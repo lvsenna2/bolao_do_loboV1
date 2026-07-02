@@ -1,0 +1,271 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --color-background: 248 250 252;
+  --color-foreground: 15 23 42;
+  --color-surface: 255 255 255;
+  --color-elevated: 241 245 249;
+  --color-muted: 100 116 139;
+  --color-border: 226 232 240;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-background: 15 23 42;
+  --color-foreground: 248 250 252;
+  --color-surface: 30 41 59;
+  --color-elevated: 15 23 42;
+  --color-muted: 148 163 184;
+  --color-border: 51 65 85;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: rgb(var(--color-background));
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: rgb(var(--color-background));
+  color: rgb(var(--color-foreground));
+  font-family: var(--font-inter), Inter, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgb(245 158 11 / 0.35);
+}
+
+:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+[data-shell-mode="user"] {
+  --color-background: 0 20 90;
+  --color-foreground: 255 255 255;
+  --color-surface: 255 255 255;
+  --color-elevated: 16 45 140;
+  --color-muted: 210 220 255;
+  --color-border: 60 95 190;
+}
+
+[data-shell-mode="user"] > .flex {
+  position: relative;
+  z-index: 1;
+}
+
+.wolf-ambience {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.wolf-paw {
+  position: absolute;
+  color: rgb(255 255 255 / 0.09);
+  filter: drop-shadow(0 14px 28px rgb(0 0 0 / 0.18));
+  animation: wolf-drift 8s ease-in-out infinite;
+}
+
+.wolf-paw-one {
+  --wolf-rotate: -12deg;
+  top: 12%;
+  right: 8%;
+  width: 96px;
+  height: 96px;
+}
+
+.wolf-paw-two {
+  --wolf-rotate: 18deg;
+  top: 44%;
+  left: -20px;
+  width: 120px;
+  height: 120px;
+  animation-delay: -2s;
+}
+
+.wolf-paw-three {
+  --wolf-rotate: 10deg;
+  right: 12%;
+  bottom: 8%;
+  width: 150px;
+  height: 150px;
+  animation-delay: -4s;
+}
+
+.wolf-moon {
+  position: absolute;
+  top: 90px;
+  right: 28px;
+  width: 92px;
+  height: 92px;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: radial-gradient(circle, rgb(251 191 36 / 0.16), transparent 62%);
+  animation: wolf-pulse 5s ease-in-out infinite;
+}
+
+.wolf-brand-mark {
+  position: relative;
+  isolation: isolate;
+}
+
+.wolf-brand-mark::before,
+.wolf-brand-mark::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px 8px 2px 8px;
+  background: #fbbf24;
+  transform: rotate(45deg);
+  z-index: -1;
+}
+
+.wolf-brand-mark::before {
+  left: 7px;
+}
+
+.wolf-brand-mark::after {
+  right: 7px;
+}
+
+.wolf-card-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.wolf-card-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent, rgb(245 158 11 / 0.18), transparent);
+  transform: translateX(-120%);
+  animation: wolf-shine 4.5s ease-in-out infinite;
+}
+
+[data-shell-mode="user"] .bg-app-surface {
+  background-color: rgb(255 255 255 / 0.96);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+[data-shell-mode="user"] .bg-app-surface:hover {
+  border-color: rgb(251 191 36 / 0.42);
+  box-shadow: 0 22px 55px -28px rgb(0 0 0 / 0.55);
+  transform: translateY(-1px);
+}
+
+[data-shell-mode="user"] .bg-app-surface .bg-app-background,
+[data-shell-mode="user"] .bg-app-surface.bg-app-background {
+  background-color: #f1f5ff;
+}
+
+[data-shell-mode="user"] .bg-app-surface .text-app-foreground {
+  color: #071044;
+}
+
+[data-shell-mode="user"] .bg-app-surface .text-app-muted {
+  color: rgb(63 78 116);
+}
+
+[data-shell-mode="user"] main > div > header {
+  border-color: rgb(255 255 255 / 0.16);
+}
+
+[data-shell-mode="user"] main > div > header h1,
+[data-shell-mode="user"] main > div > header p {
+  color: #fff;
+}
+
+[data-shell-mode="user"] main > div > header p:first-child {
+  color: #fbbf24;
+}
+
+[data-shell-mode="user"] nav a:not([aria-current="page"]) {
+  color: rgb(218 226 255 / 0.78);
+}
+
+[data-shell-mode="user"] nav a:not([aria-current="page"]):hover {
+  background-color: rgb(255 255 255 / 0.1);
+  color: #fff;
+}
+
+[data-shell-mode="user"] nav a[aria-current="page"] {
+  background-color: #fbbf24;
+  color: #071044;
+}
+
+@keyframes wolf-drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--wolf-rotate, 0deg));
+  }
+
+  50% {
+    transform: translateY(-14px) rotate(var(--wolf-rotate, 0deg));
+  }
+}
+
+@keyframes wolf-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes wolf-shine {
+  0%,
+  46% {
+    transform: translateX(-120%);
+  }
+
+  70%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

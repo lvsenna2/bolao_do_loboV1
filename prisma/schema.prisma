@@ -1,0 +1,571 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ORGANIZER
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AccountStatus {
+  PENDING_EMAIL
+  ACTIVE
+  BLOCKED
+  DELETED
+}
+
+enum LeagueVisibility {
+  PUBLIC
+  PRIVATE
+  INVITE_ONLY
+}
+
+enum LeagueStatus {
+  DRAFT
+  OPEN
+  ACTIVE
+  FINISHED
+  ARCHIVED
+}
+
+enum LeagueRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum MemberStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  BLOCKED
+  LEFT
+}
+
+enum ChampionshipStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum SeasonStatus {
+  SCHEDULED
+  ACTIVE
+  FINISHED
+  ARCHIVED
+}
+
+enum RoundStatus {
+  SCHEDULED
+  OPEN
+  LIVE
+  FINISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  HALFTIME
+  FINISHED
+  POSTPONED
+  CANCELLED
+}
+
+enum Prediction {
+  HOME
+  DRAW
+  AWAY
+}
+
+enum RankingScope {
+  GLOBAL
+  LEAGUE
+  ROUND
+  MONTHLY
+  HISTORICAL
+}
+
+enum PaymentGateway {
+  MERCADO_PAGO
+  ASAAS
+  STRIPE
+  PAGSEGURO
+  PIX
+  MANUAL
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  SYSTEM
+  MATCH
+  PAYMENT
+  RANKING
+}
+
+enum BadgeRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+model User {
+  id              String        @id @default(uuid()) @db.Uuid
+  name            String        @db.VarChar(120)
+  firstName       String?       @map("first_name") @db.VarChar(80)
+  lastName        String?       @map("last_name") @db.VarChar(80)
+  username        String        @unique @db.VarChar(40)
+  email           String        @unique @db.VarChar(150)
+  emailVerified   DateTime?     @map("email_verified")
+  passwordHash    String?       @map("password_hash")
+  birthDate       DateTime?     @map("birth_date")
+  avatarUrl       String?       @map("avatar_url")
+  role            UserRole      @default(USER)
+  status          AccountStatus @default(PENDING_EMAIL)
+  xp              Int           @default(0)
+  level           Int           @default(1)
+  locale          String        @default("pt-BR") @db.VarChar(12)
+  theme           String        @default("system") @db.VarChar(20)
+  termsAcceptedAt DateTime?     @map("terms_accepted_at")
+  lastLoginAt     DateTime?     @map("last_login_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+
+  accounts      Account[]
+  sessions      Session[]
+  ownedLeagues  League[]       @relation("LeagueOwner")
+  memberships   LeagueMember[]
+  guesses       Guess[]
+  scores        Score[]
+  rankings      Ranking[]
+  payments      Payment[]
+  notifications Notification[]
+  achievements  Achievement[]
+  auditLogs     AuditLog[]
+
+  @@index([email])
+  @@index([username])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id") @db.Uuid
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model League {
+  id          String           @id @default(uuid()) @db.Uuid
+  ownerId     String           @map("owner_id") @db.Uuid
+  name        String           @db.VarChar(120)
+  description String?
+  imageUrl    String?          @map("image_url")
+  visibility  LeagueVisibility @default(PRIVATE)
+  status      LeagueStatus     @default(DRAFT)
+  entryFee    Decimal          @default(0) @map("entry_fee") @db.Decimal(10, 2)
+  maxMembers  Int?             @map("max_members")
+  inviteCode  String?          @unique @map("invite_code") @db.VarChar(32)
+  rules       Json?
+  prizeRules  Json?            @map("prize_rules")
+  startsAt    DateTime?        @map("starts_at")
+  endsAt      DateTime?        @map("ends_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  deletedAt   DateTime?        @map("deleted_at")
+
+  owner    User           @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members  LeagueMember[]
+  payments Payment[]
+  rankings Ranking[]
+  rounds   Round[]
+  guesses  Guess[]
+  scores   Score[]
+
+  @@index([ownerId])
+  @@index([visibility])
+  @@index([status])
+  @@index([createdAt])
+  @@map("leagues")
+}
+
+model LeagueMember {
+  id        String       @id @default(uuid()) @db.Uuid
+  leagueId  String       @map("league_id") @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  role      LeagueRole   @default(MEMBER)
+  status    MemberStatus @default(PENDING_PAYMENT)
+  joinedAt  DateTime     @default(now()) @map("joined_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  leftAt    DateTime?    @map("left_at")
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([leagueId, userId])
+  @@index([userId])
+  @@index([status])
+  @@map("league_members")
+}
+
+model Championship {
+  id          String             @id @default(uuid()) @db.Uuid
+  name        String             @db.VarChar(120)
+  country     String             @db.VarChar(80)
+  logo        String?
+  provider    String?            @db.VarChar(40)
+  apiId       Int?               @map("api_id")
+  status      ChampionshipStatus @default(ACTIVE)
+  description String?
+  primaryColor String?           @map("primary_color") @db.VarChar(20)
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  deletedAt   DateTime?          @map("deleted_at")
+
+  seasons Season[]
+
+  @@unique([provider, apiId])
+  @@index([country])
+  @@index([status])
+  @@map("championships")
+}
+
+model Season {
+  id             String       @id @default(uuid()) @db.Uuid
+  championshipId String       @map("championship_id") @db.Uuid
+  year           Int
+  name           String?      @db.VarChar(80)
+  status         SeasonStatus @default(SCHEDULED)
+  startsAt       DateTime?    @map("starts_at")
+  endsAt         DateTime?    @map("ends_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  championship Championship @relation(fields: [championshipId], references: [id], onDelete: Restrict)
+  rounds       Round[]
+  rankings     Ranking[]
+
+  @@unique([championshipId, year])
+  @@index([status])
+  @@map("seasons")
+}
+
+model Round {
+  id          String      @id @default(uuid()) @db.Uuid
+  seasonId    String      @map("season_id") @db.Uuid
+  leagueId    String?     @map("league_id") @db.Uuid
+  number      Int
+  name        String?     @db.VarChar(80)
+  description String?
+  startsAt    DateTime    @map("starts_at")
+  endsAt      DateTime    @map("ends_at")
+  status      RoundStatus @default(SCHEDULED)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  season   Season    @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  league   League?   @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+  matches  Match[]
+  rankings Ranking[]
+
+  @@unique([leagueId, seasonId, number])
+  @@index([leagueId])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([status])
+  @@map("rounds")
+}
+
+model Team {
+  id        String   @id @default(uuid()) @db.Uuid
+  apiId     Int?     @map("api_id")
+  name      String   @db.VarChar(120)
+  shortName String?  @map("short_name") @db.VarChar(30)
+  country   String   @db.VarChar(80)
+  logo      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  homeMatches Match[] @relation("HomeTeam")
+  awayMatches Match[] @relation("AwayTeam")
+
+  @@unique([apiId])
+  @@index([name])
+  @@index([country])
+  @@map("teams")
+}
+
+model Match {
+  id          String      @id @default(uuid()) @db.Uuid
+  roundId     String      @map("round_id") @db.Uuid
+  homeTeamId  String      @map("home_team_id") @db.Uuid
+  awayTeamId  String      @map("away_team_id") @db.Uuid
+  kickoff     DateTime
+  homeScore   Int?        @map("home_score")
+  awayScore   Int?        @map("away_score")
+  stadium     String?     @db.VarChar(160)
+  city        String?     @db.VarChar(100)
+  country     String?     @db.VarChar(80)
+  referee     String?     @db.VarChar(120)
+  broadcast   String?     @db.VarChar(120)
+  status      MatchStatus @default(SCHEDULED)
+  homologatedAt DateTime? @map("homologated_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  deletedAt   DateTime?   @map("deleted_at")
+
+  round    Round  @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  homeTeam Team   @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam Team   @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  guesses  Guess[]
+  scores   Score[]
+
+  @@index([roundId])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+  @@index([kickoff])
+  @@index([status])
+  @@map("matches")
+}
+
+model Guess {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String     @map("user_id") @db.Uuid
+  leagueId       String?    @map("league_id") @db.Uuid
+  matchId        String     @map("match_id") @db.Uuid
+  prediction     Prediction
+  homePrediction Int?       @map("home_prediction")
+  awayPrediction Int?       @map("away_prediction")
+  joker          Boolean    @default(false)
+  notes          String?    @db.VarChar(240)
+  submittedAt    DateTime   @default(now()) @map("submitted_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  deletedAt      DateTime?  @map("deleted_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  league League? @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+  match  Match   @relation(fields: [matchId], references: [id], onDelete: Restrict)
+  score Score?
+
+  @@unique([userId, leagueId, matchId])
+  @@index([leagueId])
+  @@index([matchId])
+  @@index([submittedAt])
+  @@index([joker])
+  @@map("guesses")
+}
+
+model Score {
+  id           String   @id @default(uuid()) @db.Uuid
+  guessId      String   @unique @map("guess_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  matchId      String   @map("match_id") @db.Uuid
+  leagueId     String?  @map("league_id") @db.Uuid
+  basePoints   Int      @default(0) @map("base_points")
+  bonusPoints  Int      @default(0) @map("bonus_points")
+  totalPoints  Int      @default(0) @map("total_points")
+  winnerHit    Boolean  @default(false) @map("winner_hit")
+  exactScore   Boolean  @default(false) @map("exact_score")
+  jokerApplied Boolean  @default(false) @map("joker_applied")
+  calculatedAt DateTime @default(now()) @map("calculated_at")
+
+  guess  Guess   @relation(fields: [guessId], references: [id], onDelete: Restrict)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  match  Match   @relation(fields: [matchId], references: [id], onDelete: Restrict)
+  league League? @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([matchId])
+  @@index([leagueId])
+  @@index([totalPoints])
+  @@map("scores")
+}
+
+model Ranking {
+  id                   String       @id @default(uuid()) @db.Uuid
+  scope                RankingScope @default(LEAGUE)
+  leagueId             String?      @map("league_id") @db.Uuid
+  seasonId             String?      @map("season_id") @db.Uuid
+  roundId              String?      @map("round_id") @db.Uuid
+  userId               String       @map("user_id") @db.Uuid
+  position             Int?
+  points               Int          @default(0)
+  exactScores          Int          @default(0) @map("exact_scores")
+  wins                 Int          @default(0)
+  losses               Int          @default(0)
+  hits                 Int          @default(0)
+  currentStreak        Int          @default(0) @map("current_streak")
+  averageSubmitSeconds Int?         @map("average_submit_seconds")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  league League? @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+  season Season? @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  round  Round?  @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([scope, leagueId, seasonId, roundId, userId])
+  @@index([leagueId, points(sort: Desc), exactScores(sort: Desc), hits(sort: Desc)])
+  @@index([userId])
+  @@index([scope])
+  @@map("rankings")
+}
+
+model Payment {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  leagueId      String         @map("league_id") @db.Uuid
+  gateway       PaymentGateway @default(MERCADO_PAGO)
+  transactionId String?        @unique @map("transaction_id")
+  amount        Decimal        @db.Decimal(10, 2)
+  status        PaymentStatus  @default(PENDING)
+  qrCode        String?        @map("qr_code")
+  receiptUrl    String?        @map("receipt_url")
+  paidAt        DateTime?      @map("paid_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([leagueId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  title     String           @db.VarChar(200)
+  body      String
+  type      NotificationType @default(INFO)
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model Badge {
+  id          String      @id @default(uuid()) @db.Uuid
+  title       String      @db.VarChar(100)
+  description String
+  image       String?
+  rarity      BadgeRarity @default(COMMON)
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  achievements Achievement[]
+
+  @@unique([title])
+  @@index([rarity])
+  @@map("badges")
+}
+
+model Achievement {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  badgeId    String   @map("badge_id") @db.Uuid
+  unlockedAt DateTime @default(now()) @map("unlocked_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, badgeId])
+  @@index([badgeId])
+  @@map("achievements")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  action    String   @db.VarChar(120)
+  entity    String   @db.VarChar(120)
+  entityId  String?  @map("entity_id") @db.VarChar(80)
+  oldValue  Json?    @map("old_value")
+  newValue  Json?    @map("new_value")
+  ip        String?  @db.VarChar(80)
+  userAgent String?  @map("user_agent")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Setting {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique @db.VarChar(120)
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

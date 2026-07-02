@@ -1,0 +1,116 @@
+import {
+  BarChart3,
+  CalendarDays,
+  ClipboardList,
+  FileText,
+  History,
+  LayoutDashboard,
+  Medal,
+  Settings,
+  ShieldCheck,
+  Trophy,
+  UserRound,
+  Users,
+  WalletCards
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+export type NavigationItem = {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+};
+
+export const mainNavigationItems: NavigationItem[] = [
+  {
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    label: "Dashboard"
+  },
+  {
+    href: "/minhas-ligas",
+    icon: Users,
+    label: "Minhas ligas"
+  },
+  {
+    href: "/rodadas",
+    icon: CalendarDays,
+    label: "Jogos"
+  },
+  {
+    href: "/palpites",
+    icon: ClipboardList,
+    label: "Palpites"
+  },
+  {
+    href: "/ranking",
+    icon: Trophy,
+    label: "Ranking"
+  },
+  {
+    href: "/estatisticas",
+    icon: BarChart3,
+    label: "Estatisticas"
+  },
+  {
+    href: "/perfil",
+    icon: UserRound,
+    label: "Perfil"
+  }
+];
+
+export const mobileNavigationItems: NavigationItem[] = [
+  mainNavigationItems[0],
+  mainNavigationItems[2],
+  mainNavigationItems[3],
+  mainNavigationItems[4],
+  mainNavigationItems[6]
+];
+
+export const adminNavigationItems: NavigationItem[] = [
+  {
+    href: "/admin",
+    icon: ShieldCheck,
+    label: "Visao geral"
+  },
+  {
+    href: "/admin/usuarios",
+    icon: Users,
+    label: "Usuarios"
+  },
+  {
+    href: "/admin/campeonatos",
+    icon: Medal,
+    label: "Campeonatos"
+  },
+  {
+    href: "/admin/rodadas",
+    icon: CalendarDays,
+    label: "Rodadas"
+  },
+  {
+    href: "/admin/ligas",
+    icon: Trophy,
+    label: "Ligas"
+  },
+  {
+    href: "/admin/pagamentos",
+    icon: WalletCards,
+    label: "Pagamentos"
+  },
+  {
+    href: "/admin/relatorios",
+    icon: FileText,
+    label: "Relatorios"
+  },
+  {
+    href: "/admin/auditoria",
+    icon: History,
+    label: "Auditoria"
+  },
+  {
+    href: "/admin/configuracoes",
+    icon: Settings,
+    label: "Configuracoes"
+  }
+];
