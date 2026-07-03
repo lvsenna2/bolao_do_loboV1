@@ -88,6 +88,10 @@ export const updateRoundStatusSchema = z.object({
   status: roundStatusSchema
 });
 
+export const openRoundSchema = z.object({
+  roundId: uuidSchema
+});
+
 export const createMatchSchema = z
   .object({
     roundId: uuidSchema,

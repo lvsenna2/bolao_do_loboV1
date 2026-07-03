@@ -7,6 +7,7 @@ import {
   createRoundAction,
   createTeamAction,
   homologateMatchResultAction,
+  openRoundAction,
   updateMatchStatusAction,
   updateRoundStatusAction
 } from "@/features/admin/actions/admin-actions";
@@ -36,6 +37,7 @@ const createTeamFormAction = createTeamAction as unknown as FormAction;
 const createRoundFormAction = createRoundAction as unknown as FormAction;
 const createMatchFormAction = createMatchAction as unknown as FormAction;
 const homologateMatchResultFormAction = homologateMatchResultAction as unknown as FormAction;
+const openRoundFormAction = openRoundAction as unknown as FormAction;
 const updateRoundStatusFormAction = updateRoundStatusAction as unknown as FormAction;
 const updateMatchStatusFormAction = updateMatchStatusAction as unknown as FormAction;
 
@@ -252,6 +254,14 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
             </option>
           ))}
         </AdminSelect>
+        <AdminSelect defaultValue={String(params.league ?? "")} label="Liga" name="league">
+          <option value="">Todas</option>
+          {leagues.map((league) => (
+            <option key={league.id} value={league.id}>
+              {league.name}
+            </option>
+          ))}
+        </AdminSelect>
         <AdminSelect defaultValue={String(params.status ?? "")} label="Status" name="status">
           <option value="">Todos</option>
           {Object.values(RoundStatus).map((status) => (
@@ -317,6 +327,16 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                         type="submit"
                       >
                         Salvar
+                      </button>
+                    </form>
+                    <form action={openRoundFormAction} className="mt-2">
+                      <input name="roundId" type="hidden" value={round.id} />
+                      <button
+                        className="h-9 rounded-button bg-brand-gold px-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={round.status === "OPEN"}
+                        type="submit"
+                      >
+                        {round.status === "OPEN" ? "Aberta" : "Abrir"}
                       </button>
                     </form>
                   </AdminTd>

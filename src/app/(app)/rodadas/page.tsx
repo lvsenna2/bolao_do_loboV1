@@ -10,6 +10,8 @@ import { getRoundsPageData } from "@/features/rounds/data/round-data";
 import { RoundCard } from "@/features/rounds/components/round-card";
 import { RoundFilterForm } from "@/features/rounds/components/round-filter-form";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
+import { PublicLeagueList } from "@/features/leagues/components/public-league-list";
+import { formatCurrency, getUserLeagues } from "@/features/user/data/user-data";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +22,20 @@ type RoundsPageProps = {
 export default async function RoundsPage({ searchParams }: RoundsPageProps) {
   const params = await searchParams;
   const user = await requireUser();
-  const result = await getRoundsPageData(user.id, params);
+  const [result, leaguesResult] = await Promise.all([
+    getRoundsPageData(user.id, params),
+    getUserLeagues(user.id)
+  ]);
   const { championships, leagues, rounds, stats } = result.data;
+  const publicLeagueItems = leaguesResult.data.publicLeagues.map((league) => ({
+    description: league.description,
+    entryFeeLabel: formatCurrency(league.entryFee),
+    id: league.id,
+    membersCount: league._count.members,
+    name: league.name,
+    ownerName: league.owner.name,
+    status: league.status
+  }));
 
   return (
     <PageShell
@@ -67,6 +81,18 @@ export default async function RoundsPage({ searchParams }: RoundsPageProps) {
               <RoundCard key={round.id} round={round} />
             ))}
           </div>
+        ) : leagues.length === 0 && publicLeagueItems.length > 0 ? (
+          <Card className="wolf-card-glow">
+            <CardHeader>
+              <CardTitle>Ligas publicas disponiveis</CardTitle>
+              <CardDescription>
+                Entre em uma liga publica para liberar as rodadas vinculadas a ela.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PublicLeagueList leagues={publicLeagueItems} />
+            </CardContent>
+          </Card>
         ) : leagues.length === 0 ? (
           <Card className="wolf-card-glow">
             <CardHeader>
@@ -76,7 +102,7 @@ export default async function RoundsPage({ searchParams }: RoundsPageProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <JoinLeagueForm defaultInviteCode="BRLOBO2026" />
+              <JoinLeagueForm />
             </CardContent>
           </Card>
         ) : (

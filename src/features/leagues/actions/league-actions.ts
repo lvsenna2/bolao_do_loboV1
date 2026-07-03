@@ -8,10 +8,12 @@ import { prisma } from "@/server/db";
 import {
   createAdminLeagueSchema,
   createLeagueSchema,
+  joinPublicLeagueSchema,
   joinLeagueSchema,
   type CreateAdminLeagueInput,
   type CreateLeagueInput,
-  type JoinLeagueInput
+  type JoinLeagueInput,
+  type JoinPublicLeagueInput
 } from "../schemas/league-schemas";
 import type { LeagueActionResult } from "../types/league-action-result";
 
@@ -110,6 +112,112 @@ async function createLeagueForOwner(
   return league;
 }
 
+type JoinableLeague = {
+  id: string;
+  inviteCode: string | null;
+  maxMembers: number | null;
+  name: string;
+  status: string;
+  visibility: string;
+};
+
+async function joinLeagueForUser(
+  userId: string,
+  league: JoinableLeague,
+  auditAction: string
+): Promise<LeagueActionResult> {
+  if (!["OPEN", "ACTIVE"].includes(league.status)) {
+    return {
+      ok: false,
+      message: "Esta liga nao esta aberta para entrada."
+    };
+  }
+
+  const [activeMemberCount, existingMembership] = await prisma.$transaction([
+    prisma.leagueMember.count({
+      where: {
+        leagueId: league.id,
+        status: {
+          not: "LEFT"
+        }
+      }
+    }),
+    prisma.leagueMember.findUnique({
+      where: {
+        leagueId_userId: {
+          leagueId: league.id,
+          userId
+        }
+      },
+      select: {
+        id: true,
+        status: true
+      }
+    })
+  ]);
+
+  if (existingMembership && existingMembership.status !== "LEFT") {
+    return {
+      ok: false,
+      message: "Voce ja participa desta liga."
+    };
+  }
+
+  if (league.maxMembers && activeMemberCount >= league.maxMembers) {
+    return {
+      ok: false,
+      message: "Esta liga atingiu o limite de participantes."
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (existingMembership) {
+      await tx.leagueMember.update({
+        data: {
+          joinedAt: new Date(),
+          leftAt: null,
+          role: "MEMBER",
+          status: "ACTIVE"
+        },
+        where: {
+          id: existingMembership.id
+        }
+      });
+    } else {
+      await tx.leagueMember.create({
+        data: {
+          leagueId: league.id,
+          role: "MEMBER",
+          status: "ACTIVE",
+          userId
+        }
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        action: auditAction,
+        entity: "League",
+        entityId: league.id,
+        newValue: {
+          inviteCode: league.inviteCode,
+          leagueId: league.id,
+          leagueName: league.name,
+          visibility: league.visibility
+        },
+        userId
+      }
+    });
+  });
+
+  revalidateLeaguePaths();
+
+  return {
+    ok: true,
+    message: `Voce entrou na liga ${league.name}.`
+  };
+}
+
 export async function createLeagueAction(input: CreateLeagueInput): Promise<LeagueActionResult> {
   const user = await requireUser();
   const parsedInput = createLeagueSchema.safeParse(input);
@@ -198,13 +306,6 @@ export async function joinLeagueAction(input: JoinLeagueInput): Promise<LeagueAc
   }
 
   const league = await prisma.league.findFirst({
-    include: {
-      _count: {
-        select: {
-          members: true
-        }
-      }
-    },
     where: {
       deletedAt: null,
       inviteCode: parsedInput.data.inviteCode
@@ -221,83 +322,37 @@ export async function joinLeagueAction(input: JoinLeagueInput): Promise<LeagueAc
     };
   }
 
-  if (!["OPEN", "ACTIVE"].includes(league.status)) {
+  return joinLeagueForUser(user.id, league, "league.joined");
+}
+
+export async function joinPublicLeagueAction(
+  input: JoinPublicLeagueInput
+): Promise<LeagueActionResult> {
+  const user = await requireUser();
+  const parsedInput = joinPublicLeagueSchema.safeParse(input);
+
+  if (!parsedInput.success) {
     return {
       ok: false,
-      message: "Esta liga nao esta aberta para entrada."
+      message: "Liga invalida.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
     };
   }
 
-  if (league.maxMembers && league._count.members >= league.maxMembers) {
-    return {
-      ok: false,
-      message: "Esta liga atingiu o limite de participantes."
-    };
-  }
-
-  const existingMembership = await prisma.leagueMember.findUnique({
+  const league = await prisma.league.findFirst({
     where: {
-      leagueId_userId: {
-        leagueId: league.id,
-        userId: user.id
-      }
-    },
-    select: {
-      id: true,
-      status: true
+      deletedAt: null,
+      id: parsedInput.data.leagueId,
+      visibility: "PUBLIC"
     }
   });
 
-  if (existingMembership && existingMembership.status !== "LEFT") {
+  if (!league) {
     return {
       ok: false,
-      message: "Voce ja participa desta liga."
+      message: "Liga publica nao encontrada."
     };
   }
 
-  await prisma.$transaction(async (tx) => {
-    if (existingMembership) {
-      await tx.leagueMember.update({
-        data: {
-          joinedAt: new Date(),
-          leftAt: null,
-          role: "MEMBER",
-          status: "ACTIVE"
-        },
-        where: {
-          id: existingMembership.id
-        }
-      });
-    } else {
-      await tx.leagueMember.create({
-        data: {
-          leagueId: league.id,
-          role: "MEMBER",
-          status: "ACTIVE",
-          userId: user.id
-        }
-      });
-    }
-
-    await tx.auditLog.create({
-      data: {
-        action: "league.joined",
-        entity: "League",
-        entityId: league.id,
-        newValue: {
-          inviteCode: league.inviteCode,
-          leagueId: league.id,
-          leagueName: league.name
-        },
-        userId: user.id
-      }
-    });
-  });
-
-  revalidateLeaguePaths();
-
-  return {
-    ok: true,
-    message: `Voce entrou na liga ${league.name}.`
-  };
+  return joinLeagueForUser(user.id, league, "league.public_joined");
 }

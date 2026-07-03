@@ -378,6 +378,7 @@ export async function getAdminRounds(searchParams: SearchParams) {
     const q = getParam(searchParams, "q");
     const status = getParam(searchParams, "status") as RoundStatus | undefined;
     const championshipId = getParam(searchParams, "championship");
+    const leagueId = getParam(searchParams, "league");
     const where: Prisma.RoundWhereInput = {
       ...(q
         ? {
@@ -408,6 +409,7 @@ export async function getAdminRounds(searchParams: SearchParams) {
           }
         : {}),
       ...(status ? { status } : {}),
+      ...(leagueId ? { leagueId } : {}),
       ...(championshipId
         ? {
             season: {

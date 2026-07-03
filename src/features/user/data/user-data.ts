@@ -485,11 +485,12 @@ export async function getUserProfileData(userId: string) {
 export async function getUserLeagues(userId: string) {
   const empty = {
     memberships: [],
-    ownedLeagues: []
+    ownedLeagues: [],
+    publicLeagues: []
   };
 
   try {
-    const [memberships, ownedLeagues] = await prisma.$transaction([
+    const [memberships, ownedLeagues, publicLeagues] = await prisma.$transaction([
       prisma.leagueMember.findMany({
         include: {
           league: {
@@ -544,6 +545,41 @@ export async function getUserLeagues(userId: string) {
           ownerId: userId,
           deletedAt: null
         }
+      }),
+      prisma.league.findMany({
+        include: {
+          owner: {
+            select: {
+              name: true,
+              email: true
+            }
+          },
+          _count: {
+            select: {
+              members: true,
+              payments: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 50,
+        where: {
+          deletedAt: null,
+          status: {
+            in: ["OPEN", "ACTIVE"]
+          },
+          visibility: "PUBLIC",
+          members: {
+            none: {
+              status: {
+                not: "LEFT"
+              },
+              userId
+            }
+          }
+        }
       })
     ]);
 
@@ -551,7 +587,8 @@ export async function getUserLeagues(userId: string) {
       ok: true as const,
       data: {
         memberships,
-        ownedLeagues
+        ownedLeagues,
+        publicLeagues
       }
     };
   } catch {

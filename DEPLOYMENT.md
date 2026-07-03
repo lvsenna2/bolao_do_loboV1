@@ -52,6 +52,30 @@ ALLOW_DEMO_SEED=true pnpm seed:demo
 
 Use esse seed apenas na homologacao inicial. Ele recria os dados ficticios da liga `BRLOBO2026`.
 
+## Zerar banco e manter somente o admin
+
+Use este caminho quando quiser limpar o banco publicado e remover campeonatos, ligas, rodadas, partidas,
+palpites, rankings, usuarios comuns e dados auxiliares, mantendo apenas o login do admin.
+
+Configure no ambiente que vai executar o comando:
+
+```env
+DATABASE_URL="postgresql://..."
+ALLOW_DB_RESET="true"
+SEED_ADMIN_NAME="Administrador"
+SEED_ADMIN_USERNAME="admin"
+SEED_ADMIN_EMAIL="admin@bolaodolobo.local"
+SEED_ADMIN_PASSWORD="defina-uma-senha-segura"
+```
+
+Depois rode:
+
+```bash
+pnpm db:reset-admin-only
+```
+
+Remova `ALLOW_DB_RESET` ou volte para `false` depois da limpeza.
+
 ## Acessos de teste
 
 - Admin: `admin@bolaodolobo.local` / `Admin@123`

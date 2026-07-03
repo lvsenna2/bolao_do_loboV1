@@ -13,6 +13,7 @@ import {
   createTeamSchema,
   generalSettingsSchema,
   homologateMatchResultSchema,
+  openRoundSchema,
   softDeleteUserSchema,
   updateChampionshipStatusSchema,
   updateLeagueStatusSchema,
@@ -541,6 +542,67 @@ export async function updateRoundStatusAction(formData: FormData): Promise<Admin
   return {
     ok: true,
     message: "Status da rodada atualizado."
+  };
+}
+
+export async function openRoundAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = openRoundSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Rodada invalida.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const currentRound = await prisma.round.findUnique({
+    select: {
+      endsAt: true,
+      id: true,
+      startsAt: true,
+      status: true
+    },
+    where: {
+      id: parsedInput.data.roundId
+    }
+  });
+
+  if (!currentRound) {
+    return {
+      ok: false,
+      message: "Rodada nao encontrada."
+    };
+  }
+
+  const now = new Date();
+  const fallbackEnd = new Date(now);
+  fallbackEnd.setDate(fallbackEnd.getDate() + 7);
+
+  const round = await prisma.round.update({
+    data: {
+      endsAt: currentRound.endsAt <= now ? fallbackEnd : currentRound.endsAt,
+      startsAt: currentRound.startsAt > now ? now : currentRound.startsAt,
+      status: "OPEN"
+    },
+    select: {
+      endsAt: true,
+      id: true,
+      startsAt: true,
+      status: true
+    },
+    where: {
+      id: currentRound.id
+    }
+  });
+
+  await createAuditLog(admin.id, "admin.round.opened", "Round", round.id, currentRound, round);
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: "Rodada aberta para palpites."
   };
 }
 

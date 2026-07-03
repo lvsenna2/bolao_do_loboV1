@@ -62,6 +62,11 @@ export const joinLeagueSchema = z.object({
     .toUpperCase()
 });
 
+export const joinPublicLeagueSchema = z.object({
+  leagueId: z.string().uuid("Liga invalida.")
+});
+
 export type CreateLeagueInput = z.infer<typeof createLeagueSchema>;
 export type CreateAdminLeagueInput = z.infer<typeof createAdminLeagueSchema>;
 export type JoinLeagueInput = z.infer<typeof joinLeagueSchema>;
+export type JoinPublicLeagueInput = z.infer<typeof joinPublicLeagueSchema>;

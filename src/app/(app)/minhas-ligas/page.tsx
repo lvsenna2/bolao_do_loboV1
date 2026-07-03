@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
+import { PublicLeagueList } from "@/features/leagues/components/public-league-list";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { formatCurrency, formatDate, getUserLeagues } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
@@ -17,7 +18,16 @@ export const dynamic = "force-dynamic";
 export default async function MyLeaguesPage() {
   const sessionUser = await requireUser();
   const result = await getUserLeagues(sessionUser.id);
-  const { memberships, ownedLeagues } = result.data;
+  const { memberships, ownedLeagues, publicLeagues } = result.data;
+  const publicLeagueItems = publicLeagues.map((league) => ({
+    description: league.description,
+    entryFeeLabel: formatCurrency(league.entryFee),
+    id: league.id,
+    membersCount: league._count.members,
+    name: league.name,
+    ownerName: league.owner.name,
+    status: league.status
+  }));
 
   return (
     <PageShell
@@ -36,6 +46,18 @@ export default async function MyLeaguesPage() {
         </CardHeader>
         <CardContent>
           <JoinLeagueForm />
+        </CardContent>
+      </Card>
+
+      <Card className="mb-5">
+        <CardHeader>
+          <CardTitle>Ligas publicas disponiveis</CardTitle>
+          <CardDescription>
+            Ligas publicas criadas pelo administrador aparecem aqui para entrada direta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PublicLeagueList leagues={publicLeagueItems} />
         </CardContent>
       </Card>
 

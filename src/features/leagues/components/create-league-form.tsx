@@ -25,6 +25,12 @@ type CreateLeagueFormProps = {
 const fieldClass =
   "h-11 w-full rounded-control border border-app-border bg-app-background px-3 text-sm text-app-foreground outline-none transition placeholder:text-app-muted focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20";
 
+const visibilityLabels = {
+  INVITE_ONLY: "Somente convite",
+  PRIVATE: "Privada por codigo",
+  PUBLIC: "Publica"
+} satisfies Record<LeagueVisibility, string>;
+
 export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -45,7 +51,7 @@ export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
       maxMembers: undefined,
       name: "",
       ownerEmail: "",
-      visibility: "PRIVATE"
+      visibility: admin ? "PUBLIC" : "PRIVATE"
     }
   });
 
@@ -73,7 +79,7 @@ export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
           maxMembers: undefined,
           name: "",
           ownerEmail: "",
-          visibility: "PRIVATE"
+          visibility: admin ? "PUBLIC" : "PRIVATE"
         });
         router.refresh();
       });
@@ -111,7 +117,7 @@ export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
         <select className={fieldClass} {...register("visibility")}>
           {Object.values(LeagueVisibility).map((visibility) => (
             <option key={visibility} value={visibility}>
-              {visibility}
+              {visibilityLabels[visibility]}
             </option>
           ))}
         </select>

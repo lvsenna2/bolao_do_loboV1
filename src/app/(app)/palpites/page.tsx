@@ -10,7 +10,8 @@ import { getGuessesPageData } from "@/features/guesses/data/guess-data";
 import { GuessHistoryCard } from "@/features/guesses/components/guess-history-card";
 import { GuessMatchCard } from "@/features/guesses/components/guess-match-card";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
-import { getUserLeagues } from "@/features/user/data/user-data";
+import { PublicLeagueList } from "@/features/leagues/components/public-league-list";
+import { formatCurrency, getUserLeagues } from "@/features/user/data/user-data";
 
 export default async function GuessesPage() {
   const user = await requireUser();
@@ -22,6 +23,15 @@ export default async function GuessesPage() {
   const hasActiveLeague = leaguesResult.data.memberships.some(
     (membership) => membership.status === "ACTIVE"
   );
+  const publicLeagueItems = leaguesResult.data.publicLeagues.map((league) => ({
+    description: league.description,
+    entryFeeLabel: formatCurrency(league.entryFee),
+    id: league.id,
+    membersCount: league._count.members,
+    name: league.name,
+    ownerName: league.owner.name,
+    status: league.status
+  }));
 
   return (
     <PageShell
@@ -64,16 +74,28 @@ export default async function GuessesPage() {
               <GuessMatchCard key={match.id} match={match} />
             ))}
           </div>
+        ) : !hasActiveLeague && publicLeagueItems.length > 0 ? (
+          <Card className="wolf-card-glow">
+            <CardHeader>
+              <CardTitle>Ligas publicas disponiveis</CardTitle>
+              <CardDescription>
+                Entre em uma liga publica para liberar os jogos abertos para palpite.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PublicLeagueList leagues={publicLeagueItems} />
+            </CardContent>
+          </Card>
         ) : !hasActiveLeague ? (
           <Card className="wolf-card-glow">
             <CardHeader>
-              <CardTitle>Entre no Bolao Brasileirao</CardTitle>
+              <CardTitle>Entre em uma liga</CardTitle>
               <CardDescription>
                 Para liberar rodadas e palpites, entre na liga criada pelo administrador.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <JoinLeagueForm defaultInviteCode="BRLOBO2026" />
+              <JoinLeagueForm />
             </CardContent>
           </Card>
         ) : (

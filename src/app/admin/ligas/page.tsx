@@ -1,4 +1,6 @@
 import { LeagueStatus } from "@prisma/client";
+import Link from "next/link";
+import type { Route } from "next";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,27 +110,35 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                     <p className="text-xs text-app-muted">{league._count.payments} pagamentos</p>
                   </AdminTd>
                   <AdminTd>
-                    <form action={updateLeagueStatusFormAction} className="flex gap-2">
-                      <input name="leagueId" type="hidden" value={league.id} />
-                      <AdminSelect
-                        aria-label="Status"
-                        className="w-36"
-                        defaultValue={league.status}
-                        name="status"
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        className="inline-flex h-10 items-center justify-center rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
+                        href={`/admin/rodadas?league=${league.id}` as Route}
                       >
-                        {Object.values(LeagueStatus).map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </AdminSelect>
-                      <button
-                        className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                        type="submit"
-                      >
-                        Salvar
-                      </button>
-                    </form>
+                        Rodadas
+                      </Link>
+                      <form action={updateLeagueStatusFormAction} className="flex gap-2">
+                        <input name="leagueId" type="hidden" value={league.id} />
+                        <AdminSelect
+                          aria-label="Status"
+                          className="w-36"
+                          defaultValue={league.status}
+                          name="status"
+                        >
+                          {Object.values(LeagueStatus).map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </AdminSelect>
+                        <button
+                          className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                          type="submit"
+                        >
+                          Salvar
+                        </button>
+                      </form>
+                    </div>
                   </AdminTd>
                 </tr>
               ))}
