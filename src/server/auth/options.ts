@@ -57,7 +57,10 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findFirst({
           where: {
-            email: parsedCredentials.data.email,
+            email: {
+              equals: parsedCredentials.data.email,
+              mode: "insensitive"
+            },
             deletedAt: null
           },
           select: {

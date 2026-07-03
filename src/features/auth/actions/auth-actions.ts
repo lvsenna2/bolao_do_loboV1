@@ -66,7 +66,20 @@ export async function registerUserAction(input: RegisterInput): Promise<AuthActi
 
   const existingUser = await prisma.user.findFirst({
     where: {
-      OR: [{ email: data.email }, { username: data.username }]
+      OR: [
+        {
+          email: {
+            equals: data.email,
+            mode: "insensitive"
+          }
+        },
+        {
+          username: {
+            equals: data.username,
+            mode: "insensitive"
+          }
+        }
+      ]
     },
     select: {
       email: true,
@@ -75,14 +88,15 @@ export async function registerUserAction(input: RegisterInput): Promise<AuthActi
   });
 
   if (existingUser) {
+    const emailAlreadyExists = existingUser.email.toLowerCase() === data.email;
+    const usernameAlreadyExists = existingUser.username.toLowerCase() === data.username;
+
     return {
       ok: false,
       message: "Ja existe uma conta com esses dados.",
       fieldErrors: {
-        ...(existingUser.email === data.email ? { email: ["Este e-mail ja esta em uso."] } : {}),
-        ...(existingUser.username === data.username
-          ? { username: ["Este username ja esta em uso."] }
-          : {})
+        ...(emailAlreadyExists ? { email: ["Este e-mail ja esta em uso."] } : {}),
+        ...(usernameAlreadyExists ? { username: ["Este username ja esta em uso."] } : {})
       }
     };
   }
@@ -157,7 +171,10 @@ export async function requestPasswordResetAction(
 
   const user = await prisma.user.findFirst({
     where: {
-      email: parsedInput.data.email,
+      email: {
+        equals: parsedInput.data.email,
+        mode: "insensitive"
+      },
       deletedAt: null
     },
     select: {
@@ -237,7 +254,10 @@ export async function resetPasswordAction(input: ResetPasswordInput): Promise<Au
 
   const user = await prisma.user.findFirst({
     where: {
-      email,
+      email: {
+        equals: email,
+        mode: "insensitive"
+      },
       deletedAt: null
     },
     select: {
