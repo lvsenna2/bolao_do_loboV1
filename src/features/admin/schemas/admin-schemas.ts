@@ -19,6 +19,33 @@ export const roundStatusSchema = z.nativeEnum(RoundStatus);
 
 const uuidSchema = z.string().uuid("Identificador invalido.");
 
+function parseSaoPauloDateTimeLocal(value: unknown) {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmedValue = value.trim();
+  const dateTimeLocalPattern =
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/;
+
+  if (!dateTimeLocalPattern.test(trimmedValue)) {
+    return value;
+  }
+
+  const withSeconds = trimmedValue.length === 16 ? `${trimmedValue}:00` : trimmedValue;
+
+  return new Date(`${withSeconds}-03:00`);
+}
+
+function saoPauloDateTimeSchema(message: string) {
+  return z.preprocess(
+    parseSaoPauloDateTimeLocal,
+    z.coerce.date({
+      invalid_type_error: message
+    })
+  );
+}
+
 export const updateUserRoleSchema = z.object({
   userId: uuidSchema,
   role: userRoleSchema
@@ -74,8 +101,8 @@ export const createRoundSchema = z
     number: z.coerce.number().int().min(1, "Informe o numero da rodada."),
     name: z.string().max(80).optional().or(z.literal("")),
     description: z.string().max(500).optional().or(z.literal("")),
-    startsAt: z.coerce.date({ invalid_type_error: "Informe a data inicial." }),
-    endsAt: z.coerce.date({ invalid_type_error: "Informe a data final." }),
+    startsAt: saoPauloDateTimeSchema("Informe a data inicial."),
+    endsAt: saoPauloDateTimeSchema("Informe a data final."),
     status: roundStatusSchema.default("SCHEDULED")
   })
   .refine((data) => data.endsAt > data.startsAt, {
@@ -97,7 +124,7 @@ export const createMatchSchema = z
     roundId: uuidSchema,
     homeTeamId: uuidSchema,
     awayTeamId: uuidSchema,
-    kickoff: z.coerce.date({ invalid_type_error: "Informe a data e horario da partida." }),
+    kickoff: saoPauloDateTimeSchema("Informe a data e horario da partida."),
     stadium: z.string().max(160).optional().or(z.literal("")),
     city: z.string().max(100).optional().or(z.literal("")),
     country: z.string().max(80).optional().or(z.literal("")),
