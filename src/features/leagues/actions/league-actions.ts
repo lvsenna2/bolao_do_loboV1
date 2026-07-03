@@ -1,8 +1,15 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
+import {
+  createPixPayload,
+  createPixTransactionId,
+  createQrSvgDataUri,
+  getPixReceiverKey
+} from "@/features/payments/pix";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import {
@@ -15,7 +22,7 @@ import {
   type JoinLeagueInput,
   type JoinPublicLeagueInput
 } from "../schemas/league-schemas";
-import type { LeagueActionResult } from "../types/league-action-result";
+import type { LeagueActionResult, LeaguePaymentIntent } from "../types/league-action-result";
 
 function normalizeFieldErrors(fieldErrors: Record<string, string[] | undefined>) {
   return Object.fromEntries(
@@ -28,6 +35,7 @@ function normalizeFieldErrors(fieldErrors: Record<string, string[] | undefined>)
 function revalidateLeaguePaths() {
   revalidatePath("/admin");
   revalidatePath("/admin/ligas");
+  revalidatePath("/admin/pagamentos");
   revalidatePath("/dashboard");
   revalidatePath("/minhas-ligas");
   revalidatePath("/ranking");
@@ -115,17 +123,111 @@ async function createLeagueForOwner(
 type JoinableLeague = {
   id: string;
   inviteCode: string | null;
+  entryFee: Prisma.Decimal | number | string;
   maxMembers: number | null;
   name: string;
   status: string;
   visibility: string;
 };
 
+type PendingPixPayment = {
+  amount: Prisma.Decimal | number | string;
+  qrCode: string | null;
+  transactionId: string | null;
+};
+
+function getMoneyNumber(value: Prisma.Decimal | number | string) {
+  return Number(typeof value === "object" ? value.toString() : value);
+}
+
+function formatMoney(value: Prisma.Decimal | number | string) {
+  return new Intl.NumberFormat("pt-BR", {
+    currency: "BRL",
+    style: "currency"
+  }).format(getMoneyNumber(value));
+}
+
+function requiresPixPayment(league: JoinableLeague) {
+  return league.visibility !== "PUBLIC" && getMoneyNumber(league.entryFee) > 0;
+}
+
+function toPaymentIntent(league: JoinableLeague, payment: PendingPixPayment): LeaguePaymentIntent {
+  const pixCode =
+    payment.qrCode ??
+    createPixPayload({
+      amount: getMoneyNumber(payment.amount),
+      description: league.name,
+      transactionId: payment.transactionId ?? createPixTransactionId()
+    });
+
+  return {
+    amountLabel: formatMoney(payment.amount),
+    leagueName: league.name,
+    pixCode,
+    pixKey: getPixReceiverKey(),
+    qrCodeDataUri: createQrSvgDataUri(pixCode),
+    requiresPayment: true,
+    transactionId: payment.transactionId ?? "PENDENTE"
+  };
+}
+
+async function createPendingPixPayment(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  league: JoinableLeague
+) {
+  const existingPayment = await tx.payment.findFirst({
+    orderBy: {
+      createdAt: "desc"
+    },
+    select: {
+      amount: true,
+      qrCode: true,
+      transactionId: true
+    },
+    where: {
+      gateway: "PIX",
+      leagueId: league.id,
+      status: "PENDING",
+      userId
+    }
+  });
+
+  if (existingPayment) {
+    return existingPayment;
+  }
+
+  const transactionId = createPixTransactionId();
+  const amount = getMoneyNumber(league.entryFee);
+  const pixCode = createPixPayload({
+    amount,
+    description: league.name,
+    transactionId
+  });
+
+  return tx.payment.create({
+    data: {
+      amount,
+      gateway: "PIX",
+      leagueId: league.id,
+      qrCode: pixCode,
+      status: "PENDING",
+      transactionId,
+      userId
+    },
+    select: {
+      amount: true,
+      qrCode: true,
+      transactionId: true
+    }
+  });
+}
+
 async function joinLeagueForUser(
   userId: string,
   league: JoinableLeague,
   auditAction: string
-): Promise<LeagueActionResult> {
+): Promise<LeagueActionResult<LeaguePaymentIntent>> {
   if (!["OPEN", "ACTIVE"].includes(league.status)) {
     return {
       ok: false,
@@ -156,17 +258,84 @@ async function joinLeagueForUser(
     })
   ]);
 
-  if (existingMembership && existingMembership.status !== "LEFT") {
+  if (existingMembership?.status === "ACTIVE") {
     return {
       ok: false,
       message: "Voce ja participa desta liga."
     };
   }
 
-  if (league.maxMembers && activeMemberCount >= league.maxMembers) {
+  if (existingMembership?.status === "BLOCKED") {
+    return {
+      ok: false,
+      message: "Sua participacao nesta liga esta bloqueada."
+    };
+  }
+
+  if (
+    (!existingMembership || existingMembership.status === "LEFT") &&
+    league.maxMembers &&
+    activeMemberCount >= league.maxMembers
+  ) {
     return {
       ok: false,
       message: "Esta liga atingiu o limite de participantes."
+    };
+  }
+
+  if (requiresPixPayment(league)) {
+    const payment = await prisma.$transaction(async (tx) => {
+      if (existingMembership) {
+        await tx.leagueMember.update({
+          data: {
+            joinedAt: new Date(),
+            leftAt: null,
+            role: "MEMBER",
+            status: "PENDING_PAYMENT"
+          },
+          where: {
+            id: existingMembership.id
+          }
+        });
+      } else {
+        await tx.leagueMember.create({
+          data: {
+            leagueId: league.id,
+            role: "MEMBER",
+            status: "PENDING_PAYMENT",
+            userId
+          }
+        });
+      }
+
+      const pendingPayment = await createPendingPixPayment(tx, userId, league);
+
+      await tx.auditLog.create({
+        data: {
+          action: `${auditAction}.payment_pending`,
+          entity: "Payment",
+          entityId: pendingPayment.transactionId ?? league.id,
+          newValue: {
+            amount: pendingPayment.amount.toString(),
+            gateway: "PIX",
+            inviteCode: league.inviteCode,
+            leagueId: league.id,
+            leagueName: league.name,
+            status: "PENDING"
+          },
+          userId
+        }
+      });
+
+      return pendingPayment;
+    });
+
+    revalidateLeaguePaths();
+
+    return {
+      ok: true,
+      message: "Pagamento Pix gerado. Aguarde a aprovacao do administrador para entrar na liga.",
+      data: toPaymentIntent(league, payment)
     };
   }
 
@@ -293,7 +462,9 @@ export async function createAdminLeagueAction(
   };
 }
 
-export async function joinLeagueAction(input: JoinLeagueInput): Promise<LeagueActionResult> {
+export async function joinLeagueAction(
+  input: JoinLeagueInput
+): Promise<LeagueActionResult<LeaguePaymentIntent>> {
   const user = await requireUser();
   const parsedInput = joinLeagueSchema.safeParse(input);
 
@@ -327,7 +498,7 @@ export async function joinLeagueAction(input: JoinLeagueInput): Promise<LeagueAc
 
 export async function joinPublicLeagueAction(
   input: JoinPublicLeagueInput
-): Promise<LeagueActionResult> {
+): Promise<LeagueActionResult<LeaguePaymentIntent>> {
   const user = await requireUser();
   const parsedInput = joinPublicLeagueSchema.safeParse(input);
 

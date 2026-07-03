@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EmptyState } from "@/components/ui/empty-state";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
 import { PublicLeagueList } from "@/features/leagues/components/public-league-list";
+import { PixPaymentCard } from "@/features/payments/components/pix-payment-card";
+import { createQrSvgDataUri, getPixReceiverKey } from "@/features/payments/pix";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { formatCurrency, formatDate, getUserLeagues } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
@@ -72,50 +74,74 @@ export default async function MyLeaguesPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {memberships.length > 0 ? (
-              memberships.map((membership) => (
-                <article
-                  className="rounded-card border border-app-border bg-app-background p-4"
-                  key={membership.id}
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h2 className="font-semibold text-app-foreground">
-                        {membership.league.name}
-                      </h2>
-                      <p className="mt-1 text-sm text-app-muted">{membership.league.description}</p>
-                      <p className="mt-2 text-xs text-app-muted">
-                        Dono: {membership.league.owner.name} | Entrada:{" "}
-                        {formatCurrency(membership.league.entryFee)}
+              memberships.map((membership) => {
+                const pendingPixPayment = membership.league.payments[0];
+
+                return (
+                  <article
+                    className="rounded-card border border-app-border bg-app-background p-4"
+                    key={membership.id}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h2 className="font-semibold text-app-foreground">
+                          {membership.league.name}
+                        </h2>
+                        <p className="mt-1 text-sm text-app-muted">
+                          {membership.league.description}
+                        </p>
+                        <p className="mt-2 text-xs text-app-muted">
+                          Dono: {membership.league.owner.name} | Entrada:{" "}
+                          {formatCurrency(membership.league.entryFee)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge>{membership.role}</Badge>
+                        <Badge tone={membership.status === "ACTIVE" ? "success" : "warning"}>
+                          {membership.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 text-sm text-app-muted sm:grid-cols-3">
+                      <span>{membership.league._count.members} participantes</span>
+                      <span>{membership.league._count.payments} pagamentos</span>
+                      <span>Entrada em {formatDate(membership.joinedAt)}</span>
+                    </div>
+                    {membership.status === "PENDING_PAYMENT" && pendingPixPayment?.qrCode ? (
+                      <div className="mt-4">
+                        <PixPaymentCard
+                          amountLabel={formatCurrency(pendingPixPayment.amount)}
+                          leagueName={membership.league.name}
+                          pixCode={pendingPixPayment.qrCode}
+                          pixKey={getPixReceiverKey()}
+                          qrCodeDataUri={createQrSvgDataUri(pendingPixPayment.qrCode)}
+                          transactionId={pendingPixPayment.transactionId ?? "PENDENTE"}
+                        />
+                      </div>
+                    ) : null}
+                    {membership.status === "ACTIVE" ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Link
+                          className={buttonVariants({ size: "sm", variant: "accent" })}
+                          href={`/rodadas?league=${membership.league.id}` as Route}
+                        >
+                          Ver partidas
+                        </Link>
+                        <Link
+                          className={buttonVariants({ size: "sm", variant: "secondary" })}
+                          href={`/ranking?league=${membership.league.id}` as Route}
+                        >
+                          Ranking
+                        </Link>
+                      </div>
+                    ) : (
+                      <p className="mt-4 rounded-control border border-brand-gold/30 bg-brand-gold/10 p-3 text-sm font-medium text-app-foreground">
+                        Acesso liberado apos aprovacao do pagamento.
                       </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge>{membership.role}</Badge>
-                      <Badge tone={membership.status === "ACTIVE" ? "success" : "warning"}>
-                        {membership.status}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-3 text-sm text-app-muted sm:grid-cols-3">
-                    <span>{membership.league._count.members} participantes</span>
-                    <span>{membership.league._count.payments} pagamentos</span>
-                    <span>Entrada em {formatDate(membership.joinedAt)}</span>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Link
-                      className={buttonVariants({ size: "sm", variant: "accent" })}
-                      href={`/rodadas?league=${membership.league.id}` as Route}
-                    >
-                      Ver partidas
-                    </Link>
-                    <Link
-                      className={buttonVariants({ size: "sm", variant: "secondary" })}
-                      href={`/ranking?league=${membership.league.id}` as Route}
-                    >
-                      Ranking
-                    </Link>
-                  </div>
-                </article>
-              ))
+                    )}
+                  </article>
+                );
+              })
             ) : (
               <EmptyState
                 description="Quando voce entrar em uma liga, ela aparecera nesta lista."

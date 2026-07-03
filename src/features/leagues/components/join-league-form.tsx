@@ -9,8 +9,10 @@ import { useForm } from "react-hook-form";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { AuthField } from "@/features/auth/components/auth-field";
 import { applyServerFieldErrors } from "@/features/auth/components/form-error-utils";
+import { PixPaymentCard } from "@/features/payments/components/pix-payment-card";
 import { joinLeagueAction } from "../actions/league-actions";
 import { joinLeagueSchema, type JoinLeagueInput } from "../schemas/league-schemas";
+import type { LeaguePaymentIntent } from "../types/league-action-result";
 
 type JoinLeagueFormProps = {
   defaultInviteCode?: string;
@@ -21,6 +23,7 @@ export function JoinLeagueForm({ defaultInviteCode = "" }: JoinLeagueFormProps) 
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | undefined>();
   const [error, setErrorMessage] = useState<string | undefined>();
+  const [paymentIntent, setPaymentIntent] = useState<LeaguePaymentIntent | undefined>();
   const {
     formState: { errors },
     handleSubmit,
@@ -37,6 +40,7 @@ export function JoinLeagueForm({ defaultInviteCode = "" }: JoinLeagueFormProps) 
   function onSubmit(values: JoinLeagueInput) {
     setMessage(undefined);
     setErrorMessage(undefined);
+    setPaymentIntent(undefined);
 
     startTransition(() => {
       void joinLeagueAction(values).then((result) => {
@@ -47,6 +51,13 @@ export function JoinLeagueForm({ defaultInviteCode = "" }: JoinLeagueFormProps) 
         }
 
         setMessage(result.message);
+        setPaymentIntent(result.data);
+
+        if (result.data?.requiresPayment) {
+          router.refresh();
+          return;
+        }
+
         reset({
           inviteCode: defaultInviteCode
         });
@@ -79,6 +90,11 @@ export function JoinLeagueForm({ defaultInviteCode = "" }: JoinLeagueFormProps) 
           {!isPending ? <LogIn aria-hidden className="h-4 w-4" /> : null}
         </button>
       </div>
+      {paymentIntent ? (
+        <div className="sm:col-span-2">
+          <PixPaymentCard {...paymentIntent} />
+        </div>
+      ) : null}
     </form>
   );
 }

@@ -501,6 +501,24 @@ export async function getUserLeagues(userId: string) {
                   email: true
                 }
               },
+              payments: {
+                orderBy: {
+                  createdAt: "desc"
+                },
+                select: {
+                  amount: true,
+                  gateway: true,
+                  qrCode: true,
+                  status: true,
+                  transactionId: true
+                },
+                take: 1,
+                where: {
+                  gateway: "PIX",
+                  status: "PENDING",
+                  userId
+                }
+              },
               _count: {
                 select: {
                   members: true,

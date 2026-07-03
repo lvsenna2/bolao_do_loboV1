@@ -1329,24 +1329,54 @@ export async function updatePaymentStatusAction(formData: FormData): Promise<Adm
 
   const paidAt = parsedInput.data.status === "APPROVED" ? new Date() : null;
 
-  const payment = await prisma.payment.update({
-    where: {
-      id: parsedInput.data.paymentId
-    },
-    data: {
-      status: parsedInput.data.status,
-      paidAt
-    },
-    select: {
-      id: true,
-      status: true,
-      amount: true
+  const payment = await prisma.$transaction(async (tx) => {
+    const updatedPayment = await tx.payment.update({
+      where: {
+        id: parsedInput.data.paymentId
+      },
+      data: {
+        status: parsedInput.data.status,
+        paidAt
+      },
+      select: {
+        amount: true,
+        id: true,
+        leagueId: true,
+        status: true,
+        userId: true
+      }
+    });
+
+    if (updatedPayment.status === "APPROVED") {
+      await tx.leagueMember.upsert({
+        create: {
+          leagueId: updatedPayment.leagueId,
+          role: "MEMBER",
+          status: "ACTIVE",
+          userId: updatedPayment.userId
+        },
+        update: {
+          joinedAt: new Date(),
+          leftAt: null,
+          status: "ACTIVE"
+        },
+        where: {
+          leagueId_userId: {
+            leagueId: updatedPayment.leagueId,
+            userId: updatedPayment.userId
+          }
+        }
+      });
     }
+
+    return updatedPayment;
   });
 
   await createAuditLog(admin.id, "admin.payment.status_updated", "Payment", payment.id, undefined, {
+    leagueId: payment.leagueId,
     status: payment.status,
-    amount: payment.amount.toString()
+    amount: payment.amount.toString(),
+    userId: payment.userId
   });
   revalidateAdminPaths();
 
