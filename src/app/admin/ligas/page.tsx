@@ -4,8 +4,12 @@ import type { Route } from "next";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { updateLeagueStatusAction } from "@/features/admin/actions/admin-actions";
+import {
+  deleteLeagueAction,
+  updateLeagueStatusAction
+} from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
+import { AdminDeleteButton } from "@/features/admin/components/admin-delete-button";
 import { AdminEmpty } from "@/features/admin/components/admin-empty";
 import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
@@ -28,6 +32,7 @@ type LeaguesPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const deleteLeagueFormAction = deleteLeagueAction as unknown as FormAction;
 const updateLeagueStatusFormAction = updateLeagueStatusAction as unknown as FormAction;
 
 export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProps) {
@@ -137,6 +142,12 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                         >
                           Salvar
                         </button>
+                      </form>
+                      <form action={deleteLeagueFormAction}>
+                        <input name="leagueId" type="hidden" value={league.id} />
+                        <AdminDeleteButton
+                          confirmMessage={`Excluir a liga "${league.name}"? Rodadas, partidas, palpites, ranking, pagamentos e membros vinculados tambem serao removidos.`}
+                        />
                       </form>
                     </div>
                   </AdminTd>

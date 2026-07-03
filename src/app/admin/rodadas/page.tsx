@@ -6,12 +6,14 @@ import {
   createMatchAction,
   createRoundAction,
   createTeamAction,
+  deleteRoundAction,
   homologateMatchResultAction,
   openRoundAction,
   updateMatchStatusAction,
   updateRoundStatusAction
 } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
+import { AdminDeleteButton } from "@/features/admin/components/admin-delete-button";
 import { AdminEmpty } from "@/features/admin/components/admin-empty";
 import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
@@ -36,6 +38,7 @@ type AdminRoundsPageProps = {
 const createTeamFormAction = createTeamAction as unknown as FormAction;
 const createRoundFormAction = createRoundAction as unknown as FormAction;
 const createMatchFormAction = createMatchAction as unknown as FormAction;
+const deleteRoundFormAction = deleteRoundAction as unknown as FormAction;
 const homologateMatchResultFormAction = homologateMatchResultAction as unknown as FormAction;
 const openRoundFormAction = openRoundAction as unknown as FormAction;
 const updateRoundStatusFormAction = updateRoundStatusAction as unknown as FormAction;
@@ -338,6 +341,12 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                       >
                         {round.status === "OPEN" ? "Aberta" : "Abrir"}
                       </button>
+                    </form>
+                    <form action={deleteRoundFormAction} className="mt-2">
+                      <input name="roundId" type="hidden" value={round.id} />
+                      <AdminDeleteButton
+                        confirmMessage={`Excluir a rodada "${round.name || `Rodada ${round.number}`}"? Partidas, palpites, pontuacoes e rankings vinculados tambem serao removidos.`}
+                      />
                     </form>
                   </AdminTd>
                   <AdminTd>

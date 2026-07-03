@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { recalculateRankingsForMatch } from "@/features/ranking/services/ranking-service";
@@ -11,6 +12,9 @@ import {
   createMatchSchema,
   createRoundSchema,
   createTeamSchema,
+  deleteChampionshipSchema,
+  deleteLeagueSchema,
+  deleteRoundSchema,
   generalSettingsSchema,
   homologateMatchResultSchema,
   openRoundSchema,
@@ -360,6 +364,155 @@ export async function updateChampionshipStatusAction(
   };
 }
 
+export async function deleteChampionshipAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = deleteChampionshipSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Campeonato invalido.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const championshipId = parsedInput.data.championshipId;
+
+  try {
+    const deleted = await prisma.$transaction(async (tx) => {
+      const championship = await tx.championship.findUnique({
+        select: {
+          country: true,
+          id: true,
+          name: true,
+          status: true,
+          _count: {
+            select: {
+              seasons: true
+            }
+          }
+        },
+        where: {
+          id: championshipId
+        }
+      });
+
+      if (!championship) {
+        return null;
+      }
+
+      const scores = await tx.score.deleteMany({
+        where: {
+          match: {
+            round: {
+              season: {
+                championshipId
+              }
+            }
+          }
+        }
+      });
+      const guesses = await tx.guess.deleteMany({
+        where: {
+          match: {
+            round: {
+              season: {
+                championshipId
+              }
+            }
+          }
+        }
+      });
+      const rankings = await tx.ranking.deleteMany({
+        where: {
+          OR: [
+            {
+              season: {
+                championshipId
+              }
+            },
+            {
+              round: {
+                season: {
+                  championshipId
+                }
+              }
+            }
+          ]
+        }
+      });
+      const matches = await tx.match.deleteMany({
+        where: {
+          round: {
+            season: {
+              championshipId
+            }
+          }
+        }
+      });
+      const rounds = await tx.round.deleteMany({
+        where: {
+          season: {
+            championshipId
+          }
+        }
+      });
+      const seasons = await tx.season.deleteMany({
+        where: {
+          championshipId
+        }
+      });
+      await tx.championship.delete({
+        where: {
+          id: championshipId
+        }
+      });
+
+      const summary = {
+        championship: 1,
+        guesses: guesses.count,
+        matches: matches.count,
+        rankings: rankings.count,
+        rounds: rounds.count,
+        scores: scores.count,
+        seasons: seasons.count
+      };
+
+      await tx.auditLog.create({
+        data: {
+          action: "admin.championship.deleted",
+          entity: "Championship",
+          entityId: championship.id,
+          oldValue: JSON.parse(JSON.stringify(championship)),
+          newValue: summary,
+          userId: admin.id
+        }
+      });
+
+      return summary;
+    });
+
+    if (!deleted) {
+      return {
+        ok: false,
+        message: "Campeonato nao encontrado."
+      };
+    }
+
+    revalidateAdminPaths();
+
+    return {
+      ok: true,
+      message: `Campeonato excluido. ${deleted.rounds} rodadas e ${deleted.matches} partidas removidas.`
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Nao foi possivel excluir o campeonato."
+    };
+  }
+}
+
 export async function createTeamAction(formData: FormData): Promise<AdminActionResult> {
   const admin = await requireAdmin();
   const parsedInput = createTeamSchema.safeParse(formDataToObject(formData));
@@ -604,6 +757,136 @@ export async function openRoundAction(formData: FormData): Promise<AdminActionRe
     ok: true,
     message: "Rodada aberta para palpites."
   };
+}
+
+export async function deleteRoundAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = deleteRoundSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Rodada invalida.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const roundId = parsedInput.data.roundId;
+
+  try {
+    const deleted = await prisma.$transaction(async (tx) => {
+      const round = await tx.round.findUnique({
+        select: {
+          id: true,
+          name: true,
+          number: true,
+          status: true,
+          league: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          season: {
+            select: {
+              championship: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              },
+              id: true,
+              name: true,
+              year: true
+            }
+          },
+          _count: {
+            select: {
+              matches: true,
+              rankings: true
+            }
+          }
+        },
+        where: {
+          id: roundId
+        }
+      });
+
+      if (!round) {
+        return null;
+      }
+
+      const scores = await tx.score.deleteMany({
+        where: {
+          match: {
+            roundId
+          }
+        }
+      });
+      const guesses = await tx.guess.deleteMany({
+        where: {
+          match: {
+            roundId
+          }
+        }
+      });
+      const rankings = await tx.ranking.deleteMany({
+        where: {
+          roundId
+        }
+      });
+      const matches = await tx.match.deleteMany({
+        where: {
+          roundId
+        }
+      });
+      await tx.round.delete({
+        where: {
+          id: roundId
+        }
+      });
+
+      const summary = {
+        guesses: guesses.count,
+        matches: matches.count,
+        rankings: rankings.count,
+        round: 1,
+        scores: scores.count
+      };
+
+      await tx.auditLog.create({
+        data: {
+          action: "admin.round.deleted",
+          entity: "Round",
+          entityId: round.id,
+          oldValue: JSON.parse(JSON.stringify(round)),
+          newValue: summary,
+          userId: admin.id
+        }
+      });
+
+      return summary;
+    });
+
+    if (!deleted) {
+      return {
+        ok: false,
+        message: "Rodada nao encontrada."
+      };
+    }
+
+    revalidateAdminPaths();
+
+    return {
+      ok: true,
+      message: `Rodada excluida. ${deleted.matches} partidas removidas.`
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Nao foi possivel excluir a rodada."
+    };
+  }
 }
 
 export async function createMatchAction(formData: FormData): Promise<AdminActionResult> {
@@ -862,6 +1145,174 @@ export async function updateLeagueStatusAction(formData: FormData): Promise<Admi
     ok: true,
     message: "Status da liga atualizado."
   };
+}
+
+export async function deleteLeagueAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = deleteLeagueSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Liga invalida.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const leagueId = parsedInput.data.leagueId;
+
+  try {
+    const deleted = await prisma.$transaction(async (tx) => {
+      const league = await tx.league.findUnique({
+        select: {
+          id: true,
+          inviteCode: true,
+          name: true,
+          status: true,
+          visibility: true,
+          _count: {
+            select: {
+              members: true,
+              payments: true,
+              rounds: true
+            }
+          }
+        },
+        where: {
+          id: leagueId
+        }
+      });
+
+      if (!league) {
+        return null;
+      }
+
+      const scoreWhere: Prisma.ScoreWhereInput = {
+        OR: [
+          {
+            leagueId
+          },
+          {
+            guess: {
+              leagueId
+            }
+          },
+          {
+            match: {
+              round: {
+                leagueId
+              }
+            }
+          }
+        ]
+      };
+      const guessWhere: Prisma.GuessWhereInput = {
+        OR: [
+          {
+            leagueId
+          },
+          {
+            match: {
+              round: {
+                leagueId
+              }
+            }
+          }
+        ]
+      };
+
+      const scores = await tx.score.deleteMany({
+        where: scoreWhere
+      });
+      const guesses = await tx.guess.deleteMany({
+        where: guessWhere
+      });
+      const rankings = await tx.ranking.deleteMany({
+        where: {
+          OR: [
+            {
+              leagueId
+            },
+            {
+              round: {
+                leagueId
+              }
+            }
+          ]
+        }
+      });
+      const payments = await tx.payment.deleteMany({
+        where: {
+          leagueId
+        }
+      });
+      const members = await tx.leagueMember.deleteMany({
+        where: {
+          leagueId
+        }
+      });
+      const matches = await tx.match.deleteMany({
+        where: {
+          round: {
+            leagueId
+          }
+        }
+      });
+      const rounds = await tx.round.deleteMany({
+        where: {
+          leagueId
+        }
+      });
+      await tx.league.delete({
+        where: {
+          id: leagueId
+        }
+      });
+
+      const summary = {
+        guesses: guesses.count,
+        league: 1,
+        matches: matches.count,
+        members: members.count,
+        payments: payments.count,
+        rankings: rankings.count,
+        rounds: rounds.count,
+        scores: scores.count
+      };
+
+      await tx.auditLog.create({
+        data: {
+          action: "admin.league.deleted",
+          entity: "League",
+          entityId: league.id,
+          oldValue: JSON.parse(JSON.stringify(league)),
+          newValue: summary,
+          userId: admin.id
+        }
+      });
+
+      return summary;
+    });
+
+    if (!deleted) {
+      return {
+        ok: false,
+        message: "Liga nao encontrada."
+      };
+    }
+
+    revalidateAdminPaths();
+
+    return {
+      ok: true,
+      message: `Liga excluida. ${deleted.rounds} rodadas e ${deleted.members} participantes removidos.`
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Nao foi possivel excluir a liga."
+    };
+  }
 }
 
 export async function updatePaymentStatusAction(formData: FormData): Promise<AdminActionResult> {

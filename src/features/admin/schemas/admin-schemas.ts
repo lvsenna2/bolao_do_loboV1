@@ -86,6 +86,10 @@ export const updateChampionshipStatusSchema = z.object({
   status: championshipStatusSchema
 });
 
+export const deleteChampionshipSchema = z.object({
+  championshipId: uuidSchema
+});
+
 export const createTeamSchema = z.object({
   name: z.string().min(2, "Informe o nome da equipe.").max(120).trim(),
   shortName: z.string().max(30).optional().or(z.literal("")),
@@ -116,6 +120,10 @@ export const updateRoundStatusSchema = z.object({
 });
 
 export const openRoundSchema = z.object({
+  roundId: uuidSchema
+});
+
+export const deleteRoundSchema = z.object({
   roundId: uuidSchema
 });
 
@@ -159,6 +167,10 @@ export const homologateMatchResultSchema = z.object({
 export const updateLeagueStatusSchema = z.object({
   leagueId: uuidSchema,
   status: leagueStatusSchema
+});
+
+export const deleteLeagueSchema = z.object({
+  leagueId: uuidSchema
 });
 
 export const updatePaymentStatusSchema = z.object({

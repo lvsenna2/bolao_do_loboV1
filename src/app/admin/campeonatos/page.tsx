@@ -4,9 +4,11 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   createChampionshipAction,
+  deleteChampionshipAction,
   updateChampionshipStatusAction
 } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
+import { AdminDeleteButton } from "@/features/admin/components/admin-delete-button";
 import { AdminEmpty } from "@/features/admin/components/admin-empty";
 import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
@@ -29,6 +31,7 @@ type ChampionshipsPageProps = {
 };
 
 const createChampionshipFormAction = createChampionshipAction as unknown as FormAction;
+const deleteChampionshipFormAction = deleteChampionshipAction as unknown as FormAction;
 const updateChampionshipStatusFormAction = updateChampionshipStatusAction as unknown as FormAction;
 
 const inputClass =
@@ -139,27 +142,35 @@ export default async function AdminChampionshipsPage({ searchParams }: Champions
                     <p className="text-xs text-app-muted">{championship.apiId ?? ""}</p>
                   </AdminTd>
                   <AdminTd>
-                    <form action={updateChampionshipStatusFormAction} className="flex gap-2">
-                      <input name="championshipId" type="hidden" value={championship.id} />
-                      <AdminSelect
-                        aria-label="Status"
-                        className="w-36"
-                        defaultValue={championship.status}
-                        name="status"
-                      >
-                        {Object.values(ChampionshipStatus).map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </AdminSelect>
-                      <button
-                        className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                        type="submit"
-                      >
-                        Salvar
-                      </button>
-                    </form>
+                    <div className="flex flex-wrap gap-2">
+                      <form action={updateChampionshipStatusFormAction} className="flex gap-2">
+                        <input name="championshipId" type="hidden" value={championship.id} />
+                        <AdminSelect
+                          aria-label="Status"
+                          className="w-36"
+                          defaultValue={championship.status}
+                          name="status"
+                        >
+                          {Object.values(ChampionshipStatus).map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </AdminSelect>
+                        <button
+                          className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                          type="submit"
+                        >
+                          Salvar
+                        </button>
+                      </form>
+                      <form action={deleteChampionshipFormAction}>
+                        <input name="championshipId" type="hidden" value={championship.id} />
+                        <AdminDeleteButton
+                          confirmMessage={`Excluir o campeonato "${championship.name}"? Rodadas, partidas, palpites e rankings vinculados tambem serao removidos.`}
+                        />
+                      </form>
+                    </div>
                   </AdminTd>
                 </tr>
               ))}
