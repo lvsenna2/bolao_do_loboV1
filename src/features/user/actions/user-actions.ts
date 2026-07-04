@@ -27,6 +27,7 @@ function normalizeFieldErrors(fieldErrors: Record<string, string[] | undefined>)
 function revalidateUserArea() {
   revalidatePath("/dashboard");
   revalidatePath("/perfil");
+  revalidatePath("/ligas");
   revalidatePath("/minhas-ligas");
   revalidatePath("/notificacoes");
   revalidatePath("/conquistas");

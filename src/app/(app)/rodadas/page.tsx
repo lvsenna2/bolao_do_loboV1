@@ -10,7 +10,7 @@ import { getRoundsPageData } from "@/features/rounds/data/round-data";
 import { RoundCard } from "@/features/rounds/components/round-card";
 import { RoundFilterForm } from "@/features/rounds/components/round-filter-form";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
-import { PublicLeagueList } from "@/features/leagues/components/public-league-list";
+import { AvailableLeagueList } from "@/features/leagues/components/available-league-list";
 import { formatCurrency, getUserLeagues } from "@/features/user/data/user-data";
 
 export const dynamic = "force-dynamic";
@@ -27,14 +27,16 @@ export default async function RoundsPage({ searchParams }: RoundsPageProps) {
     getUserLeagues(user.id)
   ]);
   const { championships, leagues, rounds, stats } = result.data;
-  const publicLeagueItems = leaguesResult.data.publicLeagues.map((league) => ({
+  const availableLeagueItems = leaguesResult.data.availableLeagues.map((league) => ({
     description: league.description,
+    entryFee: Number(league.entryFee),
     entryFeeLabel: formatCurrency(league.entryFee),
     id: league.id,
     membersCount: league._count.members,
     name: league.name,
     ownerName: league.owner.name,
-    status: league.status
+    status: league.status,
+    visibility: league.visibility === "PRIVATE" ? ("PRIVATE" as const) : ("PUBLIC" as const)
   }));
 
   return (
@@ -81,16 +83,16 @@ export default async function RoundsPage({ searchParams }: RoundsPageProps) {
               <RoundCard key={round.id} round={round} />
             ))}
           </div>
-        ) : leagues.length === 0 && publicLeagueItems.length > 0 ? (
+        ) : leagues.length === 0 && availableLeagueItems.length > 0 ? (
           <Card className="wolf-card-glow">
             <CardHeader>
-              <CardTitle>Ligas publicas disponiveis</CardTitle>
+              <CardTitle>Ligas disponiveis</CardTitle>
               <CardDescription>
-                Entre em uma liga publica para liberar as rodadas vinculadas a ela.
+                Entre em uma liga para liberar as rodadas vinculadas a ela.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <PublicLeagueList leagues={publicLeagueItems} />
+              <AvailableLeagueList leagues={availableLeagueItems} />
             </CardContent>
           </Card>
         ) : leagues.length === 0 ? (

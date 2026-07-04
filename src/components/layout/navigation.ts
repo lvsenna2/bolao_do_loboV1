@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   CalendarDays,
   ClipboardList,
   FileText,
@@ -28,9 +27,9 @@ export const mainNavigationItems: NavigationItem[] = [
     label: "Dashboard"
   },
   {
-    href: "/minhas-ligas",
+    href: "/ligas",
     icon: Users,
-    label: "Minhas ligas"
+    label: "Ligas"
   },
   {
     href: "/rodadas",
@@ -48,11 +47,6 @@ export const mainNavigationItems: NavigationItem[] = [
     label: "Ranking"
   },
   {
-    href: "/estatisticas",
-    icon: BarChart3,
-    label: "Estatisticas"
-  },
-  {
     href: "/perfil",
     icon: UserRound,
     label: "Perfil"
@@ -61,10 +55,10 @@ export const mainNavigationItems: NavigationItem[] = [
 
 export const mobileNavigationItems: NavigationItem[] = [
   mainNavigationItems[0],
-  mainNavigationItems[2],
+  mainNavigationItems[1],
   mainNavigationItems[3],
   mainNavigationItems[4],
-  mainNavigationItems[6]
+  mainNavigationItems[5]
 ];
 
 export const adminNavigationItems: NavigationItem[] = [

@@ -73,6 +73,7 @@ function revalidateAdminPaths() {
   revalidatePath("/rodadas");
   revalidatePath("/palpites");
   revalidatePath("/ranking");
+  revalidatePath("/ligas");
   revalidatePath("/dashboard");
   revalidatePath("/perfil");
   revalidatePath("/estatisticas");

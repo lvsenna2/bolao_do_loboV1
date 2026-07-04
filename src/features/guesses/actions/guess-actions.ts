@@ -63,6 +63,7 @@ function revalidateGuessesArea() {
   revalidatePath("/dashboard");
   revalidatePath("/estatisticas");
   revalidatePath("/perfil");
+  revalidatePath("/ligas");
   revalidatePath("/minhas-ligas");
   revalidatePath("/ranking");
   revalidatePath("/rodadas");

@@ -10,7 +10,7 @@ import { getGuessesPageData } from "@/features/guesses/data/guess-data";
 import { GuessHistoryCard } from "@/features/guesses/components/guess-history-card";
 import { GuessMatchCard } from "@/features/guesses/components/guess-match-card";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
-import { PublicLeagueList } from "@/features/leagues/components/public-league-list";
+import { AvailableLeagueList } from "@/features/leagues/components/available-league-list";
 import { formatCurrency, getUserLeagues } from "@/features/user/data/user-data";
 
 export default async function GuessesPage() {
@@ -23,14 +23,16 @@ export default async function GuessesPage() {
   const hasActiveLeague = leaguesResult.data.memberships.some(
     (membership) => membership.status === "ACTIVE"
   );
-  const publicLeagueItems = leaguesResult.data.publicLeagues.map((league) => ({
+  const availableLeagueItems = leaguesResult.data.availableLeagues.map((league) => ({
     description: league.description,
+    entryFee: Number(league.entryFee),
     entryFeeLabel: formatCurrency(league.entryFee),
     id: league.id,
     membersCount: league._count.members,
     name: league.name,
     ownerName: league.owner.name,
-    status: league.status
+    status: league.status,
+    visibility: league.visibility === "PRIVATE" ? ("PRIVATE" as const) : ("PUBLIC" as const)
   }));
 
   return (
@@ -74,16 +76,16 @@ export default async function GuessesPage() {
               <GuessMatchCard key={match.id} match={match} />
             ))}
           </div>
-        ) : !hasActiveLeague && publicLeagueItems.length > 0 ? (
+        ) : !hasActiveLeague && availableLeagueItems.length > 0 ? (
           <Card className="wolf-card-glow">
             <CardHeader>
-              <CardTitle>Ligas publicas disponiveis</CardTitle>
+              <CardTitle>Ligas disponiveis</CardTitle>
               <CardDescription>
-                Entre em uma liga publica para liberar os jogos abertos para palpite.
+                Entre em uma liga para liberar os jogos abertos para palpite.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <PublicLeagueList leagues={publicLeagueItems} />
+              <AvailableLeagueList leagues={availableLeagueItems} />
             </CardContent>
           </Card>
         ) : !hasActiveLeague ? (

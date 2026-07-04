@@ -22,6 +22,7 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/dashboard/:path*",
+    "/ligas/:path*",
     "/minhas-ligas/:path*",
     "/palpites/:path*",
     "/rodadas/:path*"

@@ -15,12 +15,12 @@ import { prisma } from "@/server/db";
 import {
   createAdminLeagueSchema,
   createLeagueSchema,
-  joinPublicLeagueSchema,
+  joinAvailableLeagueSchema,
   joinLeagueSchema,
   type CreateAdminLeagueInput,
   type CreateLeagueInput,
-  type JoinLeagueInput,
-  type JoinPublicLeagueInput
+  type JoinAvailableLeagueInput,
+  type JoinLeagueInput
 } from "../schemas/league-schemas";
 import type { LeagueActionResult, LeaguePaymentIntent } from "../types/league-action-result";
 
@@ -37,6 +37,7 @@ function revalidateLeaguePaths() {
   revalidatePath("/admin/ligas");
   revalidatePath("/admin/pagamentos");
   revalidatePath("/dashboard");
+  revalidatePath("/ligas");
   revalidatePath("/minhas-ligas");
   revalidatePath("/ranking");
   revalidatePath("/rodadas");
@@ -496,11 +497,11 @@ export async function joinLeagueAction(
   return joinLeagueForUser(user.id, league, "league.joined");
 }
 
-export async function joinPublicLeagueAction(
-  input: JoinPublicLeagueInput
+export async function joinAvailableLeagueAction(
+  input: JoinAvailableLeagueInput
 ): Promise<LeagueActionResult<LeaguePaymentIntent>> {
   const user = await requireUser();
-  const parsedInput = joinPublicLeagueSchema.safeParse(input);
+  const parsedInput = joinAvailableLeagueSchema.safeParse(input);
 
   if (!parsedInput.success) {
     return {
@@ -514,16 +515,18 @@ export async function joinPublicLeagueAction(
     where: {
       deletedAt: null,
       id: parsedInput.data.leagueId,
-      visibility: "PUBLIC"
+      visibility: {
+        in: ["PUBLIC", "PRIVATE"]
+      }
     }
   });
 
   if (!league) {
     return {
       ok: false,
-      message: "Liga publica nao encontrada."
+      message: "Liga nao encontrada ou indisponivel."
     };
   }
 
-  return joinLeagueForUser(user.id, league, "league.public_joined");
+  return joinLeagueForUser(user.id, league, "league.available_joined");
 }
