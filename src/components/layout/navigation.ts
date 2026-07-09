@@ -2,6 +2,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileText,
+  GitCompareArrows,
   History,
   LayoutDashboard,
   Medal,
@@ -42,6 +43,11 @@ export const mainNavigationItems: NavigationItem[] = [
     label: "Palpites"
   },
   {
+    href: "/comparar-palpites",
+    icon: GitCompareArrows,
+    label: "Comparar"
+  },
+  {
     href: "/ranking",
     icon: Trophy,
     label: "Ranking"
@@ -58,7 +64,7 @@ export const mobileNavigationItems: NavigationItem[] = [
   mainNavigationItems[1],
   mainNavigationItems[3],
   mainNavigationItems[4],
-  mainNavigationItems[5]
+  mainNavigationItems[6]
 ];
 
 export const adminNavigationItems: NavigationItem[] = [
@@ -91,6 +97,11 @@ export const adminNavigationItems: NavigationItem[] = [
     href: "/admin/pagamentos",
     icon: WalletCards,
     label: "Pagamentos"
+  },
+  {
+    href: "/admin/palpites",
+    icon: ClipboardList,
+    label: "Palpites"
   },
   {
     href: "/admin/relatorios",

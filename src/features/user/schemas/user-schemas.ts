@@ -8,7 +8,18 @@ const passwordSchema = z
   .regex(/[0-9]/, "A senha deve conter pelo menos um numero.")
   .regex(/[^A-Za-z0-9]/, "A senha deve conter pelo menos um caractere especial.");
 
-const optionalUrlSchema = z.string().url("Informe uma URL valida.").optional().or(z.literal(""));
+const optionalAvatarSchema = z
+  .string()
+  .max(900_000, "A imagem deve ter no maximo 900 KB depois do ajuste.")
+  .refine((value) => {
+    if (!value) {
+      return true;
+    }
+
+    return /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(value) || z.string().url().safeParse(value).success;
+  }, "Informe uma URL valida ou envie uma imagem em PNG, JPG ou WebP.")
+  .optional()
+  .or(z.literal(""));
 
 export const updateProfileSchema = z.object({
   firstName: z.string().min(2, "Informe seu nome.").max(80).trim(),
@@ -20,7 +31,7 @@ export const updateProfileSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, "Use apenas letras, numeros e underline.")
     .trim()
     .toLowerCase(),
-  avatarUrl: optionalUrlSchema,
+  avatarUrl: optionalAvatarSchema,
   locale: z.string().min(2).max(12).trim(),
   theme: z.enum(["system", "light", "dark"])
 });

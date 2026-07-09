@@ -59,6 +59,8 @@ function validateEditableMatch(match: EditableMatch | null, now = new Date()) {
 }
 
 function revalidateGuessesArea() {
+  revalidatePath("/admin/palpites");
+  revalidatePath("/comparar-palpites");
   revalidatePath("/palpites");
   revalidatePath("/dashboard");
   revalidatePath("/estatisticas");

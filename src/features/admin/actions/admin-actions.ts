@@ -68,10 +68,12 @@ function revalidateAdminPaths() {
   revalidatePath("/admin/rodadas");
   revalidatePath("/admin/ligas");
   revalidatePath("/admin/pagamentos");
+  revalidatePath("/admin/palpites");
   revalidatePath("/admin/auditoria");
   revalidatePath("/admin/configuracoes");
   revalidatePath("/rodadas");
   revalidatePath("/palpites");
+  revalidatePath("/comparar-palpites");
   revalidatePath("/ranking");
   revalidatePath("/ligas");
   revalidatePath("/dashboard");

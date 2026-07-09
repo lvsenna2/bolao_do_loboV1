@@ -758,6 +758,163 @@ export async function getAdminPayments(searchParams: SearchParams) {
   }
 }
 
+export async function getAdminGuesses(searchParams: SearchParams) {
+  const empty = {
+    items: [],
+    page: getPage(searchParams),
+    pageSize: DEFAULT_PAGE_SIZE,
+    total: 0
+  };
+
+  try {
+    const { page, skip, take } = getPagination(searchParams);
+    const q = getParam(searchParams, "q");
+    const where: Prisma.GuessWhereInput = {
+      deletedAt: null,
+      ...(q
+        ? {
+            OR: [
+              {
+                user: {
+                  name: {
+                    contains: q,
+                    mode: "insensitive"
+                  }
+                }
+              },
+              {
+                user: {
+                  email: {
+                    contains: q,
+                    mode: "insensitive"
+                  }
+                }
+              },
+              {
+                league: {
+                  name: {
+                    contains: q,
+                    mode: "insensitive"
+                  }
+                }
+              },
+              {
+                match: {
+                  homeTeam: {
+                    name: {
+                      contains: q,
+                      mode: "insensitive"
+                    }
+                  }
+                }
+              },
+              {
+                match: {
+                  awayTeam: {
+                    name: {
+                      contains: q,
+                      mode: "insensitive"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        : {})
+    };
+
+    const [items, total] = await prisma.$transaction([
+      prisma.guess.findMany({
+        orderBy: {
+          submittedAt: "desc"
+        },
+        select: {
+          awayPrediction: true,
+          homePrediction: true,
+          id: true,
+          joker: true,
+          league: {
+            select: {
+              name: true
+            }
+          },
+          match: {
+            select: {
+              awayTeam: {
+                select: {
+                  name: true,
+                  shortName: true
+                }
+              },
+              homeTeam: {
+                select: {
+                  name: true,
+                  shortName: true
+                }
+              },
+              kickoff: true,
+              round: {
+                select: {
+                  name: true,
+                  number: true,
+                  season: {
+                    select: {
+                      championship: {
+                        select: {
+                          name: true
+                        }
+                      },
+                      name: true,
+                      year: true
+                    }
+                  }
+                }
+              },
+              status: true
+            }
+          },
+          prediction: true,
+          score: {
+            select: {
+              exactScore: true,
+              totalPoints: true,
+              winnerHit: true
+            }
+          },
+          submittedAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              avatarUrl: true,
+              email: true,
+              name: true,
+              username: true
+            }
+          }
+        },
+        skip,
+        take,
+        where
+      }),
+      prisma.guess.count({
+        where
+      })
+    ]);
+
+    return {
+      ok: true as const,
+      data: {
+        items,
+        page,
+        pageSize: DEFAULT_PAGE_SIZE,
+        total
+      }
+    };
+  } catch {
+    return emptyResult("Nao foi possivel carregar palpites.", empty);
+  }
+}
+
 export async function getAdminAuditLogs(searchParams: SearchParams) {
   const empty = {
     items: [],
