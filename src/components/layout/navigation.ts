@@ -2,6 +2,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileText,
+  Flag,
   GitCompareArrows,
   History,
   LayoutDashboard,
@@ -82,6 +83,11 @@ export const adminNavigationItems: NavigationItem[] = [
     href: "/admin/campeonatos",
     icon: Medal,
     label: "Campeonatos"
+  },
+  {
+    href: "/admin/times",
+    icon: Flag,
+    label: "Times"
   },
   {
     href: "/admin/rodadas",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createMatchSchema, createRoundSchema } from "./admin-schemas";
+import { createMatchSchema, createRoundSchema, importApiFootballTeamsSchema } from "./admin-schemas";
 
 const uuid = "11111111-1111-4111-8111-111111111111";
 
@@ -29,5 +29,33 @@ describe("admin schemas", () => {
     });
 
     expect(parsed.kickoff.toISOString()).toBe("2026-07-03T03:06:00.000Z");
+  });
+
+  it("permite importar times da API por pais", () => {
+    const parsed = importApiFootballTeamsSchema.parse({
+      country: "Brazil"
+    });
+
+    expect(parsed.country).toBe("Brazil");
+  });
+
+  it("permite importar times da API por liga e temporada", () => {
+    const parsed = importApiFootballTeamsSchema.parse({
+      leagueId: "71",
+      season: "2026"
+    });
+
+    expect(parsed.leagueId).toBe(71);
+    expect(parsed.season).toBe(2026);
+  });
+
+  it("exige pais ou liga com temporada para a API", () => {
+    const parsed = importApiFootballTeamsSchema.safeParse({
+      country: "",
+      leagueId: "",
+      season: ""
+    });
+
+    expect(parsed.success).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ import type {
 } from "@prisma/client";
 
 import { prisma } from "@/server/db";
+import { isFootballApiConfigured } from "@/server/football-api/client";
 import type { AdminDataResult } from "../types";
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -358,6 +359,94 @@ export async function getAdminChampionships(searchParams: SearchParams) {
     };
   } catch {
     return emptyResult("Nao foi possivel carregar campeonatos.", empty);
+  }
+}
+
+export async function getAdminTeams(searchParams: SearchParams) {
+  const empty = {
+    apiConfigured: isFootballApiConfigured(),
+    items: [],
+    page: getPage(searchParams),
+    pageSize: DEFAULT_PAGE_SIZE,
+    total: 0
+  };
+
+  try {
+    const { page, skip, take } = getPagination(searchParams);
+    const q = getParam(searchParams, "q");
+    const where: Prisma.TeamWhereInput = {
+      ...(q
+        ? {
+            OR: [
+              {
+                name: {
+                  contains: q,
+                  mode: "insensitive"
+                }
+              },
+              {
+                shortName: {
+                  contains: q,
+                  mode: "insensitive"
+                }
+              },
+              {
+                country: {
+                  contains: q,
+                  mode: "insensitive"
+                }
+              }
+            ]
+          }
+        : {})
+    };
+
+    const [items, total] = await prisma.$transaction([
+      prisma.team.findMany({
+        orderBy: [
+          {
+            country: "asc"
+          },
+          {
+            name: "asc"
+          }
+        ],
+        select: {
+          apiId: true,
+          country: true,
+          createdAt: true,
+          id: true,
+          logo: true,
+          name: true,
+          shortName: true,
+          _count: {
+            select: {
+              awayMatches: true,
+              homeMatches: true
+            }
+          }
+        },
+        skip,
+        take,
+        where
+      }),
+      prisma.team.count({
+        where
+      })
+    ]);
+
+    return {
+      ok: true as const,
+      data: {
+        apiConfigured: isFootballApiConfigured(),
+        items,
+        page,
+        pageSize: DEFAULT_PAGE_SIZE,
+        total
+      }
+    };
+  } catch {
+    return emptyResult("Nao foi possivel carregar times.", empty);
   }
 }
 

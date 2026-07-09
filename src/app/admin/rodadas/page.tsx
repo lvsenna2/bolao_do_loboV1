@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   createMatchAction,
   createRoundAction,
-  createTeamAction,
   deleteRoundAction,
   homologateMatchResultAction,
   openRoundAction,
@@ -35,7 +34,6 @@ type AdminRoundsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-const createTeamFormAction = createTeamAction as unknown as FormAction;
 const createRoundFormAction = createRoundAction as unknown as FormAction;
 const createMatchFormAction = createMatchAction as unknown as FormAction;
 const deleteRoundFormAction = deleteRoundAction as unknown as FormAction;
@@ -96,37 +94,13 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
 
   return (
     <PageShell
-      description="Cadastre rodadas, equipes e partidas para liberar o fluxo de acompanhamento e palpites."
+      description="Cadastre rodadas e partidas para liberar o fluxo de acompanhamento e palpites."
       eyebrow="Administracao"
       title="Rodadas"
     >
       <AdminAlert message={result.ok ? undefined : result.message} />
 
-      <div className="mb-5 grid gap-5 xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nova equipe</CardTitle>
-            <CardDescription>
-              Equipes usadas como mandante e visitante nas partidas.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={createTeamFormAction} className="grid gap-3">
-              <input className={inputClass} name="name" placeholder="Nome da equipe" required />
-              <input className={inputClass} name="shortName" placeholder="Sigla" />
-              <input className={inputClass} name="country" placeholder="Pais" required />
-              <input className={inputClass} name="logo" placeholder="URL do escudo" type="url" />
-              <input className={inputClass} name="apiId" placeholder="ID na API" type="number" />
-              <button
-                className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
-                type="submit"
-              >
-                Cadastrar equipe
-              </button>
-            </form>
-          </CardContent>
-        </Card>
-
+      <div className="mb-5 grid gap-5 xl:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Nova rodada</CardTitle>

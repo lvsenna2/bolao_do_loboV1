@@ -98,6 +98,36 @@ export const createTeamSchema = z.object({
   apiId: z.coerce.number().int().positive().optional().or(z.literal(""))
 });
 
+export const bulkImportTeamsSchema = z.object({
+  teams: z
+    .string()
+    .min(5, "Informe pelo menos uma equipe.")
+    .max(30000, "Envie no maximo 30.000 caracteres.")
+});
+
+export const importTeamPresetSchema = z.object({
+  preset: z.enum(["national-teams", "brazil-clubs"])
+});
+
+export const importApiFootballTeamsSchema = z
+  .object({
+    country: z.string().max(80).trim().optional().or(z.literal("")),
+    leagueId: z.coerce.number().int().positive().optional().or(z.literal("")),
+    season: z.coerce.number().int().min(1900).max(2200).optional().or(z.literal(""))
+  })
+  .refine(
+    (data) => {
+      const hasCountry = typeof data.country === "string" && data.country.length > 0;
+      const hasLeagueSeason = typeof data.leagueId === "number" && typeof data.season === "number";
+
+      return hasCountry || hasLeagueSeason;
+    },
+    {
+      message: "Informe um pais ou o ID da liga com temporada.",
+      path: ["country"]
+    }
+  );
+
 export const createRoundSchema = z
   .object({
     seasonId: uuidSchema,
@@ -193,3 +223,4 @@ export type CreateRoundInput = z.infer<typeof createRoundSchema>;
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
 export type GeneralSettingsInput = z.infer<typeof generalSettingsSchema>;
 export type HomologateMatchResultInput = z.infer<typeof homologateMatchResultSchema>;
+export type ImportApiFootballTeamsInput = z.infer<typeof importApiFootballTeamsSchema>;

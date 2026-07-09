@@ -3,11 +3,14 @@
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
+import { getTeamPreset } from "@/features/admin/data/team-presets";
 import { recalculateRankingsForMatch } from "@/features/ranking/services/ranking-service";
 import { processMatchScores } from "@/features/scoring/services/scoring-service";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
+import { fetchApiFootballTeams } from "@/server/football-api/client";
 import {
+  bulkImportTeamsSchema,
   createChampionshipSchema,
   createMatchSchema,
   createRoundSchema,
@@ -17,6 +20,8 @@ import {
   deleteRoundSchema,
   generalSettingsSchema,
   homologateMatchResultSchema,
+  importApiFootballTeamsSchema,
+  importTeamPresetSchema,
   openRoundSchema,
   softDeleteUserSchema,
   updateChampionshipStatusSchema,
@@ -65,6 +70,7 @@ function revalidateAdminPaths() {
   revalidatePath("/admin");
   revalidatePath("/admin/usuarios");
   revalidatePath("/admin/campeonatos");
+  revalidatePath("/admin/times");
   revalidatePath("/admin/rodadas");
   revalidatePath("/admin/ligas");
   revalidatePath("/admin/pagamentos");
@@ -80,6 +86,237 @@ function revalidateAdminPaths() {
   revalidatePath("/perfil");
   revalidatePath("/estatisticas");
   revalidatePath("/minhas-ligas");
+}
+
+type ImportableTeam = {
+  apiId?: number | null;
+  country: string;
+  logo?: string | null;
+  name: string;
+  shortName?: string | null;
+};
+
+type TeamImportSummary = {
+  created: number;
+  invalid: number;
+  skipped: number;
+  updated: number;
+};
+
+function cleanText(value: string | null | undefined) {
+  const trimmed = value?.trim();
+
+  return trimmed ? trimmed : null;
+}
+
+function normalizeImportableTeam(team: ImportableTeam) {
+  const name = cleanText(team.name);
+  const country = cleanText(team.country);
+
+  if (!name || !country) {
+    return null;
+  }
+
+  return {
+    apiId: typeof team.apiId === "number" && team.apiId > 0 ? team.apiId : null,
+    country,
+    logo: cleanText(team.logo),
+    name,
+    shortName: cleanText(team.shortName)
+  } satisfies ImportableTeam;
+}
+
+function prepareTeamsForImport(rawTeams: ImportableTeam[]) {
+  const uniqueTeams = new Map<string, ImportableTeam>();
+  let invalid = 0;
+  let skipped = 0;
+
+  rawTeams.forEach((rawTeam) => {
+    const team = normalizeImportableTeam(rawTeam);
+
+    if (!team) {
+      invalid += 1;
+      return;
+    }
+
+    const key = team.apiId
+      ? `api:${team.apiId}`
+      : `manual:${team.name.toLowerCase()}|${team.country.toLowerCase()}`;
+
+    if (uniqueTeams.has(key)) {
+      skipped += 1;
+    }
+
+    uniqueTeams.set(key, team);
+  });
+
+  return {
+    invalid,
+    skipped,
+    teams: [...uniqueTeams.values()]
+  };
+}
+
+function parseBulkTeamLines(value: string) {
+  const teams: ImportableTeam[] = [];
+  let invalid = 0;
+
+  value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const delimiter = line.includes(";") ? ";" : ",";
+      const fields = line.split(delimiter).map((field) => field.trim());
+      const [name, shortNameOrCountry, countryOrLogo, logoOrApiId, apiId] = fields;
+
+      if (!name || !shortNameOrCountry) {
+        invalid += 1;
+        return;
+      }
+
+      if (!countryOrLogo) {
+        teams.push({
+          country: shortNameOrCountry,
+          name
+        });
+        return;
+      }
+
+      const parsedApiId = apiId ? Number(apiId) : Number(logoOrApiId);
+      const hasParsedApiId = Number.isFinite(parsedApiId) && parsedApiId > 0;
+
+      teams.push({
+        apiId: hasParsedApiId ? parsedApiId : undefined,
+        country: countryOrLogo,
+        logo: hasParsedApiId ? undefined : logoOrApiId,
+        name,
+        shortName: shortNameOrCountry
+      });
+    });
+
+  return {
+    invalid,
+    teams
+  };
+}
+
+function getTeamImportMessage(summary: TeamImportSummary) {
+  return `Importacao concluida: ${summary.created} criados, ${summary.updated} atualizados, ${summary.skipped} ignorados e ${summary.invalid} invalidos.`;
+}
+
+async function importTeamsIntoDatabase(
+  adminId: string,
+  source: string,
+  rawTeams: ImportableTeam[],
+  invalidOffset = 0
+) {
+  const prepared = prepareTeamsForImport(rawTeams);
+
+  if (prepared.teams.length === 0) {
+    return {
+      created: 0,
+      invalid: prepared.invalid + invalidOffset,
+      skipped: prepared.skipped,
+      updated: 0
+    } satisfies TeamImportSummary;
+  }
+
+  const summary = await prisma.$transaction(async (tx) => {
+    const currentSummary: TeamImportSummary = {
+      created: 0,
+      invalid: prepared.invalid + invalidOffset,
+      skipped: prepared.skipped,
+      updated: 0
+    };
+
+    for (const team of prepared.teams) {
+      const existingByApiId = team.apiId
+        ? await tx.team.findUnique({
+            select: {
+              apiId: true,
+              country: true,
+              id: true,
+              logo: true,
+              name: true,
+              shortName: true
+            },
+            where: {
+              apiId: team.apiId
+            }
+          })
+        : null;
+
+      const existingTeam =
+        existingByApiId ??
+        (await tx.team.findFirst({
+          select: {
+            apiId: true,
+            country: true,
+            id: true,
+            logo: true,
+            name: true,
+            shortName: true
+          },
+          where: {
+            country: {
+              equals: team.country,
+              mode: "insensitive"
+            },
+            name: {
+              equals: team.name,
+              mode: "insensitive"
+            }
+          }
+        }));
+
+      if (existingTeam) {
+        await tx.team.update({
+          data: {
+            apiId: existingTeam.apiId ?? team.apiId ?? null,
+            country: team.country,
+            logo: team.logo || existingTeam.logo,
+            name: team.name,
+            shortName: team.shortName || existingTeam.shortName
+          },
+          where: {
+            id: existingTeam.id
+          }
+        });
+        currentSummary.updated += 1;
+      } else {
+        await tx.team.create({
+          data: {
+            apiId: team.apiId ?? null,
+            country: team.country,
+            logo: team.logo,
+            name: team.name,
+            shortName: team.shortName
+          }
+        });
+        currentSummary.created += 1;
+      }
+    }
+
+    await tx.auditLog.create({
+      data: {
+        action: "admin.team.imported",
+        entity: "Team",
+        entityId: "bulk",
+        newValue: {
+          source,
+          ...currentSummary
+        },
+        userId: adminId
+      }
+    });
+
+    return currentSummary;
+  });
+
+  revalidateAdminPaths();
+
+  return summary;
 }
 
 export async function updateUserRoleAction(formData: FormData): Promise<AdminActionResult> {
@@ -566,6 +803,103 @@ export async function createTeamAction(formData: FormData): Promise<AdminActionR
   return {
     ok: true,
     message: "Equipe cadastrada."
+  };
+}
+
+export async function bulkImportTeamsAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = bulkImportTeamsSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise a lista de equipes.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const parsedTeams = parseBulkTeamLines(parsedInput.data.teams);
+  const summary = await importTeamsIntoDatabase(
+    admin.id,
+    "bulk",
+    parsedTeams.teams,
+    parsedTeams.invalid
+  );
+
+  if (summary.created + summary.updated === 0) {
+    return {
+      ok: false,
+      message: "Nenhuma equipe valida foi importada."
+    };
+  }
+
+  return {
+    ok: true,
+    message: getTeamImportMessage(summary)
+  };
+}
+
+export async function importTeamPresetAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = importTeamPresetSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Biblioteca de equipes invalida.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const teams = getTeamPreset(parsedInput.data.preset);
+  const summary = await importTeamsIntoDatabase(admin.id, parsedInput.data.preset, teams);
+
+  return {
+    ok: true,
+    message: getTeamImportMessage(summary)
+  };
+}
+
+export async function importApiFootballTeamsAction(
+  formData: FormData
+): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = importApiFootballTeamsSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise os parametros da API.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const data = parsedInput.data;
+  const apiResult = await fetchApiFootballTeams({
+    country: typeof data.country === "string" && data.country ? data.country : undefined,
+    leagueId: typeof data.leagueId === "number" ? data.leagueId : undefined,
+    season: typeof data.season === "number" ? data.season : undefined
+  });
+
+  if (!apiResult.ok) {
+    return {
+      ok: false,
+      message: apiResult.message
+    };
+  }
+
+  if (apiResult.teams.length === 0) {
+    return {
+      ok: false,
+      message: "A API nao retornou equipes para estes parametros."
+    };
+  }
+
+  const summary = await importTeamsIntoDatabase(admin.id, "api-football", apiResult.teams);
+
+  return {
+    ok: true,
+    message: getTeamImportMessage(summary)
   };
 }
 
