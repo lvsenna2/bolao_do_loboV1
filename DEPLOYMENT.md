@@ -46,7 +46,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 pnpm prisma:deploy
 ```
 
-O comando `pnpm build` tambem executa `prisma migrate deploy` antes do build para manter o banco publicado atualizado.
+Evite rodar migration dentro do build da Vercel. Se aparecer erro de lock/advisory lock,
+aguarde alguns minutos, cancele deploys antigos em andamento e rode a migration uma unica vez
+fora do build.
 
 6. Para popular o ambiente de testes com o Brasileirao ficticio:
 
