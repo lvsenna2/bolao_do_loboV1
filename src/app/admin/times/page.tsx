@@ -125,41 +125,32 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
             <CardDescription>Carregue listas comuns sem pesquisar escudo manualmente.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={importTeamPresetFormAction} className="grid gap-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                {teamPresetOptions.map((preset) => (
-                  <label
-                    className="cursor-pointer rounded-card border border-app-border bg-app-background p-4 transition hover:border-brand-gold"
-                    key={preset.id}
+            <div className="grid gap-3 md:grid-cols-2">
+              {teamPresetOptions.map((preset) => (
+                <form action={importTeamPresetFormAction} key={preset.id}>
+                  <input name="preset" type="hidden" value={preset.id} />
+                  <button
+                    className="h-full w-full rounded-card border border-app-border bg-app-background p-4 text-left transition hover:border-brand-gold hover:bg-app-elevated"
+                    type="submit"
                   >
-                    <input
-                      className="sr-only"
-                      defaultChecked={preset.id === "national-teams"}
-                      name="preset"
-                      type="radio"
-                      value={preset.id}
-                    />
                     <span className="flex items-start gap-3">
                       <Database aria-hidden className="mt-0.5 h-5 w-5 text-brand-gold" />
-                      <span>
+                      <span className="min-w-0">
                         <span className="block font-semibold text-app-foreground">
                           {preset.label}
                         </span>
                         <span className="mt-1 block text-sm text-app-muted">
                           {preset.description}
                         </span>
+                        <span className="mt-3 inline-flex h-9 items-center rounded-button bg-brand-gold px-3 text-sm font-semibold text-slate-950">
+                          Importar
+                        </span>
                       </span>
                     </span>
-                  </label>
-                ))}
-              </div>
-              <button
-                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
-                type="submit"
-              >
-                Importar biblioteca
-              </button>
-            </form>
+                  </button>
+                </form>
+              ))}
+            </div>
           </CardContent>
         </Card>
 

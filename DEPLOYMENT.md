@@ -26,6 +26,8 @@ NEXTAUTH_SECRET="gere-um-segredo-forte"
 
 MERCADO_PAGO_ACCESS_TOKEN=""
 API_FOOTBALL_KEY=""
+API_FOOTBALL_BASE_URL="https://v3.football.api-sports.io"
+FOOTBALL_SYNC_CACHE_HOURS="12"
 SMTP_HOST=""
 SMTP_PORT=""
 SMTP_USER=""
@@ -38,11 +40,13 @@ Para gerar `NEXTAUTH_SECRET` localmente:
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 ```
 
-5. Aplique migrations no banco remoto:
+5. Aplique migrations no banco remoto, se precisar rodar manualmente:
 
 ```bash
 pnpm prisma:deploy
 ```
+
+O comando `pnpm build` tambem executa `prisma migrate deploy` antes do build para manter o banco publicado atualizado.
 
 6. Para popular o ambiente de testes com o Brasileirao ficticio:
 

@@ -1,0 +1,587 @@
+import type { MatchStatus, Prisma, RoundStatus } from "@prisma/client";
+
+import { prisma } from "@/server/db";
+import {
+  fetchApiFootballFixtures,
+  fetchApiFootballLeagues,
+  fetchApiFootballRounds,
+  fetchApiFootballStandings,
+  fetchApiFootballTeams,
+  type ExternalFootballTeam
+} from "./client";
+import {
+  getFootballSyncCacheHours,
+  type FootballCompetitionConfig
+} from "./competitions";
+
+type SyncCounter = {
+  callsUsed: number;
+  matchesImported: number;
+  roundsImported: number;
+  standingsImported: number;
+  teamsImported: number;
+};
+
+export type FootballSyncResult =
+  | {
+      cached?: boolean;
+      message: string;
+      ok: true;
+      summary: SyncCounter;
+    }
+  | {
+      message: string;
+      ok: false;
+      summary: SyncCounter;
+    };
+
+const PROVIDER = "api-football";
+
+function emptySummary(): SyncCounter {
+  return {
+    callsUsed: 0,
+    matchesImported: 0,
+    roundsImported: 0,
+    standingsImported: 0,
+    teamsImported: 0
+  };
+}
+
+function addCalls(summary: SyncCounter, callsUsed: number) {
+  summary.callsUsed += callsUsed;
+}
+
+function toChampionshipStatus(): "ACTIVE" {
+  return "ACTIVE";
+}
+
+function mapMatchStatus(statusShort: string): MatchStatus {
+  if (["1H", "2H", "ET", "BT", "P", "INT", "LIVE"].includes(statusShort)) {
+    return "LIVE";
+  }
+
+  if (statusShort === "HT") {
+    return "HALFTIME";
+  }
+
+  if (["FT", "AET", "PEN", "AWD", "WO"].includes(statusShort)) {
+    return "FINISHED";
+  }
+
+  if (["PST", "SUSP"].includes(statusShort)) {
+    return "POSTPONED";
+  }
+
+  if (["CANC", "ABD"].includes(statusShort)) {
+    return "CANCELLED";
+  }
+
+  return "SCHEDULED";
+}
+
+function getRoundStatus(statuses: MatchStatus[]): RoundStatus {
+  if (statuses.some((status) => status === "LIVE" || status === "HALFTIME")) {
+    return "LIVE";
+  }
+
+  if (
+    statuses.length > 0 &&
+    statuses.every((status) => status === "FINISHED" || status === "CANCELLED")
+  ) {
+    return "FINISHED";
+  }
+
+  return "SCHEDULED";
+}
+
+function addHours(date: Date, hours: number) {
+  const nextDate = new Date(date);
+  nextDate.setHours(nextDate.getHours() + hours);
+
+  return nextDate;
+}
+
+async function getFreshSuccessfulSync(config: FootballCompetitionConfig) {
+  const cacheHours = getFootballSyncCacheHours();
+
+  if (cacheHours <= 0) {
+    return null;
+  }
+
+  const minFinishedAt = new Date();
+  minFinishedAt.setHours(minFinishedAt.getHours() - cacheHours);
+
+  return prisma.footballSyncLog.findFirst({
+    orderBy: {
+      finishedAt: "desc"
+    },
+    where: {
+      competitionKey: config.key,
+      finishedAt: {
+        gte: minFinishedAt
+      },
+      season: config.season,
+      status: "SUCCESS"
+    }
+  });
+}
+
+async function logSync(
+  config: FootballCompetitionConfig,
+  status: "SUCCESS" | "FAILED" | "SKIPPED",
+  message: string,
+  summary: SyncCounter,
+  startedAt: Date
+) {
+  await prisma.footballSyncLog.create({
+    data: {
+      callsUsed: summary.callsUsed,
+      competitionKey: config.key,
+      finishedAt: new Date(),
+      leagueId: config.leagueId,
+      matchesImported: summary.matchesImported,
+      message,
+      roundsImported: summary.roundsImported,
+      season: config.season,
+      standingsImported: summary.standingsImported,
+      startedAt,
+      status,
+      teamsImported: summary.teamsImported
+    }
+  });
+}
+
+async function upsertTeam(team: ExternalFootballTeam) {
+  const existingByApiId = await prisma.team.findUnique({
+    select: {
+      id: true,
+      logo: true,
+      shortName: true
+    },
+    where: {
+      apiId: team.apiId
+    }
+  });
+
+  if (existingByApiId) {
+    return prisma.team.update({
+      data: {
+        country: team.country,
+        logo: team.logo || existingByApiId.logo,
+        name: team.name,
+        shortName: team.shortName || existingByApiId.shortName
+      },
+      where: {
+        id: existingByApiId.id
+      }
+    });
+  }
+
+  const existingByName = await prisma.team.findFirst({
+    select: {
+      id: true,
+      logo: true,
+      shortName: true
+    },
+    where: {
+      apiId: null,
+      country: {
+        equals: team.country,
+        mode: "insensitive"
+      },
+      name: {
+        equals: team.name,
+        mode: "insensitive"
+      }
+    }
+  });
+
+  if (existingByName) {
+    return prisma.team.update({
+      data: {
+        apiId: team.apiId,
+        logo: team.logo || existingByName.logo,
+        shortName: team.shortName || existingByName.shortName
+      },
+      where: {
+        id: existingByName.id
+      }
+    });
+  }
+
+  return prisma.team.create({
+    data: {
+      apiId: team.apiId,
+      country: team.country,
+      logo: team.logo,
+      name: team.name,
+      shortName: team.shortName
+    }
+  });
+}
+
+async function upsertCompetition(config: FootballCompetitionConfig, summary: SyncCounter) {
+  const leagueResult = await fetchApiFootballLeagues({
+    id: config.leagueId
+  });
+  addCalls(summary, leagueResult.callsUsed);
+
+  if (!leagueResult.ok) {
+    throw new Error(leagueResult.message);
+  }
+
+  const league = leagueResult.data[0];
+
+  if (!league) {
+    throw new Error(`Competicao ${config.name} nao encontrada na API-Football.`);
+  }
+
+  const championship = await prisma.championship.upsert({
+    create: {
+      apiId: config.leagueId,
+      country: config.countryOrContinent,
+      description: `${league.name} importado da API-Football.`,
+      logo: league.logo,
+      name: league.name || config.name,
+      provider: PROVIDER,
+      status: toChampionshipStatus()
+    },
+    update: {
+      country: config.countryOrContinent,
+      description: `${league.name} importado da API-Football.`,
+      logo: league.logo,
+      name: league.name || config.name,
+      status: toChampionshipStatus()
+    },
+    where: {
+      provider_apiId: {
+        apiId: config.leagueId,
+        provider: PROVIDER
+      }
+    }
+  });
+
+  const season = await prisma.season.upsert({
+    create: {
+      championshipId: championship.id,
+      name: String(config.season),
+      status: "ACTIVE",
+      year: config.season
+    },
+    update: {
+      name: String(config.season),
+      status: "ACTIVE"
+    },
+    where: {
+      championshipId_year: {
+        championshipId: championship.id,
+        year: config.season
+      }
+    }
+  });
+
+  return {
+    championship,
+    season
+  };
+}
+
+async function upsertTeams(config: FootballCompetitionConfig, summary: SyncCounter) {
+  const teamsResult = await fetchApiFootballTeams({
+    leagueId: config.leagueId,
+    season: config.season
+  });
+  addCalls(summary, teamsResult.callsUsed);
+
+  if (!teamsResult.ok) {
+    throw new Error(teamsResult.message);
+  }
+
+  for (const team of teamsResult.teams) {
+    await upsertTeam(team);
+    summary.teamsImported += 1;
+  }
+}
+
+async function getRoundNumber(
+  seasonId: string,
+  roundName: string,
+  orderMap: Map<string, number>
+) {
+  const mappedNumber = orderMap.get(roundName);
+
+  if (mappedNumber) {
+    return mappedNumber;
+  }
+
+  const lastRound = await prisma.round.findFirst({
+    orderBy: {
+      number: "desc"
+    },
+    select: {
+      number: true
+    },
+    where: {
+      leagueId: null,
+      seasonId
+    }
+  });
+
+  const nextNumber = (lastRound?.number ?? 0) + 1;
+  orderMap.set(roundName, nextNumber);
+
+  return nextNumber;
+}
+
+async function upsertRound(
+  seasonId: string,
+  roundName: string,
+  kickoff: Date,
+  orderMap: Map<string, number>
+) {
+  const existingRound = await prisma.round.findFirst({
+    where: {
+      leagueId: null,
+      name: roundName,
+      seasonId
+    }
+  });
+
+  if (existingRound) {
+    return existingRound;
+  }
+
+  return prisma.round.create({
+    data: {
+      endsAt: addHours(kickoff, 2),
+      leagueId: null,
+      name: roundName,
+      number: await getRoundNumber(seasonId, roundName, orderMap),
+      seasonId,
+      startsAt: kickoff,
+      status: "SCHEDULED"
+    }
+  });
+}
+
+async function upsertFixtures(
+  config: FootballCompetitionConfig,
+  seasonId: string,
+  summary: SyncCounter
+) {
+  const roundsResult = await fetchApiFootballRounds(config.leagueId, config.season);
+  addCalls(summary, roundsResult.callsUsed);
+
+  if (!roundsResult.ok) {
+    throw new Error(roundsResult.message);
+  }
+
+  const orderMap = new Map<string, number>();
+  roundsResult.data.forEach((roundName, index) => {
+    orderMap.set(roundName, index + 1);
+  });
+
+  const fixturesResult = await fetchApiFootballFixtures(config.leagueId, config.season);
+  addCalls(summary, fixturesResult.callsUsed);
+
+  if (!fixturesResult.ok) {
+    throw new Error(fixturesResult.message);
+  }
+
+  const roundBounds = new Map<
+    string,
+    {
+      end: Date;
+      start: Date;
+      statuses: MatchStatus[];
+    }
+  >();
+
+  for (const fixture of fixturesResult.data) {
+    const [homeTeam, awayTeam] = await Promise.all([
+      upsertTeam(fixture.homeTeam),
+      upsertTeam(fixture.awayTeam)
+    ]);
+    const round = await upsertRound(seasonId, fixture.round, fixture.kickoff, orderMap);
+    const status = mapMatchStatus(fixture.statusShort);
+    const existingMatch = await prisma.match.findUnique({
+      select: {
+        id: true
+      },
+      where: {
+        apiId: fixture.apiId
+      }
+    });
+
+    const matchData: Prisma.MatchUncheckedCreateInput = {
+      apiId: fixture.apiId,
+      awayScore: fixture.awayScore,
+      awayTeamId: awayTeam.id,
+      city: fixture.city,
+      country: fixture.country,
+      homeScore: fixture.homeScore,
+      homeTeamId: homeTeam.id,
+      kickoff: fixture.kickoff,
+      referee: fixture.referee,
+      roundId: round.id,
+      stadium: fixture.stadium,
+      status
+    };
+
+    if (existingMatch) {
+      await prisma.match.update({
+        data: {
+          ...matchData,
+          deletedAt: null
+        },
+        where: {
+          id: existingMatch.id
+        }
+      });
+    } else {
+      await prisma.match.create({
+        data: matchData
+      });
+    }
+
+    summary.matchesImported += 1;
+
+    const currentBounds = roundBounds.get(round.id);
+    const fixtureEnd = addHours(fixture.kickoff, 2);
+
+    roundBounds.set(round.id, {
+      end:
+        currentBounds && currentBounds.end > fixtureEnd ? currentBounds.end : fixtureEnd,
+      start:
+        currentBounds && currentBounds.start < fixture.kickoff
+          ? currentBounds.start
+          : fixture.kickoff,
+      statuses: [...(currentBounds?.statuses ?? []), status]
+    });
+  }
+
+  for (const [roundId, bounds] of roundBounds.entries()) {
+    await prisma.round.update({
+      data: {
+        endsAt: bounds.end,
+        startsAt: bounds.start,
+        status: getRoundStatus(bounds.statuses)
+      },
+      where: {
+        id: roundId
+      }
+    });
+    summary.roundsImported += 1;
+  }
+}
+
+async function upsertStandings(
+  config: FootballCompetitionConfig,
+  seasonId: string,
+  summary: SyncCounter
+) {
+  const standingsResult = await fetchApiFootballStandings(config.leagueId, config.season);
+  addCalls(summary, standingsResult.callsUsed);
+
+  if (!standingsResult.ok) {
+    return;
+  }
+
+  for (const row of standingsResult.data) {
+    const team = await upsertTeam(row.team);
+
+    await prisma.competitionStanding.upsert({
+      create: {
+        description: row.description,
+        draws: row.draws,
+        form: row.form,
+        goalDiff: row.goalDiff,
+        goalsAgainst: row.goalsAgainst,
+        goalsFor: row.goalsFor,
+        groupName: row.groupName,
+        losses: row.losses,
+        played: row.played,
+        points: row.points,
+        rank: row.rank,
+        seasonId,
+        status: row.status,
+        teamId: team.id,
+        wins: row.wins
+      },
+      update: {
+        description: row.description,
+        draws: row.draws,
+        form: row.form,
+        goalDiff: row.goalDiff,
+        goalsAgainst: row.goalsAgainst,
+        goalsFor: row.goalsFor,
+        losses: row.losses,
+        played: row.played,
+        points: row.points,
+        rank: row.rank,
+        status: row.status,
+        wins: row.wins
+      },
+      where: {
+        seasonId_teamId_groupName: {
+          groupName: row.groupName,
+          seasonId,
+          teamId: team.id
+        }
+      }
+    });
+
+    summary.standingsImported += 1;
+  }
+}
+
+export async function syncFootballCompetition(
+  config: FootballCompetitionConfig,
+  options: {
+    force?: boolean;
+  } = {}
+): Promise<FootballSyncResult> {
+  const startedAt = new Date();
+  const summary = emptySummary();
+
+  if (!options.force) {
+    const freshSync = await getFreshSuccessfulSync(config);
+
+    if (freshSync) {
+      const message = `Sincronizacao ignorada: ${config.name} ja foi atualizado nas ultimas ${getFootballSyncCacheHours()} horas.`;
+      await logSync(config, "SKIPPED", message, summary, startedAt);
+
+      return {
+        cached: true,
+        message,
+        ok: true,
+        summary
+      };
+    }
+  }
+
+  try {
+    const { season } = await upsertCompetition(config, summary);
+    await upsertTeams(config, summary);
+    await upsertFixtures(config, season.id, summary);
+    await upsertStandings(config, season.id, summary);
+
+    const message = `${config.name} sincronizado: ${summary.teamsImported} times, ${summary.roundsImported} fases/rodadas, ${summary.matchesImported} jogos e ${summary.standingsImported} linhas de classificacao.`;
+    await logSync(config, "SUCCESS", message, summary, startedAt);
+
+    return {
+      message,
+      ok: true,
+      summary
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro inesperado na sincronizacao.";
+    await logSync(config, "FAILED", message, summary, startedAt);
+
+    return {
+      message,
+      ok: false,
+      summary
+    };
+  }
+}

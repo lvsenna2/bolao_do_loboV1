@@ -10,6 +10,11 @@ import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import { fetchApiFootballTeams } from "@/server/football-api/client";
 import {
+  footballCompetitionConfigs,
+  getFootballCompetitionConfig
+} from "@/server/football-api/competitions";
+import { syncFootballCompetition } from "@/server/football-api/sync-service";
+import {
   bulkImportTeamsSchema,
   createChampionshipSchema,
   createMatchSchema,
@@ -24,6 +29,8 @@ import {
   importTeamPresetSchema,
   openRoundSchema,
   softDeleteUserSchema,
+  syncAllFootballCompetitionsSchema,
+  syncFootballCompetitionSchema,
   updateChampionshipStatusSchema,
   updateLeagueStatusSchema,
   updateMatchStatusSchema,
@@ -71,6 +78,7 @@ function revalidateAdminPaths() {
   revalidatePath("/admin/usuarios");
   revalidatePath("/admin/campeonatos");
   revalidatePath("/admin/times");
+  revalidatePath("/admin/sincronizacao");
   revalidatePath("/admin/rodadas");
   revalidatePath("/admin/ligas");
   revalidatePath("/admin/pagamentos");
@@ -222,34 +230,16 @@ async function importTeamsIntoDatabase(
     } satisfies TeamImportSummary;
   }
 
-  const summary = await prisma.$transaction(async (tx) => {
-    const currentSummary: TeamImportSummary = {
-      created: 0,
-      invalid: prepared.invalid + invalidOffset,
-      skipped: prepared.skipped,
-      updated: 0
-    };
+  const summary: TeamImportSummary = {
+    created: 0,
+    invalid: prepared.invalid + invalidOffset,
+    skipped: prepared.skipped,
+    updated: 0
+  };
 
-    for (const team of prepared.teams) {
-      const existingByApiId = team.apiId
-        ? await tx.team.findUnique({
-            select: {
-              apiId: true,
-              country: true,
-              id: true,
-              logo: true,
-              name: true,
-              shortName: true
-            },
-            where: {
-              apiId: team.apiId
-            }
-          })
-        : null;
-
-      const existingTeam =
-        existingByApiId ??
-        (await tx.team.findFirst({
+  for (const team of prepared.teams) {
+    const existingByApiId = team.apiId
+      ? await prisma.team.findUnique({
           select: {
             apiId: true,
             country: true,
@@ -259,60 +249,78 @@ async function importTeamsIntoDatabase(
             shortName: true
           },
           where: {
-            country: {
-              equals: team.country,
-              mode: "insensitive"
-            },
-            name: {
-              equals: team.name,
-              mode: "insensitive"
-            }
+            apiId: team.apiId
           }
-        }));
+        })
+      : null;
 
-      if (existingTeam) {
-        await tx.team.update({
-          data: {
-            apiId: existingTeam.apiId ?? team.apiId ?? null,
-            country: team.country,
-            logo: team.logo || existingTeam.logo,
-            name: team.name,
-            shortName: team.shortName || existingTeam.shortName
+    const existingTeam =
+      existingByApiId ??
+      (await prisma.team.findFirst({
+        select: {
+          apiId: true,
+          country: true,
+          id: true,
+          logo: true,
+          name: true,
+          shortName: true
+        },
+        where: {
+          country: {
+            equals: team.country,
+            mode: "insensitive"
           },
-          where: {
-            id: existingTeam.id
+          name: {
+            equals: team.name,
+            mode: "insensitive"
           }
-        });
-        currentSummary.updated += 1;
-      } else {
-        await tx.team.create({
-          data: {
-            apiId: team.apiId ?? null,
-            country: team.country,
-            logo: team.logo,
-            name: team.name,
-            shortName: team.shortName
-          }
-        });
-        currentSummary.created += 1;
-      }
-    }
+        }
+      }));
 
-    await tx.auditLog.create({
+    if (existingTeam) {
+      await prisma.team.update({
+        data: {
+          apiId: existingTeam.apiId ?? team.apiId ?? null,
+          country: team.country,
+          logo: team.logo || existingTeam.logo,
+          name: team.name,
+          shortName: team.shortName || existingTeam.shortName
+        },
+        where: {
+          id: existingTeam.id
+        }
+      });
+      summary.updated += 1;
+    } else {
+      await prisma.team.create({
+        data: {
+          apiId: team.apiId ?? null,
+          country: team.country,
+          logo: team.logo,
+          name: team.name,
+          shortName: team.shortName
+        }
+      });
+      summary.created += 1;
+    }
+  }
+
+  try {
+    await prisma.auditLog.create({
       data: {
         action: "admin.team.imported",
         entity: "Team",
         entityId: "bulk",
         newValue: {
           source,
-          ...currentSummary
+          ...summary
         },
         userId: adminId
       }
     });
-
-    return currentSummary;
-  });
+  } catch {
+    // A importacao de times deve continuar mesmo se o log administrativo falhar.
+  }
 
   revalidateAdminPaths();
 
@@ -807,99 +815,219 @@ export async function createTeamAction(formData: FormData): Promise<AdminActionR
 }
 
 export async function bulkImportTeamsAction(formData: FormData): Promise<AdminActionResult> {
-  const admin = await requireAdmin();
-  const parsedInput = bulkImportTeamsSchema.safeParse(formDataToObject(formData));
+  try {
+    const admin = await requireAdmin();
+    const parsedInput = bulkImportTeamsSchema.safeParse(formDataToObject(formData));
 
-  if (!parsedInput.success) {
+    if (!parsedInput.success) {
+      return {
+        ok: false,
+        message: "Revise a lista de equipes.",
+        fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+      };
+    }
+
+    const parsedTeams = parseBulkTeamLines(parsedInput.data.teams);
+    const summary = await importTeamsIntoDatabase(
+      admin.id,
+      "bulk",
+      parsedTeams.teams,
+      parsedTeams.invalid
+    );
+
+    if (summary.created + summary.updated === 0) {
+      return {
+        ok: false,
+        message: "Nenhuma equipe valida foi importada."
+      };
+    }
+
+    return {
+      ok: true,
+      message: getTeamImportMessage(summary)
+    };
+  } catch {
     return {
       ok: false,
-      message: "Revise a lista de equipes.",
-      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+      message: "Nao foi possivel importar os times em lote."
     };
   }
-
-  const parsedTeams = parseBulkTeamLines(parsedInput.data.teams);
-  const summary = await importTeamsIntoDatabase(
-    admin.id,
-    "bulk",
-    parsedTeams.teams,
-    parsedTeams.invalid
-  );
-
-  if (summary.created + summary.updated === 0) {
-    return {
-      ok: false,
-      message: "Nenhuma equipe valida foi importada."
-    };
-  }
-
-  return {
-    ok: true,
-    message: getTeamImportMessage(summary)
-  };
 }
 
 export async function importTeamPresetAction(formData: FormData): Promise<AdminActionResult> {
-  const admin = await requireAdmin();
-  const parsedInput = importTeamPresetSchema.safeParse(formDataToObject(formData));
+  try {
+    const admin = await requireAdmin();
+    const parsedInput = importTeamPresetSchema.safeParse(formDataToObject(formData));
 
-  if (!parsedInput.success) {
+    if (!parsedInput.success) {
+      return {
+        ok: false,
+        message: "Biblioteca de equipes invalida.",
+        fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+      };
+    }
+
+    const teams = getTeamPreset(parsedInput.data.preset);
+    const summary = await importTeamsIntoDatabase(admin.id, parsedInput.data.preset, teams);
+
+    return {
+      ok: true,
+      message: getTeamImportMessage(summary)
+    };
+  } catch {
     return {
       ok: false,
-      message: "Biblioteca de equipes invalida.",
-      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+      message: "Nao foi possivel importar a biblioteca de times."
     };
   }
-
-  const teams = getTeamPreset(parsedInput.data.preset);
-  const summary = await importTeamsIntoDatabase(admin.id, parsedInput.data.preset, teams);
-
-  return {
-    ok: true,
-    message: getTeamImportMessage(summary)
-  };
 }
 
 export async function importApiFootballTeamsAction(
   formData: FormData
 ): Promise<AdminActionResult> {
+  try {
+    const admin = await requireAdmin();
+    const parsedInput = importApiFootballTeamsSchema.safeParse(formDataToObject(formData));
+
+    if (!parsedInput.success) {
+      return {
+        ok: false,
+        message: "Revise os parametros da API.",
+        fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+      };
+    }
+
+    const data = parsedInput.data;
+    const apiResult = await fetchApiFootballTeams({
+      country: typeof data.country === "string" && data.country ? data.country : undefined,
+      leagueId: typeof data.leagueId === "number" ? data.leagueId : undefined,
+      season: typeof data.season === "number" ? data.season : undefined
+    });
+
+    if (!apiResult.ok) {
+      return {
+        ok: false,
+        message: apiResult.message
+      };
+    }
+
+    if (apiResult.teams.length === 0) {
+      return {
+        ok: false,
+        message: "A API nao retornou equipes para estes parametros."
+      };
+    }
+
+    const summary = await importTeamsIntoDatabase(admin.id, "api-football", apiResult.teams);
+
+    return {
+      ok: true,
+      message: getTeamImportMessage(summary)
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Nao foi possivel importar os times da API."
+    };
+  }
+}
+
+export async function syncFootballCompetitionAction(
+  formData: FormData
+): Promise<AdminActionResult> {
   const admin = await requireAdmin();
-  const parsedInput = importApiFootballTeamsSchema.safeParse(formDataToObject(formData));
+  const parsedInput = syncFootballCompetitionSchema.safeParse(formDataToObject(formData));
 
   if (!parsedInput.success) {
     return {
       ok: false,
-      message: "Revise os parametros da API.",
+      message: "Competicao invalida.",
       fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
     };
   }
 
-  const data = parsedInput.data;
-  const apiResult = await fetchApiFootballTeams({
-    country: typeof data.country === "string" && data.country ? data.country : undefined,
-    leagueId: typeof data.leagueId === "number" ? data.leagueId : undefined,
-    season: typeof data.season === "number" ? data.season : undefined
+  const config = getFootballCompetitionConfig(parsedInput.data.competitionKey);
+
+  if (!config) {
+    return {
+      ok: false,
+      message: "Competicao nao configurada."
+    };
+  }
+
+  const result = await syncFootballCompetition(config, {
+    force: parsedInput.data.force === true
   });
 
-  if (!apiResult.ok) {
-    return {
-      ok: false,
-      message: apiResult.message
-    };
-  }
-
-  if (apiResult.teams.length === 0) {
-    return {
-      ok: false,
-      message: "A API nao retornou equipes para estes parametros."
-    };
-  }
-
-  const summary = await importTeamsIntoDatabase(admin.id, "api-football", apiResult.teams);
+  await createAuditLog(
+    admin.id,
+    result.ok ? "admin.football.sync.completed" : "admin.football.sync.failed",
+    "FootballSync",
+    config.key,
+    undefined,
+    {
+      message: result.message,
+      summary: result.summary
+    }
+  );
+  revalidateAdminPaths();
 
   return {
-    ok: true,
-    message: getTeamImportMessage(summary)
+    ok: result.ok,
+    message: result.message
+  };
+}
+
+export async function syncAllFootballCompetitionsAction(
+  formData: FormData
+): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = syncAllFootballCompetitionsSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Parametros invalidos.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const results = [];
+
+  for (const config of footballCompetitionConfigs) {
+    const result = await syncFootballCompetition(config, {
+      force: parsedInput.data.force === true
+    });
+    results.push({
+      key: config.key,
+      message: result.message,
+      ok: result.ok,
+      summary: result.summary
+    });
+  }
+
+  const failed = results.filter((result) => !result.ok);
+
+  await createAuditLog(
+    admin.id,
+    failed.length > 0 ? "admin.football.sync_all.partial" : "admin.football.sync_all.completed",
+    "FootballSync",
+    "all",
+    undefined,
+    {
+      failed: failed.length,
+      results,
+      total: results.length
+    }
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: failed.length === 0,
+    message:
+      failed.length === 0
+        ? "Todas as competicoes foram sincronizadas ou respeitaram o cache."
+        : `${failed.length} competicao(oes) falharam na sincronizacao.`
   };
 }
 

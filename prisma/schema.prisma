@@ -302,6 +302,7 @@ model Season {
   championship Championship @relation(fields: [championshipId], references: [id], onDelete: Restrict)
   rounds       Round[]
   rankings     Ranking[]
+  standings    CompetitionStanding[]
 
   @@unique([championshipId, year])
   @@index([status])
@@ -346,6 +347,7 @@ model Team {
 
   homeMatches Match[] @relation("HomeTeam")
   awayMatches Match[] @relation("AwayTeam")
+  standings   CompetitionStanding[]
 
   @@unique([apiId])
   @@index([name])
@@ -355,6 +357,7 @@ model Team {
 
 model Match {
   id          String      @id @default(uuid()) @db.Uuid
+  apiId       Int?        @unique @map("api_id")
   roundId     String      @map("round_id") @db.Uuid
   homeTeamId  String      @map("home_team_id") @db.Uuid
   awayTeamId  String      @map("away_team_id") @db.Uuid
@@ -568,4 +571,55 @@ model Setting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("settings")
+}
+
+model FootballSyncLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  competitionKey String    @map("competition_key") @db.VarChar(80)
+  leagueId       Int       @map("league_id")
+  season         Int
+  status         String    @db.VarChar(20)
+  message        String?
+  callsUsed      Int       @default(0) @map("calls_used")
+  teamsImported  Int       @default(0) @map("teams_imported")
+  roundsImported Int       @default(0) @map("rounds_imported")
+  matchesImported Int      @default(0) @map("matches_imported")
+  standingsImported Int    @default(0) @map("standings_imported")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([competitionKey, season])
+  @@index([status])
+  @@index([finishedAt])
+  @@map("football_sync_logs")
+}
+
+model CompetitionStanding {
+  id           String   @id @default(uuid()) @db.Uuid
+  seasonId     String   @map("season_id") @db.Uuid
+  teamId       String   @map("team_id") @db.Uuid
+  groupName    String   @default("Geral") @map("group_name") @db.VarChar(120)
+  rank         Int
+  points       Int      @default(0)
+  played       Int      @default(0)
+  wins         Int      @default(0)
+  draws        Int      @default(0)
+  losses       Int      @default(0)
+  goalsFor     Int      @default(0) @map("goals_for")
+  goalsAgainst Int      @default(0) @map("goals_against")
+  goalDiff     Int      @default(0) @map("goal_diff")
+  form         String?  @db.VarChar(30)
+  status       String?  @db.VarChar(80)
+  description  String?
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@unique([seasonId, teamId, groupName])
+  @@index([seasonId, rank])
+  @@index([teamId])
+  @@map("competition_standings")
 }

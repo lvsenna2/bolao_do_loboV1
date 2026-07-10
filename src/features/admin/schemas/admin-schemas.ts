@@ -128,6 +128,15 @@ export const importApiFootballTeamsSchema = z
     }
   );
 
+export const syncFootballCompetitionSchema = z.object({
+  competitionKey: z.string().min(2, "Competicao invalida.").max(80),
+  force: z.coerce.boolean().optional()
+});
+
+export const syncAllFootballCompetitionsSchema = z.object({
+  force: z.coerce.boolean().optional()
+});
+
 export const createRoundSchema = z
   .object({
     seasonId: uuidSchema,

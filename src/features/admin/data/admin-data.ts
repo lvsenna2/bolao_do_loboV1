@@ -10,6 +10,10 @@ import type {
 
 import { prisma } from "@/server/db";
 import { isFootballApiConfigured } from "@/server/football-api/client";
+import {
+  footballCompetitionConfigs,
+  getFootballSyncCacheHours
+} from "@/server/football-api/competitions";
 import type { AdminDataResult } from "../types";
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -1123,6 +1127,112 @@ export async function getAdminSettings() {
     };
   } catch {
     return emptyResult("Nao foi possivel carregar configuracoes.", fallback);
+  }
+}
+
+export async function getAdminFootballSyncStatus() {
+  const empty = {
+    apiConfigured: isFootballApiConfigured(),
+    cacheHours: getFootballSyncCacheHours(),
+    competitions: footballCompetitionConfigs.map((competition) => ({
+      ...competition,
+      lastAttempt: null,
+      lastSuccess: null,
+      local: {
+        matches: 0,
+        rounds: 0,
+        standings: 0
+      }
+    }))
+  };
+
+  try {
+    const competitionKeys = footballCompetitionConfigs.map((competition) => competition.key);
+    const [logs, championships] = await prisma.$transaction([
+      prisma.footballSyncLog.findMany({
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 100,
+        where: {
+          competitionKey: {
+            in: competitionKeys
+          }
+        }
+      }),
+      prisma.championship.findMany({
+        include: {
+          seasons: {
+            include: {
+              _count: {
+                select: {
+                  rounds: true,
+                  standings: true
+                }
+              }
+            }
+          }
+        },
+        where: {
+          apiId: {
+            in: footballCompetitionConfigs.map((competition) => competition.leagueId)
+          },
+          provider: "api-football"
+        }
+      })
+    ]);
+
+    const competitions = await Promise.all(
+      footballCompetitionConfigs.map(async (competition) => {
+        const lastAttempt =
+          logs.find(
+            (log) =>
+              log.competitionKey === competition.key && log.season === competition.season
+          ) ?? null;
+        const lastSuccess =
+          logs.find(
+            (log) =>
+              log.competitionKey === competition.key &&
+              log.season === competition.season &&
+              log.status === "SUCCESS"
+          ) ?? null;
+        const championship = championships.find(
+          (item) => item.apiId === competition.leagueId && item.provider === "api-football"
+        );
+        const season = championship?.seasons.find((item) => item.year === competition.season);
+        const matches = season
+          ? await prisma.match.count({
+              where: {
+                round: {
+                  seasonId: season.id
+                }
+              }
+            })
+          : 0;
+
+        return {
+          ...competition,
+          lastAttempt,
+          lastSuccess,
+          local: {
+            matches,
+            rounds: season?._count.rounds ?? 0,
+            standings: season?._count.standings ?? 0
+          }
+        };
+      })
+    );
+
+    return {
+      ok: true as const,
+      data: {
+        apiConfigured: isFootballApiConfigured(),
+        cacheHours: getFootballSyncCacheHours(),
+        competitions
+      }
+    };
+  } catch {
+    return emptyResult("Nao foi possivel carregar sincronizacoes.", empty);
   }
 }
 

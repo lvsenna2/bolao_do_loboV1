@@ -7,6 +7,7 @@ import {
   History,
   LayoutDashboard,
   Medal,
+  RefreshCw,
   Settings,
   ShieldCheck,
   Trophy,
@@ -88,6 +89,11 @@ export const adminNavigationItems: NavigationItem[] = [
     href: "/admin/times",
     icon: Flag,
     label: "Times"
+  },
+  {
+    href: "/admin/sincronizacao",
+    icon: RefreshCw,
+    label: "Sincronizacao"
   },
   {
     href: "/admin/rodadas",
