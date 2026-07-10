@@ -237,14 +237,6 @@ export async function getGuessesPageData(
             select: teamSelect
           },
           city: true,
-          guesses: {
-            select: guessSelect,
-            take: 1,
-            where: {
-              deletedAt: null,
-              userId
-            }
-          },
           homeTeam: {
             select: teamSelect
           },
@@ -351,11 +343,40 @@ export async function getGuessesPageData(
       })
     ]);
 
-    const roundIds = Array.from(new Set(matches.map((match) => match.roundId)));
-    const roundJokers =
-      roundIds.length > 0
+    const matchIds = matches.map((match) => match.id);
+    const leagueIds = Array.from(
+      new Set(
+        matches.map((match) => match.round.league?.id).filter((id): id is string => Boolean(id))
+      )
+    );
+    const existingGuesses =
+      matchIds.length > 0 && leagueIds.length > 0
         ? await prisma.guess.findMany({
             select: {
+              ...guessSelect,
+              matchId: true
+            },
+            where: {
+              deletedAt: null,
+              leagueId: {
+                in: leagueIds
+              },
+              matchId: {
+                in: matchIds
+              },
+              userId
+            }
+          })
+        : [];
+    const guessesByMatchAndLeague = new Map(
+      existingGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
+    );
+    const roundIds = Array.from(new Set(matches.map((match) => match.roundId)));
+    const roundJokers =
+      roundIds.length > 0 && leagueIds.length > 0
+        ? await prisma.guess.findMany({
+            select: {
+              leagueId: true,
               match: {
                 select: {
                   roundId: true
@@ -365,13 +386,8 @@ export async function getGuessesPageData(
             where: {
               deletedAt: null,
               joker: true,
-              league: {
-                members: {
-                  some: {
-                    status: "ACTIVE",
-                    userId
-                  }
-                }
+              leagueId: {
+                in: leagueIds
               },
               match: {
                 roundId: {
@@ -384,14 +400,20 @@ export async function getGuessesPageData(
         : [];
 
     const jokersByRound = roundJokers.reduce<Record<string, number>>((accumulator, guess) => {
-      accumulator[guess.match.roundId] = (accumulator[guess.match.roundId] ?? 0) + 1;
+      const key = `${guess.match.roundId}:${guess.leagueId}`;
+
+      accumulator[key] = (accumulator[key] ?? 0) + 1;
 
       return accumulator;
     }, {});
 
     const availableMatches = matches.map((match) => {
-      const existingGuess = match.guesses[0] ? mapGuess(match.guesses[0]) : null;
-      const usedJokersInRound = jokersByRound[match.roundId] ?? 0;
+      const leagueId = match.round.league?.id ?? null;
+      const existingGuessRecord = leagueId
+        ? guessesByMatchAndLeague.get(`${match.id}:${leagueId}`)
+        : undefined;
+      const existingGuess = existingGuessRecord ? mapGuess(existingGuessRecord) : null;
+      const usedJokersInRound = leagueId ? (jokersByRound[`${match.roundId}:${leagueId}`] ?? 0) : 0;
 
       return {
         awayTeam: match.awayTeam,
@@ -404,7 +426,7 @@ export async function getGuessesPageData(
           Boolean(existingGuess?.joker) || usedJokersInRound < scoring.jokerLimitPerRound,
         jokerLimit: scoring.jokerLimitPerRound,
         kickoff: match.kickoff.toISOString(),
-        leagueId: match.round.league?.id ?? null,
+        leagueId,
         leagueName: match.round.league?.name ?? null,
         roundId: match.roundId,
         roundLabel: getRoundLabel(match.round),

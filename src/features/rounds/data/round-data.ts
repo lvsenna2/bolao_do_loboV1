@@ -219,26 +219,6 @@ export async function getRoundsPageData(
                 select: teamSelect
               },
               city: true,
-              guesses: {
-                select: {
-                  awayPrediction: true,
-                  homePrediction: true,
-                  id: true,
-                  joker: true,
-                  score: {
-                    select: {
-                      exactScore: true,
-                      totalPoints: true,
-                      winnerHit: true
-                    }
-                  }
-                },
-                take: 1,
-                where: {
-                  deletedAt: null,
-                  userId
-                }
-              },
               homeScore: true,
               homeTeam: {
                 select: teamSelect
@@ -304,19 +284,71 @@ export async function getRoundsPageData(
       })
     ]);
 
+    const matchIds = rounds.flatMap((round) => round.matches.map((match) => match.id));
+    const leagueIds = Array.from(
+      new Set(rounds.map((round) => round.league?.id).filter((id): id is string => Boolean(id)))
+    );
+    const userGuesses =
+      matchIds.length > 0 && leagueIds.length > 0
+        ? await prisma.guess.findMany({
+            select: {
+              awayPrediction: true,
+              homePrediction: true,
+              id: true,
+              joker: true,
+              leagueId: true,
+              matchId: true,
+              score: {
+                select: {
+                  exactScore: true,
+                  totalPoints: true,
+                  winnerHit: true
+                }
+              }
+            },
+            where: {
+              deletedAt: null,
+              leagueId: {
+                in: leagueIds
+              },
+              matchId: {
+                in: matchIds
+              },
+              userId
+            }
+          })
+        : [];
+    const guessesByMatchAndLeague = new Map(
+      userGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
+    );
+
     const mappedRounds = rounds.map((round) => {
-      const matches = round.matches.map((match) => ({
-        awayScore: match.awayScore,
-        awayTeam: match.awayTeam,
-        city: match.city,
-        guess: match.guesses[0] ?? null,
-        homeScore: match.homeScore,
-        homeTeam: match.homeTeam,
-        id: match.id,
-        kickoff: match.kickoff.toISOString(),
-        stadium: match.stadium,
-        status: match.status
-      }));
+      const matches = round.matches.map((match) => {
+        const userGuess = round.league?.id
+          ? guessesByMatchAndLeague.get(`${match.id}:${round.league.id}`)
+          : undefined;
+
+        return {
+          awayScore: match.awayScore,
+          awayTeam: match.awayTeam,
+          city: match.city,
+          guess: userGuess
+            ? {
+                awayPrediction: userGuess.awayPrediction,
+                homePrediction: userGuess.homePrediction,
+                id: userGuess.id,
+                joker: userGuess.joker,
+                score: userGuess.score
+              }
+            : null,
+          homeScore: match.homeScore,
+          homeTeam: match.homeTeam,
+          id: match.id,
+          kickoff: match.kickoff.toISOString(),
+          stadium: match.stadium,
+          status: match.status
+        };
+      });
       const remainingMatches = matches.filter((match) =>
         ["SCHEDULED", "LIVE", "HALFTIME", "POSTPONED"].includes(match.status)
       ).length;

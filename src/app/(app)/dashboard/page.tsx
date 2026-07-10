@@ -73,6 +73,7 @@ export default async function UserHomePage() {
     achievements,
     currentRound,
     globalRanking,
+    memberships,
     notifications,
     recentGuesses,
     stats,
@@ -104,7 +105,7 @@ export default async function UserHomePage() {
           </Link>
         </>
       }
-      description="Acompanhe rodadas, jogos do dia, seus palpites, ranking, estatisticas e notificacoes."
+      description="Acompanhe suas ligas, partidas abertas, palpites, ranking, estatisticas e notificacoes."
       eyebrow="Area do usuario"
       title="Dashboard"
     >
@@ -122,7 +123,7 @@ export default async function UserHomePage() {
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Badge tone="info">Nivel {user.level}</Badge>
                     <Badge tone={stats.myGlobalPosition ? "success" : "neutral"}>
-                      Global #{stats.myGlobalPosition ?? "-"}
+                      Liga #{stats.myGlobalPosition ?? "-"}
                     </Badge>
                   </div>
                 </div>
@@ -133,6 +134,19 @@ export default async function UserHomePage() {
               </div>
             </CardContent>
           </Card>
+
+          {memberships.length === 0 ? (
+            <EmptyState
+              action={
+                <Link className={buttonVariants({ size: "sm", variant: "accent" })} href="/ligas">
+                  Ver ligas
+                </Link>
+              }
+              description="Voce ainda nao participou de nenhuma liga."
+              icon={Users}
+              title="Nenhuma liga ativa"
+            />
+          ) : null}
 
           <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             <UserStatCard
@@ -243,8 +257,10 @@ export default async function UserHomePage() {
                 <CardHeader>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <CardTitle>Jogos do dia</CardTitle>
-                      <CardDescription>Partidas com status e indicador de palpite.</CardDescription>
+                      <CardTitle>Proximas partidas</CardTitle>
+                      <CardDescription>
+                        Partidas abertas para palpite nas suas ligas ativas.
+                      </CardDescription>
                     </div>
                     <Link
                       className={buttonVariants({ size: "sm", variant: "secondary" })}
@@ -278,9 +294,9 @@ export default async function UserHomePage() {
                     ))
                   ) : (
                     <EmptyState
-                      description="Nenhuma partida cadastrada para hoje."
+                      description="Nenhuma partida disponivel para palpite."
                       icon={CalendarClock}
-                      title="Sem jogos hoje"
+                      title="Sem partidas abertas"
                     />
                   )}
                 </CardContent>
@@ -358,8 +374,8 @@ export default async function UserHomePage() {
                 <CardHeader>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <CardTitle>Ranking geral</CardTitle>
-                      <CardDescription>Top 10 e sua posicao global.</CardDescription>
+                      <CardTitle>Ranking da liga</CardTitle>
+                      <CardDescription>Top 10 da sua liga ativa mais recente.</CardDescription>
                     </div>
                     <Link
                       className={buttonVariants({ size: "sm", variant: "secondary" })}
@@ -402,7 +418,11 @@ export default async function UserHomePage() {
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-app-muted">Ranking aparecera apos homologacoes.</p>
+                    <EmptyState
+                      description="O ranking ainda nao possui participantes."
+                      icon={Trophy}
+                      title="Ranking vazio"
+                    />
                   )}
                 </CardContent>
               </Card>

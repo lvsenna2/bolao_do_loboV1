@@ -78,25 +78,7 @@ export async function getUserHomeData(userId: string) {
   };
 
   try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
-
-    const [
-      user,
-      memberships,
-      notifications,
-      achievements,
-      guessCount,
-      scores,
-      unread,
-      currentRound,
-      todayMatches,
-      recentGuesses,
-      globalRanking,
-      myGlobalRanking
-    ] = await prisma.$transaction([
+    const [user, memberships, notifications, achievements, unread] = await prisma.$transaction([
       prisma.user.findUnique({
         where: {
           id: userId
@@ -138,6 +120,13 @@ export async function getUserHomeData(userId: string) {
         },
         take: 4,
         where: {
+          league: {
+            deletedAt: null,
+            status: {
+              not: "ARCHIVED"
+            }
+          },
+          status: "ACTIVE",
           userId
         }
       }),
@@ -183,6 +172,73 @@ export async function getUserHomeData(userId: string) {
           userId,
           readAt: null
         }
+      })
+    ]);
+
+    const activeLeagueIds = memberships.map((membership) => membership.leagueId);
+    const primaryLeagueId = activeLeagueIds[0];
+
+    if (activeLeagueIds.length === 0) {
+      return {
+        ok: true as const,
+        data: {
+          achievements,
+          currentRound: null,
+          globalRanking: [],
+          memberships,
+          notifications,
+          recentGuesses: [],
+          stats: {
+            exactScores: 0,
+            guesses: 0,
+            leagues: 0,
+            losses: 0,
+            myGlobalPosition: null,
+            points: 0,
+            unreadNotifications: unread,
+            winRate: 0,
+            winnerHits: 0
+          },
+          todayMatches: [],
+          user
+        }
+      };
+    }
+
+    const now = new Date();
+    const [
+      guessCount,
+      scores,
+      currentRound,
+      upcomingMatches,
+      recentGuesses,
+      globalRanking,
+      myGlobalRanking
+    ] = await prisma.$transaction([
+      prisma.guess.count({
+        where: {
+          deletedAt: null,
+          leagueId: {
+            in: activeLeagueIds
+          },
+          userId
+        }
+      }),
+      prisma.score.findMany({
+        select: {
+          exactScore: true,
+          totalPoints: true,
+          winnerHit: true
+        },
+        where: {
+          guess: {
+            deletedAt: null
+          },
+          leagueId: {
+            in: activeLeagueIds
+          },
+          userId
+        }
       }),
       prisma.round.findFirst({
         include: {
@@ -211,6 +267,9 @@ export async function getUserHomeData(userId: string) {
           startsAt: "asc"
         },
         where: {
+          leagueId: {
+            in: activeLeagueIds
+          },
           status: {
             in: ["OPEN", "LIVE", "SCHEDULED"]
           }
@@ -228,17 +287,6 @@ export async function getUserHomeData(userId: string) {
               shortName: true
             }
           },
-          guesses: {
-            select: {
-              id: true,
-              joker: true
-            },
-            take: 1,
-            where: {
-              deletedAt: null,
-              userId
-            }
-          },
           homeTeam: {
             select: {
               logo: true,
@@ -250,6 +298,7 @@ export async function getUserHomeData(userId: string) {
           kickoff: true,
           round: {
             select: {
+              leagueId: true,
               season: {
                 select: {
                   championship: {
@@ -267,9 +316,21 @@ export async function getUserHomeData(userId: string) {
         where: {
           deletedAt: null,
           kickoff: {
-            gte: todayStart,
-            lt: todayEnd
-          }
+            gt: now
+          },
+          round: {
+            endsAt: {
+              gte: now
+            },
+            leagueId: {
+              in: activeLeagueIds
+            },
+            startsAt: {
+              lte: now
+            },
+            status: "OPEN"
+          },
+          status: "SCHEDULED"
         }
       }),
       prisma.guess.findMany({
@@ -321,6 +382,9 @@ export async function getUserHomeData(userId: string) {
         take: 5,
         where: {
           deletedAt: null,
+          leagueId: {
+            in: activeLeagueIds
+          },
           userId
         }
       }),
@@ -340,9 +404,9 @@ export async function getUserHomeData(userId: string) {
         },
         take: 10,
         where: {
-          leagueId: null,
+          leagueId: primaryLeagueId,
           roundId: null,
-          scope: "GLOBAL",
+          scope: "LEAGUE",
           seasonId: null
         }
       }),
@@ -351,14 +415,50 @@ export async function getUserHomeData(userId: string) {
           position: true
         },
         where: {
-          leagueId: null,
+          leagueId: primaryLeagueId,
           roundId: null,
-          scope: "GLOBAL",
+          scope: "LEAGUE",
           seasonId: null,
           userId
         }
       })
     ]);
+
+    const upcomingMatchGuesses =
+      upcomingMatches.length > 0
+        ? await prisma.guess.findMany({
+            select: {
+              id: true,
+              joker: true,
+              leagueId: true,
+              matchId: true
+            },
+            where: {
+              deletedAt: null,
+              leagueId: {
+                in: activeLeagueIds
+              },
+              matchId: {
+                in: upcomingMatches.map((match) => match.id)
+              },
+              userId
+            }
+          })
+        : [];
+
+    const guessesByMatchAndLeague = new Map(
+      upcomingMatchGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
+    );
+    const todayMatches = upcomingMatches.map((match) => {
+      const existingGuess = match.round.leagueId
+        ? guessesByMatchAndLeague.get(`${match.id}:${match.round.leagueId}`)
+        : undefined;
+
+      return {
+        ...match,
+        guesses: existingGuess ? [{ id: existingGuess.id, joker: existingGuess.joker }] : []
+      };
+    });
 
     const winnerHits = scores.filter((score) => score.winnerHit).length;
     const exactScores = scores.filter((score) => score.exactScore).length;
@@ -382,7 +482,7 @@ export async function getUserHomeData(userId: string) {
           myGlobalPosition: myGlobalRanking?.position ?? null,
           points,
           unreadNotifications: unread,
-          winRate: guessCount > 0 ? Math.round((winnerHits / guessCount) * 100) : 0,
+          winRate: scores.length > 0 ? Math.round((winnerHits / scores.length) * 100) : 0,
           winnerHits
         },
         todayMatches,

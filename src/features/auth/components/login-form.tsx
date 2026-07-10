@@ -87,12 +87,13 @@ export function LoginForm({ callbackUrl, registered = false }: LoginFormProps) {
         {...register("password")}
       />
       <button
+        aria-busy={isSubmitting}
         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-70"
         disabled={isSubmitting}
         type="submit"
       >
         {isSubmitting ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
-        Entrar
+        {isSubmitting ? "Entrando..." : "Entrar"}
         {!isSubmitting ? <ArrowRight aria-hidden className="h-4 w-4" /> : null}
       </button>
     </form>

@@ -23,7 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <AuthCard
-      description="Entre com seu e-mail e senha para acessar seus boloes."
+      description="Entre com seu e-mail e senha para acessar sua conta."
       footer={
         <div className="flex flex-col gap-3 text-sm text-app-muted">
           <Link className="font-medium text-brand-gold hover:text-amber-300" href="/register">
@@ -37,7 +37,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </Link>
         </div>
       }
-      title="Entrar"
+      title="Entrar no bolao"
     >
       <LoginForm
         callbackUrl={getSafeCallbackUrl(params.callbackUrl)}

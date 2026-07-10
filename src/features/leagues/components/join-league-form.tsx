@@ -76,7 +76,7 @@ export function JoinLeagueForm({ defaultInviteCode = "" }: JoinLeagueFormProps) 
         error={errors.inviteCode?.message}
         id="inviteCode"
         label="Codigo da liga"
-        placeholder={defaultInviteCode || "Ex: BRLOBO2026"}
+        placeholder={defaultInviteCode || "Ex: CODIGO-DA-LIGA"}
         {...register("inviteCode")}
       />
       <div className="flex items-end">

@@ -50,13 +50,7 @@ Evite rodar migration dentro do build da Vercel. Se aparecer erro de lock/adviso
 aguarde alguns minutos, cancele deploys antigos em andamento e rode a migration uma unica vez
 fora do build.
 
-6. Para popular o ambiente de testes com o Brasileirao ficticio:
-
-```bash
-ALLOW_DEMO_SEED=true pnpm seed:demo
-```
-
-Use esse seed apenas na homologacao inicial. Ele recria os dados ficticios da liga `BRLOBO2026`.
+6. Cadastre campeonatos, ligas, rodadas e partidas pelo painel administrativo ou sincronize as competicoes reais configuradas no admin.
 
 ## Zerar banco e manter somente o admin
 
@@ -82,11 +76,21 @@ pnpm db:reset-admin-only
 
 Remova `ALLOW_DB_RESET` ou volte para `false` depois da limpeza.
 
-## Acessos de teste
+## Limpeza de dados demo antigos
 
-- Admin: `admin@bolaodolobo.local` / `Admin@123`
-- Usuario: `usuario@bolaodolobo.local` / `Usuario@123`
-- Rival: `rival@bolaodolobo.local` / `Rival@123`
+Se o banco ainda tiver registros exatos do antigo seed `BRLOBO2026`, rode primeiro a previa:
+
+```bash
+pnpm db:preview-demo-cleanup
+```
+
+Para aplicar a limpeza, confirme explicitamente no ambiente do comando:
+
+```bash
+DEMO_CLEANUP_APPLY=true CONFIRM_DEMO_CLEANUP=BRLOBO2026 pnpm db:preview-demo-cleanup
+```
+
+Esse script nao remove usuarios. Ele mira somente liga, campeonato, temporada, rodadas, partidas e registros vinculados ao antigo seed demo por codigo/nome exatos.
 
 ## Checagem
 
@@ -107,4 +111,3 @@ Resposta esperada:
 - Nunca use o banco local para testes externos.
 - Atualize `NEXTAUTH_URL` para a URL final do deploy. Login pode falhar se essa URL estiver errada.
 - Nao rode `prisma migrate reset` em ambiente com usuarios reais.
-- O seed demo e destrutivo para os dados ficticios da liga de teste; use apenas enquanto estiver em homologacao.

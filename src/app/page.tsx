@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { SiteHeader } from "@/components/layout/site-header";
 import { buttonVariants } from "@/components/ui/button";
+import { WolfAuthScene } from "@/features/auth/components/wolf-auth-scene";
 
 export default function HomePage() {
   return (
@@ -35,47 +36,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="rounded-card border border-app-border bg-app-surface p-5 shadow-soft">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-app-border pb-4">
-                <div>
-                  <p className="text-sm font-semibold text-app-foreground">Rodada atual</p>
-                  <p className="text-sm text-app-muted">Acompanhe seus palpites</p>
-                </div>
-                <span className="rounded-full bg-brand-green px-2.5 py-1 text-xs font-semibold text-white">
-                  Aberta
-                </span>
-              </div>
-              <div className="grid gap-3">
-                <div className="rounded-control bg-app-elevated p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-app-muted">
-                    Proximo jogo
-                  </p>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-sm font-semibold text-app-foreground">
-                    <span>Casa</span>
-                    <span className="rounded-full bg-brand-gold px-2 py-1 text-xs text-slate-950">
-                      vs
-                    </span>
-                    <span>Visitante</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-control bg-app-elevated p-3">
-                    <p className="text-xs text-app-muted">Pontos</p>
-                    <p className="mt-1 text-xl font-bold text-app-foreground">0</p>
-                  </div>
-                  <div className="rounded-control bg-app-elevated p-3">
-                    <p className="text-xs text-app-muted">Ranking</p>
-                    <p className="mt-1 text-xl font-bold text-app-foreground">--</p>
-                  </div>
-                  <div className="rounded-control bg-app-elevated p-3">
-                    <p className="text-xs text-app-muted">XP</p>
-                    <p className="mt-1 text-xl font-bold text-app-foreground">0</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <WolfAuthScene className="hidden min-h-[420px] lg:block" />
         </section>
       </main>
     </div>
