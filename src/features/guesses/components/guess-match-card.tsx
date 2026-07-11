@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import { CalendarClock, MapPin, ShieldCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -32,9 +33,12 @@ function TeamMark({ logo, name, shortName }: TeamMarkProps) {
         aria-label={name}
         className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-sm font-bold text-app-foreground"
         role="img"
-        style={logo ? { backgroundImage: `url("${logo}")` } : undefined}
       >
-        {logo ? null : getInitials(shortName || name)}
+        {logo ? (
+          <img alt="" className="h-8 w-8 object-contain" referrerPolicy="no-referrer" src={logo} />
+        ) : (
+          getInitials(shortName || name)
+        )}
       </span>
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-app-foreground">{name}</span>

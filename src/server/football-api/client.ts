@@ -211,6 +211,16 @@ function describeApiErrors(errors: unknown) {
   return String(errors);
 }
 
+function normalizeLogoUrl(value: string | null | undefined) {
+  const logo = value?.trim();
+
+  if (!logo || !/^https?:\/\//i.test(logo)) {
+    return null;
+  }
+
+  return logo;
+}
+
 function normalizeTeam(item: NonNullable<ApiFootballTeamResponse["response"]>[number]) {
   const team = item.team;
 
@@ -221,7 +231,7 @@ function normalizeTeam(item: NonNullable<ApiFootballTeamResponse["response"]>[nu
   return {
     apiId: team.id,
     country: team.country || "Nao informado",
-    logo: team.logo || null,
+    logo: normalizeLogoUrl(team.logo),
     name: team.name,
     shortName: team.code || null
   } satisfies ExternalFootballTeam;
@@ -241,7 +251,7 @@ function normalizeTeamFields(team: {
   return {
     apiId: team.id,
     country: team.country || "Nao informado",
-    logo: team.logo || null,
+    logo: normalizeLogoUrl(team.logo),
     name: team.name,
     shortName: team.code || null
   } satisfies ExternalFootballTeam;
@@ -303,9 +313,9 @@ async function apiFootballRequest<T>(
   }
 }
 
-export async function fetchApiFootballLeagues(search: ApiFootballLeagueSearch): Promise<
-  ApiFootballRequestResult<ExternalFootballLeague[]>
-> {
+export async function fetchApiFootballLeagues(
+  search: ApiFootballLeagueSearch
+): Promise<ApiFootballRequestResult<ExternalFootballLeague[]>> {
   const params = new URLSearchParams();
 
   if (search.id) {
@@ -344,8 +354,8 @@ export async function fetchApiFootballLeagues(search: ApiFootballLeagueSearch): 
         } satisfies ExternalFootballLeague;
       })
       .filter((league) => league !== null),
-      ok: true,
-    };
+    ok: true
+  };
 }
 
 export async function fetchApiFootballTeams(search: ApiFootballTeamSearch): Promise<

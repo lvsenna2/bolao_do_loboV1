@@ -1404,6 +1404,8 @@ export async function getAdminFootballSyncStatus() {
     competitions: footballCompetitionConfigs.map((competition) => ({
       ...competition,
       lastAttempt: null,
+      lastScoreAttempt: null,
+      lastScoreSuccess: null,
       lastSuccess: null,
       local: {
         matches: 0,
@@ -1415,6 +1417,9 @@ export async function getAdminFootballSyncStatus() {
 
   try {
     const competitionKeys = footballCompetitionConfigs.map((competition) => competition.key);
+    const scoreCompetitionKeys = footballCompetitionConfigs.map(
+      (competition) => `${competition.key}:scores`
+    );
     const [logs, championships] = await prisma.$transaction([
       prisma.footballSyncLog.findMany({
         orderBy: {
@@ -1423,7 +1428,7 @@ export async function getAdminFootballSyncStatus() {
         take: 100,
         where: {
           competitionKey: {
-            in: competitionKeys
+            in: [...competitionKeys, ...scoreCompetitionKeys]
           }
         }
       }),
@@ -1462,6 +1467,18 @@ export async function getAdminFootballSyncStatus() {
               log.season === competition.season &&
               log.status === "SUCCESS"
           ) ?? null;
+        const scoreCompetitionKey = `${competition.key}:scores`;
+        const lastScoreAttempt =
+          logs.find(
+            (log) => log.competitionKey === scoreCompetitionKey && log.season === competition.season
+          ) ?? null;
+        const lastScoreSuccess =
+          logs.find(
+            (log) =>
+              log.competitionKey === scoreCompetitionKey &&
+              log.season === competition.season &&
+              log.status === "SUCCESS"
+          ) ?? null;
         const championship = championships.find(
           (item) => item.apiId === competition.leagueId && item.provider === "api-football"
         );
@@ -1479,6 +1496,8 @@ export async function getAdminFootballSyncStatus() {
         return {
           ...competition,
           lastAttempt,
+          lastScoreAttempt,
+          lastScoreSuccess,
           lastSuccess,
           local: {
             matches,

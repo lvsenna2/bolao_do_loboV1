@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import type { Route } from "next";
 import Link from "next/link";
 import {
@@ -55,9 +56,12 @@ function TeamMark({
         aria-label={name}
         className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground"
         role="img"
-        style={logo ? { backgroundImage: `url("${logo}")` } : undefined}
       >
-        {logo ? null : getInitials(shortName || name)}
+        {logo ? (
+          <img alt="" className="h-7 w-7 object-contain" referrerPolicy="no-referrer" src={logo} />
+        ) : (
+          getInitials(shortName || name)
+        )}
       </span>
       <span className="truncate text-sm font-semibold text-app-foreground">
         {shortName || name}
@@ -78,7 +82,8 @@ export default async function UserHomePage() {
     recentGuesses,
     stats,
     todayMatches,
-    user
+    user,
+    xpProgress
   } = result.data;
 
   const remainingRoundMatches =
@@ -121,7 +126,11 @@ export default async function UserHomePage() {
                   <p className="text-xl font-bold text-app-foreground">{user.name}</p>
                   <p className="text-sm text-app-muted">@{user.username}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge tone="info">Nivel {user.level}</Badge>
+                    <Badge tone="info">
+                      {xpProgress
+                        ? `${xpProgress.currentLevel.medal} ${xpProgress.currentLevel.name}`
+                        : `Nivel ${user.level}`}
+                    </Badge>
                     <Badge tone="warning">{user.xp} XP</Badge>
                     <Badge tone={stats.myGlobalPosition ? "success" : "neutral"}>
                       Liga #{stats.myGlobalPosition ?? "-"}
@@ -369,7 +378,7 @@ export default async function UserHomePage() {
             </div>
 
             <aside className="space-y-6">
-              <XpProgress level={user.level} xp={user.xp} />
+              <XpProgress level={user.level} progress={xpProgress} xp={user.xp} />
 
               <Card>
                 <CardHeader>

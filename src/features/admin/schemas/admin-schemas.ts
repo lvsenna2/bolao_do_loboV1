@@ -140,6 +140,12 @@ export const syncAllFootballCompetitionsSchema = z.object({
   force: z.coerce.boolean().optional()
 });
 
+export const syncFootballCompetitionScoresSchema = z.object({
+  competitionKey: z.string().min(2, "Competicao invalida.").max(80)
+});
+
+export const syncAllFootballCompetitionScoresSchema = z.object({});
+
 export const createRoundSchema = z
   .object({
     seasonId: uuidSchema,

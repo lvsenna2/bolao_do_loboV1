@@ -25,7 +25,10 @@ import {
   footballCompetitionConfigs,
   getFootballCompetitionConfig
 } from "@/server/football-api/competitions";
-import { syncFootballCompetition } from "@/server/football-api/sync-service";
+import {
+  syncFootballCompetition,
+  syncFootballCompetitionScores
+} from "@/server/football-api/sync-service";
 import {
   bulkImportTeamsSchema,
   createAchievementBadgeSchema,
@@ -47,7 +50,9 @@ import {
   recalculateLeagueRankingSchema,
   recalculateUserXpSchema,
   softDeleteUserSchema,
+  syncAllFootballCompetitionScoresSchema,
   syncAllFootballCompetitionsSchema,
+  syncFootballCompetitionScoresSchema,
   syncFootballCompetitionSchema,
   updateLeagueXpEnabledSchema,
   updateChampionshipStatusSchema,
@@ -145,6 +150,12 @@ function cleanText(value: string | null | undefined) {
   return trimmed ? trimmed : null;
 }
 
+function cleanLogoUrl(value: string | null | undefined) {
+  const logo = cleanText(value);
+
+  return logo && /^https?:\/\//i.test(logo) ? logo : null;
+}
+
 function normalizeImportableTeam(team: ImportableTeam) {
   const name = cleanText(team.name);
   const country = cleanText(team.country);
@@ -156,7 +167,7 @@ function normalizeImportableTeam(team: ImportableTeam) {
   return {
     apiId: typeof team.apiId === "number" && team.apiId > 0 ? team.apiId : null,
     country,
-    logo: cleanText(team.logo),
+    logo: cleanLogoUrl(team.logo),
     name,
     shortName: cleanText(team.shortName)
   } satisfies ImportableTeam;
@@ -340,7 +351,7 @@ async function importTeamsIntoDatabase(
         data: {
           apiId: existingTeam.apiId ?? team.apiId ?? null,
           country: team.country,
-          logo: team.logo || existingTeam.logo,
+          logo: team.logo ?? existingTeam.logo,
           name: team.name,
           shortName: team.shortName || existingTeam.shortName
         },
@@ -1098,6 +1109,101 @@ export async function syncAllFootballCompetitionsAction(
       failed.length === 0
         ? "Todas as competicoes foram sincronizadas ou respeitaram o cache."
         : `${failed.length} competicao(oes) falharam na sincronizacao.`
+  };
+}
+
+export async function syncFootballCompetitionScoresAction(
+  formData: FormData
+): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = syncFootballCompetitionScoresSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Competicao invalida.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const config = getFootballCompetitionConfig(parsedInput.data.competitionKey);
+
+  if (!config) {
+    return {
+      ok: false,
+      message: "Competicao nao configurada."
+    };
+  }
+
+  const result = await syncFootballCompetitionScores(config);
+
+  await createAuditLog(
+    admin.id,
+    result.ok ? "admin.football.scores.completed" : "admin.football.scores.failed",
+    "FootballScoreSync",
+    config.key,
+    undefined,
+    {
+      message: result.message,
+      summary: result.summary
+    }
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: result.ok,
+    message: result.message
+  };
+}
+
+export async function syncAllFootballCompetitionScoresAction(
+  formData: FormData
+): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = syncAllFootballCompetitionScoresSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Parametros invalidos.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const results = [];
+
+  for (const config of footballCompetitionConfigs) {
+    const result = await syncFootballCompetitionScores(config);
+    results.push({
+      key: config.key,
+      message: result.message,
+      ok: result.ok,
+      summary: result.summary
+    });
+  }
+
+  const failed = results.filter((result) => !result.ok);
+
+  await createAuditLog(
+    admin.id,
+    failed.length > 0 ? "admin.football.scores_all.partial" : "admin.football.scores_all.completed",
+    "FootballScoreSync",
+    "all",
+    undefined,
+    {
+      failed: failed.length,
+      results,
+      total: results.length
+    }
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: failed.length === 0,
+    message:
+      failed.length === 0
+        ? "Placares das competicoes configuradas foram atualizados."
+        : `${failed.length} competicao(oes) falharam ao atualizar placares.`
   };
 }
 

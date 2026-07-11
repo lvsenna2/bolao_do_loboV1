@@ -3,7 +3,9 @@ import { AlertTriangle, CheckCircle2, Database, RefreshCw } from "lucide-react";
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  syncAllFootballCompetitionScoresAction,
   syncAllFootballCompetitionsAction,
+  syncFootballCompetitionScoresAction,
   syncFootballCompetitionAction
 } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
@@ -14,8 +16,12 @@ export const dynamic = "force-dynamic";
 type FormAction = (formData: FormData) => Promise<void>;
 
 const syncFootballCompetitionFormAction = syncFootballCompetitionAction as unknown as FormAction;
+const syncFootballCompetitionScoresFormAction =
+  syncFootballCompetitionScoresAction as unknown as FormAction;
 const syncAllFootballCompetitionsFormAction =
   syncAllFootballCompetitionsAction as unknown as FormAction;
+const syncAllFootballCompetitionScoresFormAction =
+  syncAllFootballCompetitionScoresAction as unknown as FormAction;
 
 function formatDate(date: Date | null | undefined) {
   if (!date) {
@@ -45,7 +51,9 @@ function StatusPill({ status }: { status?: string | null }) {
         : "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200";
 
   return (
-    <span className={`inline-flex h-7 items-center rounded-full border px-3 text-xs font-semibold ${classes}`}>
+    <span
+      className={`inline-flex h-7 items-center rounded-full border px-3 text-xs font-semibold ${classes}`}
+    >
       {status}
     </span>
   );
@@ -99,6 +107,16 @@ export default async function AdminFootballSyncPage() {
                 Sincronizar todas
               </button>
             </form>
+            <form action={syncAllFootballCompetitionScoresFormAction}>
+              <button
+                className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!apiConfigured}
+                type="submit"
+              >
+                <RefreshCw aria-hidden className="h-4 w-4" />
+                Atualizar placares
+              </button>
+            </form>
             <form action={syncAllFootballCompetitionsFormAction}>
               <input name="force" type="hidden" value="true" />
               <button
@@ -139,9 +157,7 @@ export default async function AdminFootballSyncPage() {
                   <p>Partidas</p>
                 </div>
                 <div className="rounded-control border border-app-border bg-app-background p-3">
-                  <p className="font-semibold text-app-foreground">
-                    {competition.local.standings}
-                  </p>
+                  <p className="font-semibold text-app-foreground">{competition.local.standings}</p>
                   <p>Classificacao</p>
                 </div>
               </div>
@@ -149,8 +165,15 @@ export default async function AdminFootballSyncPage() {
               <div className="mt-4 space-y-1 text-sm text-app-muted">
                 <p>Ultimo sucesso: {formatDate(competition.lastSuccess?.finishedAt)}</p>
                 <p>Ultima tentativa: {formatDate(competition.lastAttempt?.finishedAt)}</p>
+                <p>
+                  Ultima atualizacao de placares:{" "}
+                  {formatDate(competition.lastScoreSuccess?.finishedAt)}
+                </p>
                 {competition.lastAttempt?.message ? (
                   <p className="text-xs">{competition.lastAttempt.message}</p>
+                ) : null}
+                {competition.lastScoreAttempt?.message ? (
+                  <p className="text-xs text-brand-gold">{competition.lastScoreAttempt.message}</p>
                 ) : null}
                 {competition.lastAttempt ? (
                   <p className="text-xs">
@@ -171,6 +194,17 @@ export default async function AdminFootballSyncPage() {
                   >
                     <Database aria-hidden className="h-4 w-4" />
                     Sincronizar
+                  </button>
+                </form>
+                <form action={syncFootballCompetitionScoresFormAction}>
+                  <input name="competitionKey" type="hidden" value={competition.key} />
+                  <button
+                    className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!apiConfigured}
+                    type="submit"
+                  >
+                    <RefreshCw aria-hidden className="h-4 w-4" />
+                    Atualizar placares
                   </button>
                 </form>
                 <form action={syncFootballCompetitionFormAction}>

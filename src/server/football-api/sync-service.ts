@@ -1,5 +1,8 @@
-import type { MatchStatus, Prisma, RoundStatus } from "@prisma/client";
+import { Prisma, type MatchStatus, type RoundStatus } from "@prisma/client";
 
+import { recalculateRankingsForMatch } from "@/features/ranking/services/ranking-service";
+import { processMatchScores } from "@/features/scoring/services/scoring-service";
+import { grantMatchResultXp } from "@/features/xp/services/xp-service";
 import { prisma } from "@/server/db";
 import {
   fetchApiFootballFixtures,
@@ -7,6 +10,7 @@ import {
   fetchApiFootballRounds,
   fetchApiFootballStandings,
   fetchApiFootballTeams,
+  type ExternalFootballFixture,
   type ExternalFootballTeam
 } from "./client";
 import { getFootballSyncCacheHours, type FootballCompetitionConfig } from "./competitions";
@@ -32,7 +36,51 @@ export type FootballSyncResult =
       summary: SyncCounter;
     };
 
+type ScoreSyncCounter = {
+  callsUsed: number;
+  liveMatchesUpdated: number;
+  matchesHomologated: number;
+  matchesUpdated: number;
+  matchedFixtures: number;
+  processedGuesses: number;
+  rankingRows: number;
+  unmatchedFixtures: number;
+  xpEvents: number;
+};
+
+export type FootballScoreSyncResult =
+  | {
+      message: string;
+      ok: true;
+      summary: ScoreSyncCounter;
+    }
+  | {
+      message: string;
+      ok: false;
+      summary: ScoreSyncCounter;
+    };
+
 const PROVIDER = "api-football";
+const SCORE_SYNC_SUFFIX = ":scores";
+const SCORE_MATCH_WINDOW_HOURS = 12;
+
+const matchScoreSyncSelect = Prisma.validator<Prisma.MatchSelect>()({
+  _count: {
+    select: {
+      guesses: true
+    }
+  },
+  awayScore: true,
+  deletedAt: true,
+  homeScore: true,
+  homologatedAt: true,
+  id: true,
+  status: true
+});
+
+type MatchForScoreSync = Prisma.MatchGetPayload<{
+  select: typeof matchScoreSyncSelect;
+}>;
 
 function emptySummary(): SyncCounter {
   return {
@@ -41,6 +89,20 @@ function emptySummary(): SyncCounter {
     roundsImported: 0,
     standingsImported: 0,
     teamsImported: 0
+  };
+}
+
+function emptyScoreSummary(): ScoreSyncCounter {
+  return {
+    callsUsed: 0,
+    liveMatchesUpdated: 0,
+    matchesHomologated: 0,
+    matchesUpdated: 0,
+    matchedFixtures: 0,
+    processedGuesses: 0,
+    rankingRows: 0,
+    unmatchedFixtures: 0,
+    xpEvents: 0
   };
 }
 
@@ -98,6 +160,10 @@ function addHours(date: Date, hours: number) {
   return nextDate;
 }
 
+function getScoreSyncKey(config: FootballCompetitionConfig) {
+  return `${config.key}${SCORE_SYNC_SUFFIX}`;
+}
+
 async function getFreshSuccessfulSync(config: FootballCompetitionConfig) {
   const cacheHours = getFootballSyncCacheHours();
 
@@ -144,6 +210,31 @@ async function logSync(
       startedAt,
       status,
       teamsImported: summary.teamsImported
+    }
+  });
+}
+
+async function logScoreSync(
+  config: FootballCompetitionConfig,
+  status: "SUCCESS" | "FAILED",
+  message: string,
+  summary: ScoreSyncCounter,
+  startedAt: Date
+) {
+  await prisma.footballSyncLog.create({
+    data: {
+      callsUsed: summary.callsUsed,
+      competitionKey: getScoreSyncKey(config),
+      finishedAt: new Date(),
+      leagueId: config.leagueId,
+      matchesImported: summary.matchesUpdated,
+      message,
+      roundsImported: summary.matchesHomologated,
+      season: config.season,
+      standingsImported: 0,
+      startedAt,
+      status,
+      teamsImported: 0
     }
   });
 }
@@ -532,6 +623,207 @@ async function upsertStandings(
     });
 
     summary.standingsImported += 1;
+  }
+}
+
+async function findTeamIdsForFixtureTeam(team: ExternalFootballTeam, fallbackId: string) {
+  const matches = await prisma.team.findMany({
+    select: {
+      id: true
+    },
+    where: {
+      OR: [
+        {
+          id: fallbackId
+        },
+        {
+          apiId: team.apiId
+        },
+        {
+          name: {
+            equals: team.name,
+            mode: "insensitive"
+          }
+        }
+      ]
+    }
+  });
+
+  return Array.from(new Set(matches.map((match) => match.id)));
+}
+
+async function findMatchesForFixture(
+  config: FootballCompetitionConfig,
+  fixture: ExternalFootballFixture
+) {
+  const [homeTeam, awayTeam] = await Promise.all([
+    upsertTeam(fixture.homeTeam),
+    upsertTeam(fixture.awayTeam)
+  ]);
+  const [homeTeamIds, awayTeamIds] = await Promise.all([
+    findTeamIdsForFixtureTeam(fixture.homeTeam, homeTeam.id),
+    findTeamIdsForFixtureTeam(fixture.awayTeam, awayTeam.id)
+  ]);
+  const kickoffStart = addHours(fixture.kickoff, -SCORE_MATCH_WINDOW_HOURS);
+  const kickoffEnd = addHours(fixture.kickoff, SCORE_MATCH_WINDOW_HOURS);
+  const [apiMatches, candidateMatches] = await Promise.all([
+    prisma.match.findMany({
+      select: matchScoreSyncSelect,
+      where: {
+        apiId: fixture.apiId,
+        deletedAt: null
+      }
+    }),
+    prisma.match.findMany({
+      select: matchScoreSyncSelect,
+      where: {
+        awayTeamId: {
+          in: awayTeamIds
+        },
+        deletedAt: null,
+        homeTeamId: {
+          in: homeTeamIds
+        },
+        kickoff: {
+          gte: kickoffStart,
+          lte: kickoffEnd
+        },
+        round: {
+          season: {
+            championship: {
+              apiId: config.leagueId,
+              provider: PROVIDER
+            },
+            year: config.season
+          }
+        }
+      }
+    })
+  ]);
+  const matchesById = new Map<string, MatchForScoreSync>();
+
+  [...apiMatches, ...candidateMatches].forEach((match) => {
+    matchesById.set(match.id, match);
+  });
+
+  return Array.from(matchesById.values());
+}
+
+function getFixtureScores(fixture: ExternalFootballFixture) {
+  const homeScore = typeof fixture.homeScore === "number" ? fixture.homeScore : null;
+  const awayScore = typeof fixture.awayScore === "number" ? fixture.awayScore : null;
+
+  return {
+    awayScore,
+    hasScore: homeScore !== null && awayScore !== null,
+    homeScore
+  };
+}
+
+async function updateMatchFromFixture(
+  match: MatchForScoreSync,
+  fixture: ExternalFootballFixture,
+  status: MatchStatus,
+  summary: ScoreSyncCounter
+) {
+  const { awayScore, hasScore, homeScore } = getFixtureScores(fixture);
+  const scoreChanged = hasScore && (match.homeScore !== homeScore || match.awayScore !== awayScore);
+  const statusChanged = match.status !== status;
+  const shouldHomologate = status === "FINISHED" && hasScore;
+  const needsHomologation = shouldHomologate && (!match.homologatedAt || scoreChanged);
+  const updateData: Prisma.MatchUpdateInput = {
+    status
+  };
+
+  if (hasScore) {
+    updateData.awayScore = awayScore;
+    updateData.homeScore = homeScore;
+  }
+
+  if (needsHomologation) {
+    updateData.homologatedAt = new Date();
+  }
+
+  if (scoreChanged || statusChanged || needsHomologation) {
+    await prisma.match.update({
+      data: updateData,
+      where: {
+        id: match.id
+      }
+    });
+
+    summary.matchesUpdated += 1;
+
+    if (status === "LIVE" || status === "HALFTIME") {
+      summary.liveMatchesUpdated += 1;
+    }
+
+    if (needsHomologation) {
+      summary.matchesHomologated += 1;
+    }
+  }
+
+  if (!shouldHomologate || match._count.guesses === 0) {
+    return;
+  }
+
+  const scoringSummary = await processMatchScores(match.id);
+  const xpSummary = await grantMatchResultXp(match.id);
+  const rankingSummary = await recalculateRankingsForMatch(match.id);
+
+  summary.processedGuesses += scoringSummary.processedGuesses;
+  summary.rankingRows += rankingSummary.leagueRows;
+  summary.xpEvents += xpSummary.resultHitEvents + xpSummary.exactScoreEvents;
+}
+
+export async function syncFootballCompetitionScores(
+  config: FootballCompetitionConfig
+): Promise<FootballScoreSyncResult> {
+  const startedAt = new Date();
+  const summary = emptyScoreSummary();
+
+  try {
+    const fixturesResult = await fetchApiFootballFixtures(config.leagueId, config.season);
+    summary.callsUsed += fixturesResult.callsUsed;
+
+    if (!fixturesResult.ok) {
+      throw new Error(fixturesResult.message);
+    }
+
+    for (const fixture of fixturesResult.data) {
+      const matches = await findMatchesForFixture(config, fixture);
+
+      if (matches.length === 0) {
+        summary.unmatchedFixtures += 1;
+        continue;
+      }
+
+      summary.matchedFixtures += 1;
+      const status = mapMatchStatus(fixture.statusShort);
+
+      for (const match of matches) {
+        await updateMatchFromFixture(match, fixture, status, summary);
+      }
+    }
+
+    const message = `${config.name}: ${summary.matchesUpdated} partida(s) atualizada(s), ${summary.matchesHomologated} finalizada(s), ${summary.processedGuesses} palpite(s) processado(s). ${summary.unmatchedFixtures} jogo(s) da API sem partida local correspondente.`;
+    await logScoreSync(config, "SUCCESS", message, summary, startedAt);
+
+    return {
+      message,
+      ok: true,
+      summary
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Erro inesperado ao atualizar placares.";
+    await logScoreSync(config, "FAILED", message, summary, startedAt);
+
+    return {
+      message,
+      ok: false,
+      summary
+    };
   }
 }
 

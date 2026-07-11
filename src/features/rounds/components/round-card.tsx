@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { CalendarClock, ClipboardCheck, MapPin, Trophy } from "lucide-react";
 
@@ -39,9 +40,12 @@ function TeamMark({ logo, name, shortName }: TeamMarkProps) {
         aria-label={name}
         className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground"
         role="img"
-        style={logo ? { backgroundImage: `url("${logo}")` } : undefined}
       >
-        {logo ? null : getInitials(shortName || name)}
+        {logo ? (
+          <img alt="" className="h-7 w-7 object-contain" referrerPolicy="no-referrer" src={logo} />
+        ) : (
+          getInitials(shortName || name)
+        )}
       </span>
       <span className="truncate font-semibold text-app-foreground">{shortName || name}</span>
     </span>

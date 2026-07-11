@@ -75,7 +75,8 @@ export async function getUserHomeData(userId: string) {
       winnerHits: 0
     },
     todayMatches: [],
-    user: null
+    user: null,
+    xpProgress: null
   };
 
   try {
@@ -183,6 +184,7 @@ export async function getUserHomeData(userId: string) {
 
     const activeLeagueIds = memberships.map((membership) => membership.leagueId);
     const primaryLeagueId = activeLeagueIds[0];
+    const xpProgress = user ? getXpProgressFromLevels(user.xp, await getActiveXpLevels()) : null;
 
     if (activeLeagueIds.length === 0) {
       return {
@@ -206,7 +208,8 @@ export async function getUserHomeData(userId: string) {
             winnerHits: 0
           },
           todayMatches: [],
-          user
+          user,
+          xpProgress
         }
       };
     }
@@ -521,7 +524,8 @@ export async function getUserHomeData(userId: string) {
           winnerHits
         },
         todayMatches,
-        user
+        user,
+        xpProgress
       }
     };
   } catch {

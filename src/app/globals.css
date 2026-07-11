@@ -169,6 +169,35 @@ textarea {
   animation: wolf-shine 4.5s ease-in-out infinite;
 }
 
+.xp-progress-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 20%, rgb(245 158 11 / 0.18), transparent 16rem),
+    linear-gradient(120deg, transparent, rgb(255 255 255 / 0.08), transparent);
+  opacity: 0.86;
+}
+
+.xp-progress-fill {
+  position: relative;
+  overflow: hidden;
+}
+
+.xp-progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.48), transparent);
+  transform: translateX(-120%);
+  animation: xp-bar-shine 2.8s ease-in-out infinite;
+}
+
+.xp-medal-breathe {
+  animation: xp-medal-breathe 3.4s ease-in-out infinite;
+}
+
 [data-shell-mode="user"] .bg-app-surface {
   border-color: rgb(255 255 255 / 0.14);
   background:
@@ -441,6 +470,37 @@ textarea {
   50% {
     opacity: 0.9;
     transform: scale(1.06);
+  }
+}
+
+@keyframes xp-bar-shine {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  55%,
+  100% {
+    transform: translateX(140%);
+  }
+}
+
+@keyframes xp-medal-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgb(245 158 11 / 0);
+  }
+
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 32px rgb(245 158 11 / 0.24);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xp-progress-fill::after,
+  .xp-medal-breathe {
+    animation: none;
   }
 }
 

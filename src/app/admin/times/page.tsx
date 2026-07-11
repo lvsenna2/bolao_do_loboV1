@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import { Database, PlugZap, UploadCloud } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
@@ -96,7 +97,9 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
         <Card>
           <CardHeader>
             <CardTitle>Importar em lote</CardTitle>
-            <CardDescription>Use uma linha por time para acelerar cadastros grandes.</CardDescription>
+            <CardDescription>
+              Use uma linha por time para acelerar cadastros grandes.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form action={bulkImportTeamsFormAction} className="grid gap-3">
@@ -122,7 +125,9 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
         <Card>
           <CardHeader>
             <CardTitle>Biblioteca pronta</CardTitle>
-            <CardDescription>Carregue listas comuns sem pesquisar escudo manualmente.</CardDescription>
+            <CardDescription>
+              Carregue listas comuns sem pesquisar escudo manualmente.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 md:grid-cols-2">
@@ -225,11 +230,17 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
                 <tr key={team.id}>
                   <AdminTd>
                     <div className="flex items-center gap-3">
-                      <span
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground"
-                        style={team.logo ? { backgroundImage: `url("${team.logo}")` } : undefined}
-                      >
-                        {team.logo ? null : getInitials(team.name)}
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground">
+                        {team.logo ? (
+                          <img
+                            alt=""
+                            className="h-8 w-8 object-contain"
+                            referrerPolicy="no-referrer"
+                            src={team.logo}
+                          />
+                        ) : (
+                          getInitials(team.name)
+                        )}
                       </span>
                       <div>
                         <p className="font-semibold">{team.name}</p>
@@ -242,9 +253,7 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
                     <p>{team.apiId ? "API-Football" : "Manual"}</p>
                     <p className="text-xs text-app-muted">{team.apiId ?? ""}</p>
                   </AdminTd>
-                  <AdminTd>
-                    {team._count.homeMatches + team._count.awayMatches} partidas
-                  </AdminTd>
+                  <AdminTd>{team._count.homeMatches + team._count.awayMatches} partidas</AdminTd>
                   <AdminTd>{formatDate(team.createdAt)}</AdminTd>
                 </tr>
               ))}
