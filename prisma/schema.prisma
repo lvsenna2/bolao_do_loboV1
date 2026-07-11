@@ -152,17 +152,19 @@ model User {
   updatedAt       DateTime      @updatedAt @map("updated_at")
   deletedAt       DateTime?     @map("deleted_at")
 
-  accounts      Account[]
-  sessions      Session[]
-  ownedLeagues  League[]       @relation("LeagueOwner")
-  memberships   LeagueMember[]
-  guesses       Guess[]
-  scores        Score[]
-  rankings      Ranking[]
-  payments      Payment[]
-  notifications Notification[]
-  achievements  Achievement[]
-  auditLogs     AuditLog[]
+  accounts               Account[]
+  sessions               Session[]
+  ownedLeagues           League[]            @relation("LeagueOwner")
+  memberships            LeagueMember[]
+  guesses                Guess[]
+  scores                 Score[]
+  rankings               Ranking[]
+  rankingAdjustments     RankingAdjustment[] @relation("RankingAdjustmentUser")
+  rankingAdjustmentsMade RankingAdjustment[] @relation("RankingAdjustmentAdmin")
+  payments               Payment[]
+  notifications          Notification[]
+  achievements           Achievement[]
+  auditLogs              AuditLog[]
 
   @@index([email])
   @@index([username])
@@ -233,14 +235,15 @@ model League {
   updatedAt      DateTime         @updatedAt @map("updated_at")
   deletedAt      DateTime?        @map("deleted_at")
 
-  owner        User           @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  championship Championship   @relation(fields: [championshipId], references: [id], onDelete: Restrict)
-  members      LeagueMember[]
-  payments     Payment[]
-  rankings     Ranking[]
-  rounds       Round[]
-  guesses      Guess[]
-  scores       Score[]
+  owner              User                @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  championship       Championship        @relation(fields: [championshipId], references: [id], onDelete: Restrict)
+  members            LeagueMember[]
+  payments           Payment[]
+  rankings           Ranking[]
+  rounds             Round[]
+  guesses            Guess[]
+  scores             Score[]
+  rankingAdjustments RankingAdjustment[]
 
   @@index([ownerId])
   @@index([championshipId])
@@ -473,6 +476,25 @@ model Ranking {
   @@index([userId])
   @@index([scope])
   @@map("rankings")
+}
+
+model RankingAdjustment {
+  id          String   @id @default(uuid()) @db.Uuid
+  leagueId    String   @map("league_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  adminId     String   @map("admin_id") @db.Uuid
+  pointsDelta Int      @map("points_delta")
+  reason      String   @db.VarChar(240)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+  user   User   @relation("RankingAdjustmentUser", fields: [userId], references: [id], onDelete: Restrict)
+  admin  User   @relation("RankingAdjustmentAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([leagueId, userId])
+  @@index([adminId])
+  @@index([createdAt])
+  @@map("ranking_adjustments")
 }
 
 model Payment {

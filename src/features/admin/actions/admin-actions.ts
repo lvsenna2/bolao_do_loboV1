@@ -42,7 +42,8 @@ import {
   updatePaymentStatusSchema,
   updateRoundStatusSchema,
   updateUserRoleSchema,
-  updateUserStatusSchema
+  updateUserStatusSchema,
+  adjustLeagueRankingSchema
 } from "../schemas/admin-schemas";
 import type { AdminActionResult } from "../types";
 
@@ -1801,6 +1802,105 @@ export async function updateLeagueChampionshipAction(
   return {
     ok: true,
     message: "Campeonato da liga atualizado."
+  };
+}
+
+export async function adjustLeagueRankingAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = adjustLeagueRankingSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise o ajuste do ranking.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const data = parsedInput.data;
+  const [league, membership] = await prisma.$transaction([
+    prisma.league.findFirst({
+      select: {
+        id: true,
+        name: true
+      },
+      where: {
+        deletedAt: null,
+        id: data.leagueId
+      }
+    }),
+    prisma.leagueMember.findUnique({
+      select: {
+        status: true,
+        user: {
+          select: {
+            email: true,
+            id: true,
+            name: true
+          }
+        }
+      },
+      where: {
+        leagueId_userId: {
+          leagueId: data.leagueId,
+          userId: data.userId
+        }
+      }
+    })
+  ]);
+
+  if (!league) {
+    return {
+      ok: false,
+      message: "Liga nao encontrada."
+    };
+  }
+
+  if (!membership || membership.status !== "ACTIVE") {
+    return {
+      ok: false,
+      message: "Participante ativo nao encontrado nesta liga."
+    };
+  }
+
+  const adjustment = await prisma.rankingAdjustment.create({
+    data: {
+      adminId: admin.id,
+      leagueId: league.id,
+      pointsDelta: data.pointsDelta,
+      reason: data.reason,
+      userId: membership.user.id
+    },
+    select: {
+      id: true,
+      pointsDelta: true,
+      reason: true
+    }
+  });
+  const rows = await recalculateLeagueRanking(league.id);
+
+  await createAuditLog(
+    admin.id,
+    "admin.league.ranking_adjusted",
+    "RankingAdjustment",
+    adjustment.id,
+    undefined,
+    {
+      leagueId: league.id,
+      leagueName: league.name,
+      pointsDelta: adjustment.pointsDelta,
+      reason: adjustment.reason,
+      rows,
+      userEmail: membership.user.email,
+      userId: membership.user.id,
+      userName: membership.user.name
+    }
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `Ajuste de ${data.pointsDelta} ponto(s) aplicado para ${membership.user.name}.`
   };
 }
 

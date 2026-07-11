@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRankingRows, getAverageSubmitSeconds, getMonthRange } from "./ranking-service";
+import {
+  applyRankingAdjustments,
+  buildRankingRows,
+  getAverageSubmitSeconds,
+  getMonthRange
+} from "./ranking-service";
 
 function scoreRecord({
   exactScore = false,
@@ -118,5 +123,55 @@ describe("ranking service helpers", () => {
       points: 6,
       wins: 1
     });
+  });
+
+  it("applies manual league ranking adjustments", () => {
+    const kickoff = new Date("2026-06-30T18:00:00.000Z");
+    const rows = buildRankingRows(
+      [
+        scoreRecord({
+          kickoff,
+          submittedAt: new Date("2026-06-30T17:40:00.000Z"),
+          totalPoints: 10,
+          userId: "user-a",
+          winnerHit: true
+        }),
+        scoreRecord({
+          kickoff,
+          submittedAt: new Date("2026-06-30T17:50:00.000Z"),
+          totalPoints: 8,
+          userId: "user-b",
+          winnerHit: true
+        })
+      ],
+      {
+        leagueId: "league-1",
+        scope: "LEAGUE"
+      }
+    );
+
+    const adjustedRows = applyRankingAdjustments(
+      rows,
+      [
+        {
+          pointsDelta: -5,
+          userId: "user-a"
+        },
+        {
+          pointsDelta: 3,
+          userId: "user-c"
+        }
+      ],
+      {
+        leagueId: "league-1",
+        scope: "LEAGUE"
+      }
+    );
+
+    expect(adjustedRows.map((row) => [row.userId, row.points, row.position])).toEqual([
+      ["user-b", 8, 1],
+      ["user-a", 5, 2],
+      ["user-c", 3, 3]
+    ]);
   });
 });

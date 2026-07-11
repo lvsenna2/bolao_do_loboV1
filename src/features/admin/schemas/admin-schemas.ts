@@ -216,6 +216,20 @@ export const recalculateLeagueRankingSchema = z.object({
   leagueId: uuidSchema
 });
 
+export const adjustLeagueRankingSchema = z.object({
+  leagueId: uuidSchema,
+  pointsDelta: z.coerce
+    .number({
+      invalid_type_error: "Informe a quantidade de pontos."
+    })
+    .int("Use apenas numeros inteiros.")
+    .min(-100000, "Desconto muito alto.")
+    .max(100000, "Bonus muito alto.")
+    .refine((value) => value !== 0, "Informe um valor diferente de zero."),
+  reason: z.string().min(3, "Informe o motivo.").max(240, "Use no maximo 240 caracteres.").trim(),
+  userId: uuidSchema
+});
+
 export const deleteLeagueSchema = z.object({
   leagueId: uuidSchema
 });

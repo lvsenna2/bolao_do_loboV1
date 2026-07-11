@@ -839,7 +839,9 @@ export async function getAdminLeagues(searchParams: SearchParams) {
 
 export async function getAdminLeagueRankings(searchParams: SearchParams) {
   const empty = {
+    adjustments: [],
     leagues: [],
+    participants: [],
     rankings: [],
     selectedLeague: null,
     selectedLeagueId: ""
@@ -910,39 +912,118 @@ export async function getAdminLeagueRankings(searchParams: SearchParams) {
       };
     }
 
-    const rankings = await prisma.ranking.findMany({
-      include: {
-        user: {
-          select: {
-            avatarUrl: true,
-            email: true,
-            id: true,
-            level: true,
-            name: true,
-            username: true,
-            xp: true
+    const [rankings, participants, adjustments, allAdjustments] = await prisma.$transaction([
+      prisma.ranking.findMany({
+        include: {
+          user: {
+            select: {
+              avatarUrl: true,
+              email: true,
+              id: true,
+              level: true,
+              name: true,
+              username: true,
+              xp: true
+            }
           }
-        }
-      },
-      orderBy: [
-        {
-          position: "asc"
         },
-        {
-          points: "desc"
+        orderBy: [
+          {
+            position: "asc"
+          },
+          {
+            points: "desc"
+          }
+        ],
+        where: {
+          leagueId: selectedLeagueId,
+          scope: "LEAGUE"
         }
-      ],
-      where: {
-        leagueId: selectedLeagueId,
-        scope: "LEAGUE"
-      }
-    });
+      }),
+      prisma.leagueMember.findMany({
+        orderBy: {
+          user: {
+            name: "asc"
+          }
+        },
+        select: {
+          user: {
+            select: {
+              avatarUrl: true,
+              email: true,
+              id: true,
+              name: true,
+              username: true
+            }
+          }
+        },
+        where: {
+          leagueId: selectedLeagueId,
+          status: "ACTIVE"
+        }
+      }),
+      prisma.rankingAdjustment.findMany({
+        orderBy: {
+          createdAt: "desc"
+        },
+        select: {
+          admin: {
+            select: {
+              email: true,
+              name: true
+            }
+          },
+          createdAt: true,
+          id: true,
+          pointsDelta: true,
+          reason: true,
+          user: {
+            select: {
+              avatarUrl: true,
+              email: true,
+              id: true,
+              name: true,
+              username: true
+            }
+          }
+        },
+        take: 20,
+        where: {
+          leagueId: selectedLeagueId
+        }
+      }),
+      prisma.rankingAdjustment.findMany({
+        select: {
+          pointsDelta: true,
+          userId: true
+        },
+        where: {
+          leagueId: selectedLeagueId
+        }
+      })
+    ]);
+    const adjustmentTotals = allAdjustments.reduce<Map<string, number>>(
+      (accumulator, adjustment) => {
+        accumulator.set(
+          adjustment.userId,
+          (accumulator.get(adjustment.userId) ?? 0) + adjustment.pointsDelta
+        );
+
+        return accumulator;
+      },
+      new Map<string, number>()
+    );
 
     return {
       ok: true as const,
       data: {
+        adjustments,
         leagues: leagueOptions,
-        rankings,
+        participants: participants.map((participant) => participant.user),
+        rankings: rankings.map((ranking) => ({
+          ...ranking,
+          adjustmentPoints: adjustmentTotals.get(ranking.userId) ?? 0
+        })),
         selectedLeague: leagueOptions.find((league) => league.id === selectedLeagueId) ?? null,
         selectedLeagueId
       }

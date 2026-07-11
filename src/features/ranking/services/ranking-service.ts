@@ -11,6 +11,11 @@ type RankingContext = {
 
 type RankingRowInput = Prisma.RankingCreateManyInput;
 
+type RankingAdjustmentInput = {
+  pointsDelta: number;
+  userId: string;
+};
+
 const scoreSelect = {
   exactScore: true,
   leagueId: true,
@@ -176,6 +181,77 @@ export function buildRankingRows(
   });
 
   return sortRankingRows(rows);
+}
+
+export function applyRankingAdjustments(
+  rows: RankingRowInput[],
+  adjustments: RankingAdjustmentInput[],
+  context: RankingContext
+): RankingRowInput[] {
+  if (adjustments.length === 0) {
+    return rows;
+  }
+
+  const rowsByUser = rows.reduce<Map<string, Omit<RankingRowInput, "position">>>(
+    (accumulator, row) => {
+      const rowWithoutPosition = {
+        averageSubmitSeconds: row.averageSubmitSeconds,
+        currentStreak: row.currentStreak,
+        exactScores: row.exactScores,
+        hits: row.hits,
+        leagueId: row.leagueId,
+        losses: row.losses,
+        points: row.points,
+        roundId: row.roundId,
+        scope: row.scope,
+        seasonId: row.seasonId,
+        userId: row.userId,
+        wins: row.wins
+      };
+
+      accumulator.set(row.userId, rowWithoutPosition);
+
+      return accumulator;
+    },
+    new Map<string, Omit<RankingRowInput, "position">>()
+  );
+  const adjustmentTotals = adjustments.reduce<Map<string, number>>((accumulator, adjustment) => {
+    accumulator.set(
+      adjustment.userId,
+      (accumulator.get(adjustment.userId) ?? 0) + adjustment.pointsDelta
+    );
+
+    return accumulator;
+  }, new Map<string, number>());
+
+  for (const [userId, pointsDelta] of adjustmentTotals.entries()) {
+    const existingRow = rowsByUser.get(userId);
+
+    if (existingRow) {
+      rowsByUser.set(userId, {
+        ...existingRow,
+        points: (existingRow.points ?? 0) + pointsDelta
+      });
+      continue;
+    }
+
+    rowsByUser.set(userId, {
+      averageSubmitSeconds: null,
+      currentStreak: 0,
+      exactScores: 0,
+      hits: 0,
+      leagueId: context.leagueId ?? null,
+      losses: 0,
+      points: pointsDelta,
+      roundId: context.roundId ?? null,
+      scope: context.scope,
+      seasonId: context.seasonId ?? null,
+      userId,
+      wins: 0
+    });
+  }
+
+  return sortRankingRows(Array.from(rowsByUser.values()));
 }
 
 async function replaceRankingRows(
@@ -362,13 +438,32 @@ export async function recalculateLeagueRanking(leagueId: string) {
     leagueId: league.id,
     scope: "LEAGUE"
   });
+  const adjustments =
+    userIds.length > 0
+      ? await prisma.rankingAdjustment.findMany({
+          select: {
+            pointsDelta: true,
+            userId: true
+          },
+          where: {
+            leagueId: league.id,
+            userId: {
+              in: userIds
+            }
+          }
+        })
+      : [];
+  const adjustedRows = applyRankingAdjustments(rows, adjustments, {
+    leagueId: league.id,
+    scope: "LEAGUE"
+  });
 
   return replaceRankingRows(
     {
       leagueId: league.id,
       scope: "LEAGUE"
     },
-    rows
+    adjustedRows
   );
 }
 

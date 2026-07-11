@@ -1,10 +1,13 @@
-import { RefreshCw, Trophy } from "lucide-react";
+import { History, PlusCircle, RefreshCw, Trophy } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { recalculateLeagueRankingAction } from "@/features/admin/actions/admin-actions";
+import {
+  adjustLeagueRankingAction,
+  recalculateLeagueRankingAction
+} from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
 import { AdminEmpty } from "@/features/admin/components/admin-empty";
 import { AdminSelect } from "@/features/admin/components/admin-select";
@@ -25,11 +28,23 @@ type AdminRankingsPageProps = {
 };
 
 const recalculateLeagueRankingFormAction = recalculateLeagueRankingAction as unknown as FormAction;
+const adjustLeagueRankingFormAction = adjustLeagueRankingAction as unknown as FormAction;
+
+const inputClass =
+  "h-10 rounded-control border border-app-border bg-app-background px-3 text-sm text-app-foreground outline-none transition placeholder:text-app-muted focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20";
+
+function formatDate(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(date);
+}
 
 export default async function AdminRankingsPage({ searchParams }: AdminRankingsPageProps) {
   const params = await searchParams;
   const result = await getAdminLeagueRankings(params);
-  const { leagues, rankings, selectedLeague, selectedLeagueId } = result.data;
+  const { adjustments, leagues, participants, rankings, selectedLeague, selectedLeagueId } =
+    result.data;
 
   return (
     <PageShell
@@ -89,6 +104,62 @@ export default async function AdminRankingsPage({ searchParams }: AdminRankingsP
         </CardContent>
       </Card>
 
+      <Card className="mb-5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PlusCircle aria-hidden className="h-5 w-5 text-brand-gold" />
+            Ajuste manual de pontos
+          </CardTitle>
+          <CardDescription>
+            Use valor negativo para descontar pontos e positivo para bonificar. O motivo fica
+            registrado no historico.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            action={adjustLeagueRankingFormAction}
+            className="grid gap-3 lg:grid-cols-[1fr_160px_1.2fr_auto] lg:items-end"
+          >
+            <input name="leagueId" type="hidden" value={selectedLeagueId} />
+            <AdminSelect label="Participante" name="userId" required>
+              <option value="">Selecione</option>
+              {participants.map((participant) => (
+                <option key={participant.id} value={participant.id}>
+                  {participant.name} | {participant.email}
+                </option>
+              ))}
+            </AdminSelect>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-app-foreground">Pontos</span>
+              <input
+                className={inputClass}
+                name="pointsDelta"
+                placeholder="-10 ou 5"
+                required
+                type="number"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-app-foreground">Motivo</span>
+              <input
+                className={inputClass}
+                maxLength={240}
+                name="reason"
+                placeholder="Ex: ajuste por palpite duplicado"
+                required
+              />
+            </label>
+            <button
+              className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:opacity-60"
+              disabled={!selectedLeagueId || participants.length === 0}
+              type="submit"
+            >
+              Aplicar
+            </button>
+          </form>
+        </CardContent>
+      </Card>
+
       {rankings.length === 0 ? (
         <AdminEmpty
           description="Homologue partidas ou recalcule a liga depois que houver pontuacoes."
@@ -101,6 +172,7 @@ export default async function AdminRankingsPage({ searchParams }: AdminRankingsP
               <AdminTh>Posicao</AdminTh>
               <AdminTh>Participante</AdminTh>
               <AdminTh>Pontos</AdminTh>
+              <AdminTh>Ajuste</AdminTh>
               <AdminTh>XP</AdminTh>
               <AdminTh>Nivel</AdminTh>
               <AdminTh>Acertos</AdminTh>
@@ -131,6 +203,12 @@ export default async function AdminRankingsPage({ searchParams }: AdminRankingsP
                   </div>
                 </AdminTd>
                 <AdminTd className="font-bold text-app-foreground">{ranking.points}</AdminTd>
+                <AdminTd>
+                  <Badge tone={ranking.adjustmentPoints === 0 ? "neutral" : "warning"}>
+                    {ranking.adjustmentPoints > 0 ? "+" : ""}
+                    {ranking.adjustmentPoints}
+                  </Badge>
+                </AdminTd>
                 <AdminTd>{ranking.user.xp}</AdminTd>
                 <AdminTd>{ranking.user.level}</AdminTd>
                 <AdminTd>{ranking.hits}</AdminTd>
@@ -140,6 +218,55 @@ export default async function AdminRankingsPage({ searchParams }: AdminRankingsP
           </AdminTableBody>
         </AdminTable>
       )}
+
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History aria-hidden className="h-5 w-5 text-brand-gold" />
+            Historico de ajustes
+          </CardTitle>
+          <CardDescription>Ultimos ajustes manuais aplicados nesta liga.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {adjustments.length === 0 ? (
+            <p className="text-sm text-app-muted">Nenhum ajuste manual registrado.</p>
+          ) : (
+            <div className="space-y-3">
+              {adjustments.map((adjustment) => (
+                <article
+                  className="rounded-control border border-app-border bg-app-background p-3"
+                  key={adjustment.id}
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar
+                        alt={adjustment.user.name}
+                        name={adjustment.user.name}
+                        src={adjustment.user.avatarUrl}
+                      />
+                      <div>
+                        <p className="font-semibold text-app-foreground">{adjustment.user.name}</p>
+                        <p className="text-xs text-app-muted">
+                          @{adjustment.user.username} | {adjustment.user.email}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge tone={adjustment.pointsDelta < 0 ? "warning" : "success"}>
+                      {adjustment.pointsDelta > 0 ? "+" : ""}
+                      {adjustment.pointsDelta} pts
+                    </Badge>
+                  </div>
+                  <p className="mt-3 text-sm text-app-foreground">{adjustment.reason}</p>
+                  <p className="mt-1 text-xs text-app-muted">
+                    Por {adjustment.admin.name} | {adjustment.admin.email} |{" "}
+                    {formatDate(adjustment.createdAt)}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </PageShell>
   );
 }
