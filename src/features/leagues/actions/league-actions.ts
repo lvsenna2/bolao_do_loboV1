@@ -10,6 +10,11 @@ import {
   createQrSvgDataUri,
   getPixReceiverKey
 } from "@/features/payments/pix";
+import {
+  evaluateAchievementsForUser,
+  getUserPaidLeaguePricing,
+  syncActiveLeagueMissionProgress
+} from "@/features/xp/services/xp-service";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import {
@@ -39,9 +44,11 @@ function revalidateLeaguePaths() {
   revalidatePath("/dashboard");
   revalidatePath("/ligas");
   revalidatePath("/minhas-ligas");
+  revalidatePath("/perfil");
   revalidatePath("/ranking");
   revalidatePath("/rodadas");
   revalidatePath("/palpites");
+  revalidatePath("/xp-ranking");
 }
 
 async function createInviteCode() {
@@ -155,10 +162,13 @@ type JoinableLeague = {
 };
 
 type PendingPixPayment = {
+  id: string;
   amount: Prisma.Decimal | number | string;
   qrCode: string | null;
   transactionId: string | null;
 };
+
+type PaidLeaguePricing = Awaited<ReturnType<typeof getUserPaidLeaguePricing>>;
 
 function getMoneyNumber(value: Prisma.Decimal | number | string) {
   return Number(typeof value === "object" ? value.toString() : value);
@@ -175,7 +185,11 @@ function requiresPixPayment(league: JoinableLeague) {
   return league.visibility !== "PUBLIC" && getMoneyNumber(league.entryFee) > 0;
 }
 
-function toPaymentIntent(league: JoinableLeague, payment: PendingPixPayment): LeaguePaymentIntent {
+function toPaymentIntent(
+  league: JoinableLeague,
+  payment: PendingPixPayment,
+  pricing: PaidLeaguePricing
+): LeaguePaymentIntent {
   const pixCode =
     payment.qrCode ??
     createPixPayload({
@@ -186,7 +200,13 @@ function toPaymentIntent(league: JoinableLeague, payment: PendingPixPayment): Le
 
   return {
     amountLabel: formatMoney(payment.amount),
+    discountAmountLabel: formatMoney(pricing.discountAmount),
+    discountPercent: pricing.discountPercent,
+    finalAmountLabel: formatMoney(payment.amount),
     leagueName: league.name,
+    levelName: pricing.level.name,
+    minimumAmountLabel: formatMoney(pricing.minimumEntryFee),
+    originalAmountLabel: formatMoney(pricing.originalAmount),
     pixCode,
     pixKey: getPixReceiverKey(),
     qrCodeDataUri: createQrSvgDataUri(pixCode),
@@ -198,13 +218,16 @@ function toPaymentIntent(league: JoinableLeague, payment: PendingPixPayment): Le
 async function createPendingPixPayment(
   tx: Prisma.TransactionClient,
   userId: string,
-  league: JoinableLeague
+  league: JoinableLeague,
+  pricing: PaidLeaguePricing
 ) {
+  const finalAmount = pricing.finalAmount;
   const existingPayment = await tx.payment.findFirst({
     orderBy: {
       createdAt: "desc"
     },
     select: {
+      id: true,
       amount: true,
       qrCode: true,
       transactionId: true
@@ -218,20 +241,47 @@ async function createPendingPixPayment(
   });
 
   if (existingPayment) {
-    return existingPayment;
+    const currentAmount = getMoneyNumber(existingPayment.amount);
+
+    if (Math.abs(currentAmount - finalAmount) < 0.01) {
+      return existingPayment;
+    }
+
+    const transactionId = existingPayment.transactionId ?? createPixTransactionId();
+    const pixCode = createPixPayload({
+      amount: finalAmount,
+      description: league.name,
+      transactionId
+    });
+
+    return tx.payment.update({
+      data: {
+        amount: finalAmount,
+        qrCode: pixCode,
+        transactionId
+      },
+      select: {
+        id: true,
+        amount: true,
+        qrCode: true,
+        transactionId: true
+      },
+      where: {
+        id: existingPayment.id
+      }
+    });
   }
 
   const transactionId = createPixTransactionId();
-  const amount = getMoneyNumber(league.entryFee);
   const pixCode = createPixPayload({
-    amount,
+    amount: finalAmount,
     description: league.name,
     transactionId
   });
 
   return tx.payment.create({
     data: {
-      amount,
+      amount: finalAmount,
       gateway: "PIX",
       leagueId: league.id,
       qrCode: pixCode,
@@ -240,6 +290,7 @@ async function createPendingPixPayment(
       userId
     },
     select: {
+      id: true,
       amount: true,
       qrCode: true,
       transactionId: true
@@ -308,6 +359,7 @@ async function joinLeagueForUser(
   }
 
   if (requiresPixPayment(league)) {
+    const pricing = await getUserPaidLeaguePricing(userId, getMoneyNumber(league.entryFee));
     const payment = await prisma.$transaction(async (tx) => {
       if (existingMembership) {
         await tx.leagueMember.update({
@@ -332,7 +384,7 @@ async function joinLeagueForUser(
         });
       }
 
-      const pendingPayment = await createPendingPixPayment(tx, userId, league);
+      const pendingPayment = await createPendingPixPayment(tx, userId, league, pricing);
 
       await tx.auditLog.create({
         data: {
@@ -341,10 +393,14 @@ async function joinLeagueForUser(
           entityId: pendingPayment.transactionId ?? league.id,
           newValue: {
             amount: pendingPayment.amount.toString(),
+            discountAmount: pricing.discountAmount,
+            discountPercent: pricing.discountPercent,
             gateway: "PIX",
             inviteCode: league.inviteCode,
             leagueId: league.id,
             leagueName: league.name,
+            levelName: pricing.level.name,
+            originalAmount: pricing.originalAmount,
             status: "PENDING"
           },
           userId
@@ -359,7 +415,7 @@ async function joinLeagueForUser(
     return {
       ok: true,
       message: "Pagamento Pix gerado. Aguarde a aprovacao do administrador para entrar na liga.",
-      data: toPaymentIntent(league, payment)
+      data: toPaymentIntent(league, payment, pricing)
     };
   }
 
@@ -403,6 +459,7 @@ async function joinLeagueForUser(
     });
   });
 
+  await Promise.all([syncActiveLeagueMissionProgress(userId), evaluateAchievementsForUser(userId)]);
   revalidateLeaguePaths();
 
   return {

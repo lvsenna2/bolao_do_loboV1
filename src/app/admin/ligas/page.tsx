@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   deleteLeagueAction,
   updateLeagueChampionshipAction,
+  updateLeagueXpEnabledAction,
   updateLeagueStatusAction
 } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
@@ -35,6 +36,7 @@ type LeaguesPageProps = {
 
 const deleteLeagueFormAction = deleteLeagueAction as unknown as FormAction;
 const updateLeagueChampionshipFormAction = updateLeagueChampionshipAction as unknown as FormAction;
+const updateLeagueXpEnabledFormAction = updateLeagueXpEnabledAction as unknown as FormAction;
 const updateLeagueStatusFormAction = updateLeagueStatusAction as unknown as FormAction;
 
 export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProps) {
@@ -102,6 +104,7 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                 <AdminTh>Campeonato</AdminTh>
                 <AdminTh>Dono</AdminTh>
                 <AdminTh>Status</AdminTh>
+                <AdminTh>XP</AdminTh>
                 <AdminTh>Participantes</AdminTh>
                 <AdminTh>Financeiro</AdminTh>
                 <AdminTh>Acoes</AdminTh>
@@ -153,6 +156,31 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                   </AdminTd>
                   <AdminTd>
                     <AdminStatusBadge value={league.status} />
+                  </AdminTd>
+                  <AdminTd>
+                    <form
+                      action={updateLeagueXpEnabledFormAction}
+                      className="flex items-center gap-2"
+                    >
+                      <input name="leagueId" type="hidden" value={league.id} />
+                      <input name="xpEnabled" type="hidden" value="false" />
+                      <label className="inline-flex items-center gap-2 text-xs font-semibold text-app-muted">
+                        <input
+                          className="h-4 w-4 accent-amber-400"
+                          defaultChecked={league.xpEnabled}
+                          name="xpEnabled"
+                          type="checkbox"
+                          value="true"
+                        />
+                        {league.xpEnabled ? "Ativo" : "Inativo"}
+                      </label>
+                      <button
+                        className="h-8 rounded-button border border-app-border px-2 text-xs font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
+                        type="submit"
+                      >
+                        Salvar
+                      </button>
+                    </form>
                   </AdminTd>
                   <AdminTd>{league._count.members}</AdminTd>
                   <AdminTd>

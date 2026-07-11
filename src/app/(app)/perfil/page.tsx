@@ -1,4 +1,4 @@
-import { Download, KeyRound, Trash2, UserRound } from "lucide-react";
+import { Download, Flame, KeyRound, Sparkles, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 
@@ -22,7 +22,17 @@ export const dynamic = "force-dynamic";
 export default async function ProfilePage() {
   const sessionUser = await requireUser();
   const result = await getUserProfileData(sessionUser.id);
-  const { achievements, stats, user } = result.data;
+  const {
+    achievements,
+    missions,
+    recentXpEvents,
+    season,
+    seasonXp,
+    stats,
+    streak,
+    user,
+    xpProgress
+  } = result.data;
 
   return (
     <PageShell
@@ -116,7 +126,7 @@ export default async function ProfilePage() {
               </CardContent>
             </Card>
 
-            <XpProgress level={user.level} xp={user.xp} />
+            <XpProgress level={user.level} progress={xpProgress} xp={user.xp} />
 
             <section className="grid gap-4">
               <UserStatCard
@@ -126,12 +136,98 @@ export default async function ProfilePage() {
                 value={stats.guesses}
               />
               <UserStatCard
+                description={season ? season.name || String(season.year) : "Temporada ativa"}
+                icon={Sparkles}
+                label="XP da temporada"
+                value={seasonXp}
+              />
+              <UserStatCard
+                description="Dias consecutivos de participacao"
+                icon={Flame}
+                label="Sequencia"
+                value={streak?.currentCount ?? 0}
+              />
+              <UserStatCard
                 description="Pontuacao acumulada"
                 icon={KeyRound}
                 label="Pontos"
                 value={stats.points}
               />
             </section>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Historico de XP</CardTitle>
+                <CardDescription>Ultimas movimentacoes auditadas.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {recentXpEvents.length > 0 ? (
+                  recentXpEvents.map((event) => (
+                    <div
+                      className="rounded-control border border-app-border bg-app-background p-3"
+                      key={event.id}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-app-foreground">
+                            {event.type.replaceAll("_", " ")}
+                          </p>
+                          <p className="text-xs text-app-muted">
+                            {event.league?.name ?? "Conta"} | {formatDate(event.createdAt)}
+                          </p>
+                        </div>
+                        <Badge tone={event.amount >= 0 ? "success" : "warning"}>
+                          {event.amount > 0 ? "+" : ""}
+                          {event.amount} XP
+                        </Badge>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyState
+                    description="Envie palpites para iniciar sua progressao."
+                    title="Nenhum XP registrado"
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Missoes</CardTitle>
+                <CardDescription>Progresso das missoes ativas.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {missions.length > 0 ? (
+                  missions.map((missionProgress) => (
+                    <div
+                      className="rounded-control border border-app-border bg-app-background p-3"
+                      key={missionProgress.id}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-app-foreground">
+                            {missionProgress.mission.title}
+                          </p>
+                          <p className="text-xs text-app-muted">
+                            {missionProgress.progress}/{missionProgress.mission.target} |{" "}
+                            {missionProgress.mission.xpReward} XP bonus
+                          </p>
+                        </div>
+                        <Badge tone={missionProgress.completedAt ? "success" : "info"}>
+                          {missionProgress.completedAt ? "Concluida" : "Ativa"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyState
+                    description="Missoes aparecem quando voce comeca a participar."
+                    title="Nenhuma missao iniciada"
+                  />
+                )}
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth/session";
 import { getDatabaseErrorCode } from "@/server/db/errors";
 import { prisma } from "@/server/db";
+import { grantGuessSubmittedXp } from "@/features/xp/services/xp-service";
 import { getPointsPreview, getScoringDefaults } from "../data/guess-data";
 import {
   deleteGuessSchema,
@@ -78,6 +79,7 @@ function revalidateGuessesArea() {
   revalidatePath("/dashboard");
   revalidatePath("/estatisticas");
   revalidatePath("/perfil");
+  revalidatePath("/xp-ranking");
   revalidatePath("/ligas");
   revalidatePath("/minhas-ligas");
   revalidatePath("/ranking");
@@ -277,6 +279,7 @@ export async function upsertGuessAction(
       }
     );
 
+    await grantGuessSubmittedXp(guess.id);
     revalidateGuessesArea();
 
     return {

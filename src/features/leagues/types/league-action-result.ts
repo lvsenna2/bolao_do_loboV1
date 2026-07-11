@@ -1,6 +1,12 @@
 export type LeaguePaymentIntent = {
   amountLabel: string;
+  discountAmountLabel: string;
+  discountPercent: number;
+  finalAmountLabel: string;
   leagueName: string;
+  levelName: string;
+  minimumAmountLabel: string;
+  originalAmountLabel: string;
   pixCode: string;
   pixKey: string;
   qrCodeDataUri: string;

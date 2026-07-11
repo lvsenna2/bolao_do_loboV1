@@ -18,6 +18,10 @@ export const paymentStatusSchema = z.nativeEnum(PaymentStatus);
 export const roundStatusSchema = z.nativeEnum(RoundStatus);
 
 const uuidSchema = z.string().uuid("Identificador invalido.");
+const formBooleanSchema = z.preprocess(
+  (value) => value === true || value === "true" || value === "on" || value === "1",
+  z.boolean()
+);
 
 function parseSaoPauloDateTimeLocal(value: unknown) {
   if (typeof value !== "string") {
@@ -212,6 +216,11 @@ export const updateLeagueChampionshipSchema = z.object({
   leagueId: uuidSchema
 });
 
+export const updateLeagueXpEnabledSchema = z.object({
+  leagueId: uuidSchema,
+  xpEnabled: formBooleanSchema
+});
+
 export const recalculateLeagueRankingSchema = z.object({
   leagueId: uuidSchema
 });
@@ -232,6 +241,114 @@ export const adjustLeagueRankingSchema = z.object({
 
 export const deleteLeagueSchema = z.object({
   leagueId: uuidSchema
+});
+
+export const updateXpLevelSchema = z
+  .object({
+    levelId: uuidSchema,
+    name: z.string().min(2, "Informe o nome.").max(80).trim(),
+    medal: z.string().min(1, "Informe a medalha.").max(20).trim(),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Use uma cor hexadecimal, como #FBBF24."),
+    minXp: z.coerce.number().int().min(0, "XP minimo invalido."),
+    maxXp: z.coerce.number().int().min(0, "XP maximo invalido.").optional().or(z.literal("")),
+    discountPercent: z.coerce.number().int().min(0).max(100),
+    active: formBooleanSchema.optional()
+  })
+  .refine((data) => data.maxXp === "" || data.maxXp === undefined || data.maxXp >= data.minXp, {
+    message: "XP maximo deve ser maior ou igual ao minimo.",
+    path: ["maxXp"]
+  });
+
+export const createXpLevelSchema = z
+  .object({
+    key: z
+      .string()
+      .min(2)
+      .max(80)
+      .regex(/^[a-z0-9-]+$/, "Use apenas letras, numeros e hifens."),
+    name: z.string().min(2, "Informe o nome.").max(80).trim(),
+    medal: z.string().min(1, "Informe a medalha.").max(20).trim(),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Use uma cor hexadecimal, como #FBBF24."),
+    minXp: z.coerce.number().int().min(0, "XP minimo invalido."),
+    maxXp: z.coerce.number().int().min(0, "XP maximo invalido.").optional().or(z.literal("")),
+    discountPercent: z.coerce.number().int().min(0).max(100),
+    sortOrder: z.coerce.number().int().min(1).max(999),
+    active: formBooleanSchema.optional()
+  })
+  .refine((data) => data.maxXp === "" || data.maxXp === undefined || data.maxXp >= data.minXp, {
+    message: "XP maximo deve ser maior ou igual ao minimo.",
+    path: ["maxXp"]
+  });
+
+export const updateXpTypeConfigSchema = z.object({
+  typeConfigId: uuidSchema,
+  amount: z.coerce.number().int().min(-100000).max(100000),
+  active: formBooleanSchema.optional()
+});
+
+export const createXpTypeConfigSchema = z.object({
+  key: z
+    .string()
+    .min(2)
+    .max(80)
+    .regex(/^[A-Z0-9_]+$/, "Use letras maiusculas, numeros e _."),
+  label: z.string().min(2).max(120).trim(),
+  description: z.string().max(500).optional().or(z.literal("")),
+  amount: z.coerce.number().int().min(-100000).max(100000),
+  active: formBooleanSchema.optional()
+});
+
+export const createAchievementBadgeSchema = z.object({
+  key: z
+    .string()
+    .min(2)
+    .max(80)
+    .regex(/^[A-Z0-9_]+$/, "Use letras maiusculas, numeros e _."),
+  title: z.string().min(2).max(100).trim(),
+  description: z.string().min(3).max(500).trim(),
+  rarity: z.enum(["COMMON", "RARE", "EPIC", "LEGENDARY"])
+});
+
+export const createMissionSchema = z
+  .object({
+    key: z
+      .string()
+      .min(2)
+      .max(80)
+      .regex(/^[A-Z0-9_]+$/, "Use letras maiusculas, numeros e _."),
+    title: z.string().min(2).max(140).trim(),
+    description: z.string().min(3).max(500).trim(),
+    type: z.string().min(2).max(80).trim(),
+    target: z.coerce.number().int().min(1).max(100000),
+    xpReward: z.coerce.number().int().min(0).max(100000),
+    startsAt: saoPauloDateTimeSchema("Informe o inicio da missao."),
+    endsAt: saoPauloDateTimeSchema("Informe o fim da missao."),
+    active: formBooleanSchema.optional()
+  })
+  .refine((data) => data.endsAt > data.startsAt, {
+    message: "A data final deve ser posterior a inicial.",
+    path: ["endsAt"]
+  });
+
+export const grantManualXpSchema = z.object({
+  userId: uuidSchema,
+  amount: z.coerce
+    .number({
+      invalid_type_error: "Informe a quantidade de XP."
+    })
+    .int("Use apenas numeros inteiros.")
+    .min(-100000, "Remocao muito alta.")
+    .max(100000, "Bonus muito alto.")
+    .refine((value) => value !== 0, "Informe um valor diferente de zero."),
+  reason: z.string().min(3, "Informe o motivo.").max(240).trim()
+});
+
+export const recalculateUserXpSchema = z.object({
+  userId: z.union([uuidSchema, z.literal(""), z.literal("all")]).optional()
+});
+
+export const updateXpSettingsSchema = z.object({
+  paidLeagueMinimumEntryFee: z.coerce.number().min(0, "Valor minimo invalido.").max(100000)
 });
 
 export const updatePaymentStatusSchema = z.object({

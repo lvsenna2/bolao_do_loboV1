@@ -1502,4 +1502,185 @@ export async function getAdminFootballSyncStatus() {
   }
 }
 
+export async function getAdminXpData() {
+  const empty = {
+    events: [],
+    badges: [],
+    levels: [],
+    leagues: [],
+    missions: [],
+    paidLeagueMinimumEntryFee: 1,
+    stats: {
+      totalEvents: 0,
+      totalXp: 0,
+      usersWithXp: 0
+    },
+    typeConfigs: [],
+    users: []
+  };
+
+  try {
+    const [
+      levels,
+      typeConfigs,
+      events,
+      users,
+      leagues,
+      missions,
+      settings,
+      badges,
+      eventCount,
+      xpAggregate,
+      usersWithXp
+    ] = await prisma.$transaction([
+      prisma.xpLevel.findMany({
+        orderBy: {
+          sortOrder: "asc"
+        }
+      }),
+      prisma.xpTypeConfig.findMany({
+        orderBy: {
+          key: "asc"
+        }
+      }),
+      prisma.xpEvent.findMany({
+        include: {
+          admin: {
+            select: {
+              email: true,
+              name: true
+            }
+          },
+          league: {
+            select: {
+              name: true
+            }
+          },
+          user: {
+            select: {
+              avatarUrl: true,
+              email: true,
+              name: true,
+              username: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 30
+      }),
+      prisma.user.findMany({
+        orderBy: [
+          {
+            xp: "desc"
+          },
+          {
+            name: "asc"
+          }
+        ],
+        select: {
+          avatarUrl: true,
+          email: true,
+          id: true,
+          level: true,
+          name: true,
+          username: true,
+          xp: true
+        },
+        take: 100,
+        where: {
+          deletedAt: null
+        }
+      }),
+      prisma.league.findMany({
+        orderBy: {
+          name: "asc"
+        },
+        select: {
+          championship: {
+            select: {
+              name: true
+            }
+          },
+          id: true,
+          name: true,
+          status: true,
+          xpEnabled: true
+        },
+        where: {
+          deletedAt: null,
+          status: {
+            not: "ARCHIVED"
+          }
+        }
+      }),
+      prisma.mission.findMany({
+        orderBy: {
+          startsAt: "desc"
+        },
+        take: 20
+      }),
+      prisma.setting.findUnique({
+        select: {
+          value: true
+        },
+        where: {
+          key: "paidLeagueMinimumEntryFee"
+        }
+      }),
+      prisma.badge.findMany({
+        orderBy: {
+          title: "asc"
+        },
+        take: 50
+      }),
+      prisma.xpEvent.count(),
+      prisma.xpEvent.aggregate({
+        _sum: {
+          amount: true
+        }
+      }),
+      prisma.user.count({
+        where: {
+          xp: {
+            gt: 0
+          }
+        }
+      })
+    ]);
+
+    const settingValue = settings?.value;
+    const paidLeagueMinimumEntryFee =
+      typeof settingValue === "number"
+        ? settingValue
+        : typeof settingValue === "string"
+          ? Number(settingValue)
+          : 1;
+
+    return {
+      ok: true as const,
+      data: {
+        badges,
+        events,
+        levels,
+        leagues,
+        missions,
+        paidLeagueMinimumEntryFee: Number.isFinite(paidLeagueMinimumEntryFee)
+          ? paidLeagueMinimumEntryFee
+          : 1,
+        stats: {
+          totalEvents: eventCount,
+          totalXp: xpAggregate._sum.amount ?? 0,
+          usersWithXp
+        },
+        typeConfigs,
+        users
+      }
+    };
+  } catch {
+    return emptyResult("Nao foi possivel carregar administracao de XP.", empty);
+  }
+}
+
 export { toCurrency };

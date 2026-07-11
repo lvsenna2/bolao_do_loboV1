@@ -154,16 +154,20 @@ model User {
 
   accounts               Account[]
   sessions               Session[]
-  ownedLeagues           League[]            @relation("LeagueOwner")
+  ownedLeagues           League[]              @relation("LeagueOwner")
   memberships            LeagueMember[]
   guesses                Guess[]
   scores                 Score[]
   rankings               Ranking[]
-  rankingAdjustments     RankingAdjustment[] @relation("RankingAdjustmentUser")
-  rankingAdjustmentsMade RankingAdjustment[] @relation("RankingAdjustmentAdmin")
+  rankingAdjustments     RankingAdjustment[]   @relation("RankingAdjustmentUser")
+  rankingAdjustmentsMade RankingAdjustment[]   @relation("RankingAdjustmentAdmin")
   payments               Payment[]
   notifications          Notification[]
   achievements           Achievement[]
+  xpEvents               XpEvent[]             @relation("XpEventUser")
+  xpEventsGranted        XpEvent[]             @relation("XpEventAdmin")
+  xpStreak               UserStreak?
+  missionProgress        UserMissionProgress[]
   auditLogs              AuditLog[]
 
   @@index([email])
@@ -225,6 +229,7 @@ model League {
   visibility     LeagueVisibility @default(PRIVATE)
   status         LeagueStatus     @default(DRAFT)
   entryFee       Decimal          @default(0) @map("entry_fee") @db.Decimal(10, 2)
+  xpEnabled      Boolean          @default(true) @map("xp_enabled")
   maxMembers     Int?             @map("max_members")
   inviteCode     String?          @unique @map("invite_code") @db.VarChar(32)
   rules          Json?
@@ -244,6 +249,7 @@ model League {
   guesses            Guess[]
   scores             Score[]
   rankingAdjustments RankingAdjustment[]
+  xpEvents           XpEvent[]
 
   @@index([ownerId])
   @@index([championshipId])
@@ -310,6 +316,7 @@ model Season {
   rounds       Round[]
   rankings     Ranking[]
   standings    CompetitionStanding[]
+  xpEvents     XpEvent[]
 
   @@unique([championshipId, year])
   @@index([status])
@@ -382,11 +389,12 @@ model Match {
   updatedAt     DateTime    @updatedAt @map("updated_at")
   deletedAt     DateTime?   @map("deleted_at")
 
-  round    Round   @relation(fields: [roundId], references: [id], onDelete: Restrict)
-  homeTeam Team    @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
-  awayTeam Team    @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  round    Round     @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  homeTeam Team      @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam Team      @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
   guesses  Guess[]
   scores   Score[]
+  xpEvents XpEvent[]
 
   @@index([roundId])
   @@index([homeTeamId])
@@ -410,10 +418,11 @@ model Guess {
   updatedAt      DateTime   @updatedAt @map("updated_at")
   deletedAt      DateTime?  @map("deleted_at")
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  league League? @relation(fields: [leagueId], references: [id], onDelete: Restrict)
-  match  Match   @relation(fields: [matchId], references: [id], onDelete: Restrict)
-  score  Score?
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  league   League?   @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+  match    Match     @relation(fields: [matchId], references: [id], onDelete: Restrict)
+  score    Score?
+  xpEvents XpEvent[]
 
   @@unique([userId, leagueId, matchId])
   @@index([leagueId])
@@ -497,6 +506,121 @@ model RankingAdjustment {
   @@map("ranking_adjustments")
 }
 
+model XpLevel {
+  id              String   @id @default(uuid()) @db.Uuid
+  key             String   @unique @db.VarChar(80)
+  name            String   @db.VarChar(80)
+  medal           String   @db.VarChar(20)
+  color           String   @db.VarChar(20)
+  minXp           Int      @map("min_xp")
+  maxXp           Int?     @map("max_xp")
+  discountPercent Int      @default(0) @map("discount_percent")
+  benefits        Json?
+  active          Boolean  @default(true)
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([active, minXp])
+  @@index([sortOrder])
+  @@map("xp_levels")
+}
+
+model XpTypeConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique @db.VarChar(80)
+  label       String   @db.VarChar(120)
+  description String?
+  amount      Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([active])
+  @@map("xp_type_configs")
+}
+
+model XpEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  adminId   String?  @map("admin_id") @db.Uuid
+  guessId   String?  @map("guess_id") @db.Uuid
+  matchId   String?  @map("match_id") @db.Uuid
+  leagueId  String?  @map("league_id") @db.Uuid
+  seasonId  String?  @map("season_id") @db.Uuid
+  type      String   @db.VarChar(80)
+  amount    Int
+  uniqueKey String   @unique @map("unique_key") @db.VarChar(180)
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User    @relation("XpEventUser", fields: [userId], references: [id], onDelete: Cascade)
+  admin  User?   @relation("XpEventAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+  guess  Guess?  @relation(fields: [guessId], references: [id], onDelete: SetNull)
+  match  Match?  @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  league League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
+  season Season? @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([leagueId, createdAt])
+  @@index([seasonId, createdAt])
+  @@index([type])
+  @@map("xp_events")
+}
+
+model UserStreak {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @unique @map("user_id") @db.Uuid
+  currentCount          Int       @default(0) @map("current_count")
+  longestCount          Int       @default(0) @map("longest_count")
+  lastParticipationDate DateTime? @map("last_participation_date")
+  awardedMilestones     Json?     @map("awarded_milestones")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_streaks")
+}
+
+model Mission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique @db.VarChar(80)
+  title       String   @db.VarChar(140)
+  description String
+  type        String   @db.VarChar(80)
+  target      Int
+  xpReward    Int      @map("xp_reward")
+  startsAt    DateTime @map("starts_at")
+  endsAt      DateTime @map("ends_at")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  progress UserMissionProgress[]
+
+  @@index([active, startsAt, endsAt])
+  @@map("missions")
+}
+
+model UserMissionProgress {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  missionId       String    @map("mission_id") @db.Uuid
+  progress        Int       @default(0)
+  completedAt     DateTime? @map("completed_at")
+  rewardClaimedAt DateTime? @map("reward_claimed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, missionId])
+  @@index([missionId])
+  @@map("user_mission_progress")
+}
+
 model Payment {
   id            String         @id @default(uuid()) @db.Uuid
   userId        String         @map("user_id") @db.Uuid
@@ -540,6 +664,7 @@ model Notification {
 
 model Badge {
   id          String      @id @default(uuid()) @db.Uuid
+  key         String?     @unique @db.VarChar(80)
   title       String      @db.VarChar(100)
   description String
   image       String?

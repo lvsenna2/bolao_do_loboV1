@@ -9,6 +9,15 @@ import {
   recalculateRankingsForMatch
 } from "@/features/ranking/services/ranking-service";
 import { processMatchScores } from "@/features/scoring/services/scoring-service";
+import {
+  evaluateAchievementsForUser,
+  grantManualXp,
+  grantMatchResultXp,
+  recalculateAllUsersXp,
+  recalculateXpForUser,
+  setPaidLeagueMinimumEntryFee,
+  syncActiveLeagueMissionProgress
+} from "@/features/xp/services/xp-service";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import { fetchApiFootballTeams } from "@/server/football-api/client";
@@ -19,10 +28,14 @@ import {
 import { syncFootballCompetition } from "@/server/football-api/sync-service";
 import {
   bulkImportTeamsSchema,
+  createAchievementBadgeSchema,
   createChampionshipSchema,
+  createMissionSchema,
   createMatchSchema,
   createRoundSchema,
   createTeamSchema,
+  createXpLevelSchema,
+  createXpTypeConfigSchema,
   deleteChampionshipSchema,
   deleteLeagueSchema,
   deleteRoundSchema,
@@ -32,9 +45,11 @@ import {
   importTeamPresetSchema,
   openRoundSchema,
   recalculateLeagueRankingSchema,
+  recalculateUserXpSchema,
   softDeleteUserSchema,
   syncAllFootballCompetitionsSchema,
   syncFootballCompetitionSchema,
+  updateLeagueXpEnabledSchema,
   updateChampionshipStatusSchema,
   updateLeagueChampionshipSchema,
   updateLeagueStatusSchema,
@@ -43,7 +58,11 @@ import {
   updateRoundStatusSchema,
   updateUserRoleSchema,
   updateUserStatusSchema,
-  adjustLeagueRankingSchema
+  adjustLeagueRankingSchema,
+  updateXpLevelSchema,
+  updateXpSettingsSchema,
+  updateXpTypeConfigSchema,
+  grantManualXpSchema
 } from "../schemas/admin-schemas";
 import type { AdminActionResult } from "../types";
 
@@ -92,6 +111,7 @@ function revalidateAdminPaths() {
   revalidatePath("/admin/palpites");
   revalidatePath("/admin/auditoria");
   revalidatePath("/admin/configuracoes");
+  revalidatePath("/admin/xp");
   revalidatePath("/rodadas");
   revalidatePath("/palpites");
   revalidatePath("/comparar-palpites");
@@ -99,6 +119,7 @@ function revalidateAdminPaths() {
   revalidatePath("/ligas");
   revalidatePath("/dashboard");
   revalidatePath("/perfil");
+  revalidatePath("/xp-ranking");
   revalidatePath("/estatisticas");
   revalidatePath("/minhas-ligas");
 }
@@ -1624,6 +1645,7 @@ export async function homologateMatchResultAction(formData: FormData): Promise<A
   });
 
   const scoringSummary = await processMatchScores(match.id);
+  const xpSummary = await grantMatchResultXp(match.id);
   const rankingSummary = await recalculateRankingsForMatch(match.id);
 
   await createAuditLog(
@@ -1635,14 +1657,15 @@ export async function homologateMatchResultAction(formData: FormData): Promise<A
     {
       match,
       rankingSummary,
-      scoringSummary
+      scoringSummary,
+      xpSummary
     }
   );
   revalidateAdminPaths();
 
   return {
     ok: true,
-    message: `Resultado homologado. ${scoringSummary.processedGuesses} palpites e ${rankingSummary.leagueRows} posicoes de liga processadas.`
+    message: `Resultado homologado. ${scoringSummary.processedGuesses} palpites, ${rankingSummary.leagueRows} posicoes de liga e ${xpSummary.resultHitEvents + xpSummary.exactScoreEvents} eventos de XP processados.`
   };
 }
 
@@ -1959,6 +1982,7 @@ export async function recalculateLeagueRankingAction(
 
   for (const match of matches) {
     await processMatchScores(match.id);
+    await grantMatchResultXp(match.id);
   }
 
   const rows = await recalculateLeagueRanking(league.id);
@@ -2152,6 +2176,393 @@ export async function deleteLeagueAction(formData: FormData): Promise<AdminActio
   }
 }
 
+export async function updateLeagueXpEnabledAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = updateLeagueXpEnabledSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Liga invalida.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const league = await prisma.league.update({
+    data: {
+      xpEnabled: parsedInput.data.xpEnabled
+    },
+    select: {
+      id: true,
+      name: true,
+      xpEnabled: true
+    },
+    where: {
+      id: parsedInput.data.leagueId
+    }
+  });
+
+  await createAuditLog(admin.id, "admin.league.xp_updated", "League", league.id, undefined, league);
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `XP ${league.xpEnabled ? "ativado" : "desativado"} para ${league.name}.`
+  };
+}
+
+export async function createXpLevelAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = createXpLevelSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise o novo nivel.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const data = parsedInput.data;
+  const level = await prisma.xpLevel.create({
+    data: {
+      active: data.active ?? true,
+      benefits: {
+        benefits:
+          data.discountPercent > 0
+            ? [`${data.discountPercent}% de desconto em ligas pagas`]
+            : ["Patente no perfil"]
+      },
+      color: data.color,
+      discountPercent: data.discountPercent,
+      key: data.key,
+      maxXp: data.maxXp === "" || data.maxXp === undefined ? null : data.maxXp,
+      medal: data.medal,
+      minXp: data.minXp,
+      name: data.name,
+      sortOrder: data.sortOrder
+    }
+  });
+
+  await createAuditLog(admin.id, "admin.xp.level_created", "XpLevel", level.id, undefined, level);
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `Nivel ${level.name} criado.`
+  };
+}
+
+export async function updateXpLevelAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = updateXpLevelSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise o nivel de XP.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const data = parsedInput.data;
+  const level = await prisma.xpLevel.update({
+    data: {
+      active: data.active ?? false,
+      benefits: {
+        benefits:
+          data.discountPercent > 0
+            ? [`${data.discountPercent}% de desconto em ligas pagas`]
+            : ["Patente no perfil"]
+      },
+      color: data.color,
+      discountPercent: data.discountPercent,
+      maxXp: data.maxXp === "" || data.maxXp === undefined ? null : data.maxXp,
+      medal: data.medal,
+      minXp: data.minXp,
+      name: data.name
+    },
+    where: {
+      id: data.levelId
+    }
+  });
+
+  await createAuditLog(admin.id, "admin.xp.level_updated", "XpLevel", level.id, undefined, level);
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `Nivel ${level.name} atualizado.`
+  };
+}
+
+export async function createXpTypeConfigAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = createXpTypeConfigSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise a nova fonte de XP.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const data = parsedInput.data;
+  const typeConfig = await prisma.xpTypeConfig.create({
+    data: {
+      active: data.active ?? true,
+      amount: data.amount,
+      description: data.description || null,
+      key: data.key,
+      label: data.label
+    }
+  });
+
+  await createAuditLog(
+    admin.id,
+    "admin.xp.type_created",
+    "XpTypeConfig",
+    typeConfig.id,
+    undefined,
+    typeConfig
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `Fonte ${typeConfig.label} criada.`
+  };
+}
+
+export async function updateXpTypeConfigAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = updateXpTypeConfigSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise a fonte de XP.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const data = parsedInput.data;
+  const typeConfig = await prisma.xpTypeConfig.update({
+    data: {
+      active: data.active ?? false,
+      amount: data.amount
+    },
+    where: {
+      id: data.typeConfigId
+    }
+  });
+
+  await createAuditLog(
+    admin.id,
+    "admin.xp.type_updated",
+    "XpTypeConfig",
+    typeConfig.id,
+    undefined,
+    typeConfig
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `Fonte ${typeConfig.label} atualizada.`
+  };
+}
+
+export async function createAchievementBadgeAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = createAchievementBadgeSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise a nova conquista.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const badge = await prisma.badge.create({
+    data: parsedInput.data
+  });
+
+  await createAuditLog(admin.id, "admin.xp.badge_created", "Badge", badge.id, undefined, badge);
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `Conquista ${badge.title} criada.`
+  };
+}
+
+export async function createMissionAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = createMissionSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise a nova missao.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const data = parsedInput.data;
+  const mission = await prisma.mission.create({
+    data: {
+      active: data.active ?? true,
+      description: data.description,
+      endsAt: data.endsAt,
+      key: data.key,
+      startsAt: data.startsAt,
+      target: data.target,
+      title: data.title,
+      type: data.type,
+      xpReward: data.xpReward
+    }
+  });
+
+  await createAuditLog(
+    admin.id,
+    "admin.xp.mission_created",
+    "Mission",
+    mission.id,
+    undefined,
+    mission
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `Missao ${mission.title} criada.`
+  };
+}
+
+export async function grantManualXpAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = grantManualXpSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise o ajuste manual de XP.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const user = await prisma.user.findFirst({
+    select: {
+      email: true,
+      id: true,
+      name: true
+    },
+    where: {
+      deletedAt: null,
+      id: parsedInput.data.userId
+    }
+  });
+
+  if (!user) {
+    return {
+      ok: false,
+      message: "Usuario nao encontrado."
+    };
+  }
+
+  const result = await grantManualXp({
+    adminId: admin.id,
+    amount: parsedInput.data.amount,
+    reason: parsedInput.data.reason,
+    userId: user.id
+  });
+
+  await createAuditLog(admin.id, "admin.xp.manual_adjustment", "User", user.id, undefined, {
+    amount: parsedInput.data.amount,
+    reason: parsedInput.data.reason,
+    userEmail: user.email,
+    userName: user.name
+  });
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: result.created
+      ? `Ajuste de ${parsedInput.data.amount} XP aplicado para ${user.name}.`
+      : "Ajuste de XP ignorado por regra de duplicidade ou fonte inativa."
+  };
+}
+
+export async function recalculateUserXpAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = recalculateUserXpSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Usuario invalido.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const userId = parsedInput.data.userId;
+
+  if (!userId || userId === "all") {
+    const total = await recalculateAllUsersXp();
+
+    await createAuditLog(admin.id, "admin.xp.recalculated_all", "XpEvent", "all", undefined, {
+      users: total
+    });
+    revalidateAdminPaths();
+
+    return {
+      ok: true,
+      message: `XP recalculado para ${total} usuario(s).`
+    };
+  }
+
+  const snapshot = await recalculateXpForUser(userId);
+
+  await createAuditLog(admin.id, "admin.xp.recalculated_user", "User", userId, undefined, {
+    level: snapshot.level.name,
+    xp: snapshot.xp
+  });
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `XP recalculado: ${snapshot.xp} XP.`
+  };
+}
+
+export async function updateXpSettingsAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = updateXpSettingsSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise as configuracoes de XP.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const setting = await setPaidLeagueMinimumEntryFee(parsedInput.data.paidLeagueMinimumEntryFee);
+
+  await createAuditLog(admin.id, "admin.xp.settings_updated", "Setting", setting.id, undefined, {
+    paidLeagueMinimumEntryFee: parsedInput.data.paidLeagueMinimumEntryFee
+  });
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: "Configuracoes de XP atualizadas."
+  };
+}
+
 export async function updatePaymentStatusAction(formData: FormData): Promise<AdminActionResult> {
   const admin = await requireAdmin();
   const parsedInput = updatePaymentStatusSchema.safeParse(formDataToObject(formData));
@@ -2215,6 +2626,14 @@ export async function updatePaymentStatusAction(formData: FormData): Promise<Adm
     amount: payment.amount.toString(),
     userId: payment.userId
   });
+
+  if (payment.status === "APPROVED") {
+    await Promise.all([
+      syncActiveLeagueMissionProgress(payment.userId),
+      evaluateAchievementsForUser(payment.userId)
+    ]);
+  }
+
   revalidateAdminPaths();
 
   return {

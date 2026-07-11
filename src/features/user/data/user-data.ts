@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db";
+import { getActiveXpLevels, getXpProgressFromLevels } from "@/features/xp/services/xp-service";
 import type { UserDataResult } from "../types/user-action-result";
 
 function emptyResult<T>(message: string, data: T): UserDataResult<T> {
@@ -37,7 +38,7 @@ export function formatCurrency(value: Prisma.Decimal | number | null | undefined
 }
 
 export function getXpProgress(xp: number) {
-  const thresholds = [0, 100, 250, 450, 700, 1000, 1500, 2000, 2500, 3500, 5000, 7500, 10000];
+  const thresholds = [0, 250, 750, 2000, 5000, 10000, 20000, 40000, 80000, 150000];
   const nextThreshold = thresholds.find((threshold) => threshold > xp) ?? xp + 1000;
   const previousThreshold =
     thresholds
@@ -531,83 +532,183 @@ export async function getUserHomeData(userId: string) {
 export async function getUserProfileData(userId: string) {
   const empty = {
     achievements: [],
+    missions: [],
+    recentXpEvents: [],
+    season: null,
+    seasonXp: 0,
     stats: {
       exactScores: 0,
       guesses: 0,
       points: 0,
       winnerHits: 0
     },
+    streak: null,
+    xpProgress: null,
     user: null
   };
 
   try {
-    const [user, achievements, guessCount, scores] = await prisma.$transaction([
-      prisma.user.findUnique({
-        where: {
-          id: userId
-        },
-        select: {
-          id: true,
-          name: true,
-          firstName: true,
-          lastName: true,
-          username: true,
-          email: true,
-          avatarUrl: true,
-          locale: true,
-          theme: true,
-          xp: true,
-          level: true,
-          role: true,
-          status: true,
-          createdAt: true,
-          lastLoginAt: true
-        }
-      }),
-      prisma.achievement.findMany({
-        include: {
-          badge: true
-        },
-        orderBy: {
-          unlockedAt: "desc"
-        },
-        take: 6,
-        where: {
-          userId
-        }
-      }),
-      prisma.guess.count({
-        where: {
-          userId,
-          deletedAt: null
-        }
-      }),
-      prisma.score.findMany({
-        select: {
-          exactScore: true,
-          totalPoints: true,
-          winnerHit: true
-        },
-        where: {
-          userId
-        }
-      })
+    const [user, achievements, guessCount, scores, recentXpEvents, activeSeason, streak, missions] =
+      await prisma.$transaction([
+        prisma.user.findUnique({
+          where: {
+            id: userId
+          },
+          select: {
+            id: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            email: true,
+            avatarUrl: true,
+            locale: true,
+            theme: true,
+            xp: true,
+            level: true,
+            role: true,
+            status: true,
+            createdAt: true,
+            lastLoginAt: true
+          }
+        }),
+        prisma.achievement.findMany({
+          include: {
+            badge: true
+          },
+          orderBy: {
+            unlockedAt: "desc"
+          },
+          take: 6,
+          where: {
+            userId
+          }
+        }),
+        prisma.guess.count({
+          where: {
+            userId,
+            deletedAt: null
+          }
+        }),
+        prisma.score.findMany({
+          select: {
+            exactScore: true,
+            totalPoints: true,
+            winnerHit: true
+          },
+          where: {
+            userId
+          }
+        }),
+        prisma.xpEvent.findMany({
+          include: {
+            league: {
+              select: {
+                name: true
+              }
+            },
+            match: {
+              select: {
+                awayTeam: {
+                  select: {
+                    shortName: true
+                  }
+                },
+                homeTeam: {
+                  select: {
+                    shortName: true
+                  }
+                }
+              }
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 12,
+          where: {
+            userId
+          }
+        }),
+        prisma.season.findFirst({
+          orderBy: {
+            year: "desc"
+          },
+          select: {
+            id: true,
+            name: true,
+            year: true
+          },
+          where: {
+            championship: {
+              leagues: {
+                some: {
+                  members: {
+                    some: {
+                      status: "ACTIVE",
+                      userId
+                    }
+                  }
+                }
+              }
+            },
+            status: "ACTIVE"
+          }
+        }),
+        prisma.userStreak.findUnique({
+          where: {
+            userId
+          }
+        }),
+        prisma.userMissionProgress.findMany({
+          include: {
+            mission: true
+          },
+          orderBy: {
+            updatedAt: "desc"
+          },
+          take: 4,
+          where: {
+            userId
+          }
+        })
+      ]);
+    const [levels, seasonXpAggregate] = await Promise.all([
+      getActiveXpLevels(),
+      activeSeason
+        ? prisma.xpEvent.aggregate({
+            _sum: {
+              amount: true
+            },
+            where: {
+              seasonId: activeSeason.id,
+              userId
+            }
+          })
+        : Promise.resolve({ _sum: { amount: 0 } })
     ]);
 
     const winnerHits = scores.filter((score) => score.winnerHit).length;
     const exactScores = scores.filter((score) => score.exactScore).length;
     const points = scores.reduce((sum, score) => sum + score.totalPoints, 0);
+    const xpProgress = user ? getXpProgressFromLevels(user.xp, levels) : null;
 
     return {
       ok: true as const,
       data: {
         achievements,
+        missions,
+        recentXpEvents,
+        season: activeSeason,
+        seasonXp: Math.max(0, seasonXpAggregate._sum.amount ?? 0),
         stats: {
           exactScores,
           guesses: guessCount,
           points,
           winnerHits
         },
+        streak,
+        xpProgress,
         user
       }
     };

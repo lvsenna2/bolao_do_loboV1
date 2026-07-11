@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
+  Sparkles,
   Trophy,
   UserRound,
   Users,
@@ -55,6 +56,11 @@ export const mainNavigationItems: NavigationItem[] = [
     label: "Ranking"
   },
   {
+    href: "/xp-ranking",
+    icon: Sparkles,
+    label: "Ranking XP"
+  },
+  {
     href: "/perfil",
     icon: UserRound,
     label: "Perfil"
@@ -66,7 +72,7 @@ export const mobileNavigationItems: NavigationItem[] = [
   mainNavigationItems[1],
   mainNavigationItems[3],
   mainNavigationItems[4],
-  mainNavigationItems[6]
+  mainNavigationItems[7]
 ];
 
 export const adminNavigationItems: NavigationItem[] = [
@@ -109,6 +115,11 @@ export const adminNavigationItems: NavigationItem[] = [
     href: "/admin/rankings",
     icon: Medal,
     label: "Rankings"
+  },
+  {
+    href: "/admin/xp",
+    icon: Sparkles,
+    label: "XP"
   },
   {
     href: "/admin/pagamentos",

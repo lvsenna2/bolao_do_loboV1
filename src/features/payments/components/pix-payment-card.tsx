@@ -5,7 +5,13 @@ import { useState } from "react";
 
 type PixPaymentCardProps = {
   amountLabel: string;
+  discountAmountLabel?: string;
+  discountPercent?: number;
+  finalAmountLabel?: string;
   leagueName: string;
+  levelName?: string;
+  minimumAmountLabel?: string;
+  originalAmountLabel?: string;
   pixCode: string;
   pixKey: string;
   qrCodeDataUri: string;
@@ -14,7 +20,13 @@ type PixPaymentCardProps = {
 
 export function PixPaymentCard({
   amountLabel,
+  discountAmountLabel,
+  discountPercent = 0,
+  finalAmountLabel,
   leagueName,
+  levelName,
+  minimumAmountLabel,
+  originalAmountLabel,
   pixCode,
   pixKey,
   qrCodeDataUri,
@@ -40,16 +52,18 @@ export function PixPaymentCard({
             </span>
             <h3 className="mt-4 text-xl font-bold text-white">{leagueName}</h3>
             <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100">
-              Entrada privada reservada. Assim que o pagamento for aprovado pelo administrador,
-              a liga libera rodadas, ranking e palpites para sua conta.
+              Entrada privada reservada. Assim que o pagamento for aprovado pelo administrador, a
+              liga libera rodadas, ranking e palpites para sua conta.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="rounded-control border border-white/10 bg-white/[0.08] p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
-                  Valor
+                  Valor final
                 </p>
-                <p className="mt-1 text-lg font-bold text-brand-gold">{amountLabel}</p>
+                <p className="mt-1 text-lg font-bold text-brand-gold">
+                  {finalAmountLabel ?? amountLabel}
+                </p>
               </div>
               <div className="rounded-control border border-white/10 bg-white/[0.08] p-3 sm:col-span-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
@@ -58,6 +72,31 @@ export function PixPaymentCard({
                 <p className="mt-1 break-all text-sm font-semibold text-white">{pixKey}</p>
               </div>
             </div>
+
+            {discountPercent > 0 ? (
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-control border border-brand-gold/25 bg-brand-gold/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
+                    Valor original
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">{originalAmountLabel}</p>
+                </div>
+                <div className="rounded-control border border-brand-gold/25 bg-brand-gold/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
+                    Desconto {levelName ? `- ${levelName}` : ""}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-brand-gold">
+                    {discountPercent}% | {discountAmountLabel}
+                  </p>
+                </div>
+                <div className="rounded-control border border-brand-gold/25 bg-brand-gold/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
+                    Minimo protegido
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">{minimumAmountLabel}</p>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-card border border-white/15 bg-white p-3 text-slate-950 shadow-soft">
@@ -89,7 +128,11 @@ export function PixPaymentCard({
             onClick={copyPixCode}
             type="button"
           >
-            {copied ? <Check aria-hidden className="h-4 w-4" /> : <Clipboard aria-hidden className="h-4 w-4" />}
+            {copied ? (
+              <Check aria-hidden className="h-4 w-4" />
+            ) : (
+              <Clipboard aria-hidden className="h-4 w-4" />
+            )}
             {copied ? "Copiado" : "Copiar Pix"}
           </button>
         </div>
