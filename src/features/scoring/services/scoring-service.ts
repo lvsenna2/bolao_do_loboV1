@@ -80,7 +80,12 @@ export async function processMatchScores(matchId: string): Promise<MatchScoringS
       awayScore: true,
       homeScore: true,
       homologatedAt: true,
-      id: true
+      id: true,
+      round: {
+        select: {
+          leagueId: true
+        }
+      }
     },
     where: {
       id: matchId
@@ -109,6 +114,7 @@ export async function processMatchScores(matchId: string): Promise<MatchScoringS
       },
       where: {
         deletedAt: null,
+        leagueId: match.round.leagueId,
         matchId
       }
     })

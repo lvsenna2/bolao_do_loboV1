@@ -70,12 +70,29 @@ async function createLeagueForOwner(
   auditUserId: string,
   auditAction: string
 ) {
+  const championship = await prisma.championship.findFirst({
+    select: {
+      id: true,
+      name: true
+    },
+    where: {
+      deletedAt: null,
+      id: input.championshipId,
+      status: "ACTIVE"
+    }
+  });
+
+  if (!championship) {
+    return null;
+  }
+
   const inviteCode = input.visibility === "PUBLIC" ? null : await createInviteCode();
 
   const league = await prisma.$transaction(async (tx) => {
     const createdLeague = await tx.league.create({
       data: {
         description: input.description || null,
+        championshipId: championship.id,
         endsAt: input.endsAt ?? null,
         entryFee: input.entryFee,
         imageUrl: input.imageUrl || null,
@@ -96,6 +113,12 @@ async function createLeagueForOwner(
       },
       select: {
         id: true,
+        championship: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         inviteCode: true,
         name: true,
         status: true,
@@ -400,12 +423,17 @@ export async function createLeagueAction(input: CreateLeagueInput): Promise<Leag
     };
   }
 
-  const league = await createLeagueForOwner(
-    user.id,
-    parsedInput.data,
-    user.id,
-    "league.created"
-  );
+  const league = await createLeagueForOwner(user.id, parsedInput.data, user.id, "league.created");
+
+  if (!league) {
+    return {
+      ok: false,
+      message: "Selecione um campeonato ativo para criar a liga.",
+      fieldErrors: {
+        championshipId: ["Selecione um campeonato ativo."]
+      }
+    };
+  }
 
   return {
     ok: true,
@@ -457,6 +485,16 @@ export async function createAdminLeagueAction(
     "admin.league.created"
   );
 
+  if (!league) {
+    return {
+      ok: false,
+      message: "Selecione um campeonato ativo para criar a liga.",
+      fieldErrors: {
+        championshipId: ["Selecione um campeonato ativo."]
+      }
+    };
+  }
+
   return {
     ok: true,
     message: `Liga ${league.name} criada com sucesso.`
@@ -479,6 +517,10 @@ export async function joinLeagueAction(
 
   const league = await prisma.league.findFirst({
     where: {
+      championship: {
+        deletedAt: null,
+        status: "ACTIVE"
+      },
       deletedAt: null,
       inviteCode: parsedInput.data.inviteCode
     }
@@ -513,6 +555,10 @@ export async function joinAvailableLeagueAction(
 
   const league = await prisma.league.findFirst({
     where: {
+      championship: {
+        deletedAt: null,
+        status: "ACTIVE"
+      },
       deletedAt: null,
       id: parsedInput.data.leagueId,
       visibility: {

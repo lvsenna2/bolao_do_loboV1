@@ -4,7 +4,10 @@ import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { getTeamPreset } from "@/features/admin/data/team-presets";
-import { recalculateRankingsForMatch } from "@/features/ranking/services/ranking-service";
+import {
+  recalculateLeagueRanking,
+  recalculateRankingsForMatch
+} from "@/features/ranking/services/ranking-service";
 import { processMatchScores } from "@/features/scoring/services/scoring-service";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
@@ -28,10 +31,12 @@ import {
   importApiFootballTeamsSchema,
   importTeamPresetSchema,
   openRoundSchema,
+  recalculateLeagueRankingSchema,
   softDeleteUserSchema,
   syncAllFootballCompetitionsSchema,
   syncFootballCompetitionSchema,
   updateChampionshipStatusSchema,
+  updateLeagueChampionshipSchema,
   updateLeagueStatusSchema,
   updateMatchStatusSchema,
   updatePaymentStatusSchema,
@@ -81,6 +86,7 @@ function revalidateAdminPaths() {
   revalidatePath("/admin/sincronizacao");
   revalidatePath("/admin/rodadas");
   revalidatePath("/admin/ligas");
+  revalidatePath("/admin/rankings");
   revalidatePath("/admin/pagamentos");
   revalidatePath("/admin/palpites");
   revalidatePath("/admin/auditoria");
@@ -238,6 +244,10 @@ async function importTeamsIntoDatabase(
   };
 
   for (const team of prepared.teams) {
+    if (source === "api-football") {
+      console.log(team.name, team.logo);
+    }
+
     const existingByApiId = team.apiId
       ? await prisma.team.findUnique({
           select: {
@@ -254,30 +264,56 @@ async function importTeamsIntoDatabase(
         })
       : null;
 
-    const existingTeam =
-      existingByApiId ??
-      (await prisma.team.findFirst({
-        select: {
-          apiId: true,
-          country: true,
-          id: true,
-          logo: true,
-          name: true,
-          shortName: true
+    const existingByName = await prisma.team.findFirst({
+      select: {
+        apiId: true,
+        country: true,
+        id: true,
+        logo: true,
+        name: true,
+        shortName: true
+      },
+      where: {
+        apiId: null,
+        country: {
+          equals: team.country,
+          mode: "insensitive"
+        },
+        name: {
+          equals: team.name,
+          mode: "insensitive"
+        }
+      }
+    });
+
+    const existingTeam = existingByApiId ?? existingByName;
+
+    if (team.apiId && !existingByName) {
+      await prisma.team.upsert({
+        create: {
+          apiId: team.apiId,
+          country: team.country,
+          logo: team.logo,
+          name: team.name,
+          shortName: team.shortName
+        },
+        update: {
+          country: team.country,
+          logo: team.logo ?? undefined,
+          name: team.name,
+          shortName: team.shortName ?? undefined
         },
         where: {
-          country: {
-            equals: team.country,
-            mode: "insensitive"
-          },
-          name: {
-            equals: team.name,
-            mode: "insensitive"
-          }
+          apiId: team.apiId
         }
-      }));
+      });
 
-    if (existingTeam) {
+      if (existingByApiId) {
+        summary.updated += 1;
+      } else {
+        summary.created += 1;
+      }
+    } else if (existingTeam) {
       await prisma.team.update({
         data: {
           apiId: existingTeam.apiId ?? team.apiId ?? null,
@@ -636,6 +672,7 @@ export async function deleteChampionshipAction(formData: FormData): Promise<Admi
           status: true,
           _count: {
             select: {
+              leagues: true,
               seasons: true
             }
           }
@@ -647,6 +684,12 @@ export async function deleteChampionshipAction(formData: FormData): Promise<Admi
 
       if (!championship) {
         return null;
+      }
+
+      if (championship._count.leagues > 0) {
+        return {
+          blockedByLeagues: championship._count.leagues
+        };
       }
 
       const scores = await tx.score.deleteMany({
@@ -744,6 +787,13 @@ export async function deleteChampionshipAction(formData: FormData): Promise<Admi
       return {
         ok: false,
         message: "Campeonato nao encontrado."
+      };
+    }
+
+    if ("blockedByLeagues" in deleted) {
+      return {
+        ok: false,
+        message: `Nao exclua este campeonato enquanto houver ${deleted.blockedByLeagues} liga(s) vinculada(s).`
       };
     }
 
@@ -882,9 +932,7 @@ export async function importTeamPresetAction(formData: FormData): Promise<AdminA
   }
 }
 
-export async function importApiFootballTeamsAction(
-  formData: FormData
-): Promise<AdminActionResult> {
+export async function importApiFootballTeamsAction(formData: FormData): Promise<AdminActionResult> {
   try {
     const admin = await requireAdmin();
     const parsedInput = importApiFootballTeamsSchema.safeParse(formDataToObject(formData));
@@ -1046,6 +1094,7 @@ export async function createRoundAction(formData: FormData): Promise<AdminAction
   const data = parsedInput.data;
   const season = await prisma.season.findUnique({
     select: {
+      championshipId: true,
       id: true
     },
     where: {
@@ -1055,6 +1104,7 @@ export async function createRoundAction(formData: FormData): Promise<AdminAction
   const league = data.leagueId
     ? await prisma.league.findFirst({
         select: {
+          championshipId: true,
           id: true
         },
         where: {
@@ -1075,6 +1125,13 @@ export async function createRoundAction(formData: FormData): Promise<AdminAction
     return {
       ok: false,
       message: "Liga nao encontrada."
+    };
+  }
+
+  if (league && league.championshipId !== season.championshipId) {
+    return {
+      ok: false,
+      message: "A liga selecionada pertence a outro campeonato."
     };
   }
 
@@ -1370,7 +1427,17 @@ export async function createMatchAction(formData: FormData): Promise<AdminAction
   const [round, homeTeam, awayTeam] = await prisma.$transaction([
     prisma.round.findUnique({
       select: {
-        id: true
+        id: true,
+        league: {
+          select: {
+            championshipId: true
+          }
+        },
+        season: {
+          select: {
+            championshipId: true
+          }
+        }
       },
       where: {
         id: data.roundId
@@ -1398,6 +1465,13 @@ export async function createMatchAction(formData: FormData): Promise<AdminAction
     return {
       ok: false,
       message: "Rodada ou equipe nao encontrada."
+    };
+  }
+
+  if (round.league && round.league.championshipId !== round.season.championshipId) {
+    return {
+      ok: false,
+      message: "A rodada pertence a um campeonato diferente da liga."
     };
   }
 
@@ -1567,7 +1641,7 @@ export async function homologateMatchResultAction(formData: FormData): Promise<A
 
   return {
     ok: true,
-    message: `Resultado homologado. ${scoringSummary.processedGuesses} palpites e ${rankingSummary.globalRows} posicoes globais processadas.`
+    message: `Resultado homologado. ${scoringSummary.processedGuesses} palpites e ${rankingSummary.leagueRows} posicoes de liga processadas.`
   };
 }
 
@@ -1609,6 +1683,204 @@ export async function updateLeagueStatusAction(formData: FormData): Promise<Admi
   return {
     ok: true,
     message: "Status da liga atualizado."
+  };
+}
+
+export async function updateLeagueChampionshipAction(
+  formData: FormData
+): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = updateLeagueChampionshipSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Dados invalidos.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const [league, championship, incompatibleRound] = await prisma.$transaction([
+    prisma.league.findFirst({
+      select: {
+        championshipId: true,
+        id: true,
+        name: true
+      },
+      where: {
+        deletedAt: null,
+        id: parsedInput.data.leagueId
+      }
+    }),
+    prisma.championship.findFirst({
+      select: {
+        id: true,
+        name: true
+      },
+      where: {
+        deletedAt: null,
+        id: parsedInput.data.championshipId,
+        status: "ACTIVE"
+      }
+    }),
+    prisma.round.findFirst({
+      select: {
+        id: true,
+        name: true,
+        number: true,
+        season: {
+          select: {
+            championship: {
+              select: {
+                name: true
+              }
+            },
+            championshipId: true
+          }
+        }
+      },
+      where: {
+        leagueId: parsedInput.data.leagueId,
+        season: {
+          championshipId: {
+            not: parsedInput.data.championshipId
+          }
+        }
+      }
+    })
+  ]);
+
+  if (!league) {
+    return {
+      ok: false,
+      message: "Liga nao encontrada."
+    };
+  }
+
+  if (!championship) {
+    return {
+      ok: false,
+      message: "Campeonato ativo nao encontrado."
+    };
+  }
+
+  if (incompatibleRound) {
+    return {
+      ok: false,
+      message: `Nao foi possivel trocar: a ${incompatibleRound.name || `Rodada ${incompatibleRound.number}`} pertence ao campeonato ${incompatibleRound.season.championship.name}.`
+    };
+  }
+
+  const updatedLeague = await prisma.league.update({
+    data: {
+      championshipId: championship.id
+    },
+    select: {
+      championshipId: true,
+      id: true,
+      name: true
+    },
+    where: {
+      id: league.id
+    }
+  });
+
+  await createAuditLog(
+    admin.id,
+    "admin.league.championship_updated",
+    "League",
+    updatedLeague.id,
+    league,
+    {
+      ...updatedLeague,
+      championshipName: championship.name
+    }
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: "Campeonato da liga atualizado."
+  };
+}
+
+export async function recalculateLeagueRankingAction(
+  formData: FormData
+): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = recalculateLeagueRankingSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Liga invalida.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  const league = await prisma.league.findFirst({
+    select: {
+      id: true,
+      name: true
+    },
+    where: {
+      deletedAt: null,
+      id: parsedInput.data.leagueId
+    }
+  });
+
+  if (!league) {
+    return {
+      ok: false,
+      message: "Liga nao encontrada."
+    };
+  }
+
+  const matches = await prisma.match.findMany({
+    select: {
+      id: true
+    },
+    where: {
+      deletedAt: null,
+      homeScore: {
+        not: null
+      },
+      awayScore: {
+        not: null
+      },
+      homologatedAt: {
+        not: null
+      },
+      round: {
+        leagueId: league.id
+      }
+    }
+  });
+
+  for (const match of matches) {
+    await processMatchScores(match.id);
+  }
+
+  const rows = await recalculateLeagueRanking(league.id);
+
+  await createAuditLog(
+    admin.id,
+    "admin.league.ranking_recalculated",
+    "League",
+    league.id,
+    undefined,
+    {
+      leagueId: league.id,
+      leagueName: league.name,
+      matches: matches.length,
+      rows
+    }
+  );
+  revalidateAdminPaths();
+
+  return {
+    ok: true,
+    message: `Ranking de ${league.name} recalculado com ${rows} posicoes e ${matches.length} partida(s) revisada(s).`
   };
 }
 

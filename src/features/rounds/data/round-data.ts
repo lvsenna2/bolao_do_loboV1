@@ -171,6 +171,7 @@ export async function getRoundsPageData(
     const leagueId = getParam(searchParams, "league");
     const where: Prisma.RoundWhereInput = {
       league: {
+        ...(championshipId ? { championshipId } : {}),
         members: {
           some: {
             status: "ACTIVE",
@@ -205,6 +206,7 @@ export async function getRoundsPageData(
           id: true,
           league: {
             select: {
+              championshipId: true,
               id: true,
               name: true
             }
@@ -261,7 +263,17 @@ export async function getRoundsPageData(
           name: true
         },
         where: {
-          deletedAt: null
+          deletedAt: null,
+          leagues: {
+            some: {
+              members: {
+                some: {
+                  status: "ACTIVE",
+                  userId
+                }
+              }
+            }
+          }
         }
       }),
       prisma.league.findMany({
@@ -284,9 +296,14 @@ export async function getRoundsPageData(
       })
     ]);
 
-    const matchIds = rounds.flatMap((round) => round.matches.map((match) => match.id));
+    const consistentRounds = rounds.filter(
+      (round) => round.league?.championshipId === round.season.championship.id
+    );
+    const matchIds = consistentRounds.flatMap((round) => round.matches.map((match) => match.id));
     const leagueIds = Array.from(
-      new Set(rounds.map((round) => round.league?.id).filter((id): id is string => Boolean(id)))
+      new Set(
+        consistentRounds.map((round) => round.league?.id).filter((id): id is string => Boolean(id))
+      )
     );
     const userGuesses =
       matchIds.length > 0 && leagueIds.length > 0
@@ -322,7 +339,7 @@ export async function getRoundsPageData(
       userGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
     );
 
-    const mappedRounds = rounds.map((round) => {
+    const mappedRounds = consistentRounds.map((round) => {
       const matches = round.matches.map((match) => {
         const userGuess = round.league?.id
           ? guessesByMatchAndLeague.get(`${match.id}:${round.league.id}`)

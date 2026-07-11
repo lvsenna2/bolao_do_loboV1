@@ -309,6 +309,25 @@ export async function recalculateSeasonRanking(seasonId: string) {
 export async function recalculateLeagueRankings() {
   const leagues = await prisma.league.findMany({
     select: {
+      id: true
+    },
+    where: {
+      deletedAt: null
+    }
+  });
+
+  let createdRows = 0;
+
+  for (const league of leagues) {
+    createdRows += await recalculateLeagueRanking(league.id);
+  }
+
+  return createdRows;
+}
+
+export async function recalculateLeagueRanking(leagueId: string) {
+  const league = await prisma.league.findFirst({
+    select: {
       id: true,
       members: {
         select: {
@@ -320,45 +339,37 @@ export async function recalculateLeagueRankings() {
       }
     },
     where: {
-      deletedAt: null
+      deletedAt: null,
+      id: leagueId
     }
   });
 
-  let createdRows = 0;
-
-  await prisma.ranking.deleteMany({
-    where: {
-      scope: "LEAGUE"
-    }
-  });
-
-  for (const league of leagues) {
-    const userIds = league.members.map((member) => member.userId);
-
-    if (userIds.length === 0) {
-      continue;
-    }
-
-    const scores = await getScores({
-      leagueId: league.id,
-      userId: {
-        in: userIds
-      }
-    });
-    const rows = buildRankingRows(scores, {
-      leagueId: league.id,
-      scope: "LEAGUE"
-    });
-
-    if (rows.length > 0) {
-      await prisma.ranking.createMany({
-        data: rows
-      });
-      createdRows += rows.length;
-    }
+  if (!league) {
+    throw new Error("LEAGUE_NOT_FOUND");
   }
 
-  return createdRows;
+  const userIds = league.members.map((member) => member.userId);
+  const scores =
+    userIds.length > 0
+      ? await getScores({
+          leagueId: league.id,
+          userId: {
+            in: userIds
+          }
+        })
+      : [];
+  const rows = buildRankingRows(scores, {
+    leagueId: league.id,
+    scope: "LEAGUE"
+  });
+
+  return replaceRankingRows(
+    {
+      leagueId: league.id,
+      scope: "LEAGUE"
+    },
+    rows
+  );
 }
 
 export async function recalculateRankingsForMatch(
@@ -370,6 +381,7 @@ export async function recalculateRankingsForMatch(
       round: {
         select: {
           id: true,
+          leagueId: true,
           seasonId: true
         }
       }
@@ -383,6 +395,26 @@ export async function recalculateRankingsForMatch(
     throw new Error("MATCH_NOT_FOUND");
   }
 
+  const scoreLeagueIds = await prisma.score.findMany({
+    distinct: ["leagueId"],
+    select: {
+      leagueId: true
+    },
+    where: {
+      leagueId: {
+        not: null
+      },
+      matchId
+    }
+  });
+  const affectedLeagueIds = Array.from(
+    new Set(
+      [match.round.leagueId, ...scoreLeagueIds.map((score) => score.leagueId)].filter(
+        (leagueId): leagueId is string => Boolean(leagueId)
+      )
+    )
+  );
+
   const [globalRows, historicalRows, monthlyRows, roundRows, seasonRows, leagueRows] =
     await Promise.all([
       recalculateGlobalRankings(),
@@ -390,7 +422,9 @@ export async function recalculateRankingsForMatch(
       recalculateMonthlyRankings(match.kickoff),
       recalculateRoundRanking(match.round.id),
       recalculateSeasonRanking(match.round.seasonId),
-      recalculateLeagueRankings()
+      Promise.all(affectedLeagueIds.map((leagueId) => recalculateLeagueRanking(leagueId))).then(
+        (rows) => rows.reduce((sum, rowCount) => sum + rowCount, 0)
+      )
     ]);
 
   return {

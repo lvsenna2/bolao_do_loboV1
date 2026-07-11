@@ -19,6 +19,18 @@ type RoundsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+function getChampionshipLabel(championship: {
+  name: string;
+  seasons: Array<{
+    name: string | null;
+    year: number;
+  }>;
+}) {
+  const season = championship.seasons[0];
+
+  return `${championship.name}${season ? ` ${season.name || season.year}` : ""}`;
+}
+
 export default async function RoundsPage({ searchParams }: RoundsPageProps) {
   const params = await searchParams;
   const user = await requireUser();
@@ -28,6 +40,9 @@ export default async function RoundsPage({ searchParams }: RoundsPageProps) {
   ]);
   const { championships, leagues, rounds, stats } = result.data;
   const availableLeagueItems = leaguesResult.data.availableLeagues.map((league) => ({
+    championshipCountry: league.championship.country,
+    championshipLabel: getChampionshipLabel(league.championship),
+    championshipLogo: league.championship.logo,
     description: league.description,
     entryFee: Number(league.entryFee),
     entryFeeLabel: formatCurrency(league.entryFee),

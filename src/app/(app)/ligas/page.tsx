@@ -22,11 +22,26 @@ function toNumber(value: Prisma.Decimal | number | null | undefined) {
   return typeof value === "number" ? value : (value?.toNumber() ?? 0);
 }
 
+function getChampionshipLabel(championship: {
+  name: string;
+  seasons: Array<{
+    name: string | null;
+    year: number;
+  }>;
+}) {
+  const season = championship.seasons[0];
+
+  return `${championship.name}${season ? ` ${season.name || season.year}` : ""}`;
+}
+
 export default async function LeaguesPage() {
   const sessionUser = await requireUser();
   const result = await getUserLeagues(sessionUser.id);
   const { availableLeagues, memberships, ownedLeagues } = result.data;
   const availableLeagueItems = availableLeagues.map((league) => ({
+    championshipCountry: league.championship.country,
+    championshipLabel: getChampionshipLabel(league.championship),
+    championshipLogo: league.championship.logo,
     description: league.description,
     entryFee: toNumber(league.entryFee),
     entryFeeLabel: formatCurrency(league.entryFee),
@@ -94,13 +109,36 @@ export default async function LeaguesPage() {
                   key={membership.id}
                 >
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
+                    <div className="flex gap-3">
+                      <span
+                        aria-hidden
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-cover bg-center text-xs font-bold text-app-foreground"
+                        style={
+                          membership.league.championship.logo
+                            ? {
+                                backgroundImage: `url("${membership.league.championship.logo}")`
+                              }
+                            : undefined
+                        }
+                      >
+                        {membership.league.championship.logo
+                          ? null
+                          : membership.league.championship.name.slice(0, 2)}
+                      </span>
+                      <div>
+                        <h2 className="font-semibold text-app-foreground">
+                          {membership.league.name}
+                        </h2>
+                        <p className="mt-1 text-sm text-app-muted">
+                          {membership.league.description || "Liga do Bolao do Lobo."}
+                        </p>
+                        <p className="mt-2 text-xs font-semibold text-brand-gold">
+                          {getChampionshipLabel(membership.league.championship)} |{" "}
+                          {membership.league.championship.country}
+                        </p>
+                      </div>
+                    </div>
                     <div>
-                      <h2 className="font-semibold text-app-foreground">
-                        {membership.league.name}
-                      </h2>
-                      <p className="mt-1 text-sm text-app-muted">
-                        {membership.league.description || "Liga do Bolao do Lobo."}
-                      </p>
                       <p className="mt-2 text-xs text-app-muted">
                         Dono: {membership.league.owner.name} | Entrada:{" "}
                         {formatCurrency(membership.league.entryFee)} | Desde{" "}
@@ -175,7 +213,25 @@ export default async function LeaguesPage() {
                 className="rounded-card border border-app-border bg-app-background p-4"
                 key={league.id}
               >
-                <h2 className="font-semibold text-app-foreground">{league.name}</h2>
+                <div className="flex gap-3">
+                  <span
+                    aria-hidden
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-cover bg-center text-xs font-bold text-app-foreground"
+                    style={
+                      league.championship.logo
+                        ? { backgroundImage: `url("${league.championship.logo}")` }
+                        : undefined
+                    }
+                  >
+                    {league.championship.logo ? null : league.championship.name.slice(0, 2)}
+                  </span>
+                  <div>
+                    <h2 className="font-semibold text-app-foreground">{league.name}</h2>
+                    <p className="mt-1 text-xs font-semibold text-brand-gold">
+                      {getChampionshipLabel(league.championship)} | {league.championship.country}
+                    </p>
+                  </div>
+                </div>
                 <p className="mt-1 text-sm text-app-muted">
                   Entrada: {formatCurrency(league.entryFee)} | {league.visibility}
                 </p>

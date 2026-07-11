@@ -13,6 +13,18 @@ import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
 import { AvailableLeagueList } from "@/features/leagues/components/available-league-list";
 import { formatCurrency, getUserLeagues } from "@/features/user/data/user-data";
 
+function getChampionshipLabel(championship: {
+  name: string;
+  seasons: Array<{
+    name: string | null;
+    year: number;
+  }>;
+}) {
+  const season = championship.seasons[0];
+
+  return `${championship.name}${season ? ` ${season.name || season.year}` : ""}`;
+}
+
 export default async function GuessesPage() {
   const user = await requireUser();
   const [result, leaguesResult] = await Promise.all([
@@ -24,6 +36,9 @@ export default async function GuessesPage() {
     (membership) => membership.status === "ACTIVE"
   );
   const availableLeagueItems = leaguesResult.data.availableLeagues.map((league) => ({
+    championshipCountry: league.championship.country,
+    championshipLabel: getChampionshipLabel(league.championship),
+    championshipLogo: league.championship.logo,
     description: league.description,
     entryFee: Number(league.entryFee),
     entryFeeLabel: formatCurrency(league.entryFee),

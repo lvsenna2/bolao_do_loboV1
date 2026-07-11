@@ -1,10 +1,8 @@
-import { RankingScope, type Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db";
 
 type SearchParams = Record<string, string | string[] | undefined>;
-
-export type RankingScopeOption = RankingScope | "SEASON";
 
 export type RankingRowView = {
   averageSubmitSeconds: number | null;
@@ -18,8 +16,10 @@ export type RankingRowView = {
   user: {
     avatarUrl: string | null;
     id: string;
+    level: number;
     name: string;
     username: string;
+    xp: number;
   };
   wins: number;
 };
@@ -32,9 +32,6 @@ export type RankingOption = {
 export type RankingPageData = {
   filters: {
     leagueId: string;
-    roundId: string;
-    scope: RankingScopeOption;
-    seasonId: string;
   };
   leagues: RankingOption[];
   myRanking: RankingRowView | null;
@@ -73,23 +70,6 @@ function emptyResult<T>(message: string, data: T): RankingDataResult<T> {
   };
 }
 
-function isRankingScopeOption(value: string | undefined): value is RankingScopeOption {
-  return value === "SEASON" || Object.values(RankingScope).includes(value as RankingScope);
-}
-
-export function getRankingScopeLabel(scope: RankingScopeOption) {
-  const labels = {
-    GLOBAL: "Geral",
-    HISTORICAL: "Historico",
-    LEAGUE: "Liga",
-    MONTHLY: "Mensal",
-    ROUND: "Rodada",
-    SEASON: "Temporada"
-  } satisfies Record<RankingScopeOption, string>;
-
-  return labels[scope];
-}
-
 function mapRankingRow(
   row: Prisma.RankingGetPayload<{
     include: {
@@ -97,8 +77,10 @@ function mapRankingRow(
         select: {
           avatarUrl: true;
           id: true;
+          level: true;
           name: true;
           username: true;
+          xp: true;
         };
       };
     };
@@ -118,108 +100,13 @@ function mapRankingRow(
   };
 }
 
-function getRankingWhere(filters: RankingPageData["filters"]): Prisma.RankingWhereInput {
-  if (filters.scope === "LEAGUE") {
-    return {
-      leagueId: filters.leagueId || "__none__",
-      scope: "LEAGUE"
-    };
-  }
-
-  if (filters.scope === "ROUND") {
-    return {
-      roundId: filters.roundId || "__none__",
-      scope: "ROUND"
-    };
-  }
-
-  if (filters.scope === "SEASON") {
-    return {
-      scope: "GLOBAL",
-      seasonId: filters.seasonId || "__none__"
-    };
-  }
-
-  return {
-    leagueId: null,
-    roundId: null,
-    scope: filters.scope,
-    seasonId: null
-  };
-}
-
-async function getDefaultRoundId(userId: string) {
-  const latestRoundRanking = await prisma.ranking.findFirst({
-    orderBy: {
-      updatedAt: "desc"
-    },
-    select: {
-      roundId: true
-    },
-    where: {
-      roundId: {
-        not: null
-      },
-      round: {
-        league: {
-          members: {
-            some: {
-              status: "ACTIVE",
-              userId
-            }
-          }
-        }
-      },
-      scope: "ROUND"
-    }
-  });
-
-  return latestRoundRanking?.roundId ?? "";
-}
-
-async function getDefaultSeasonId(userId: string) {
-  const latestSeasonRanking = await prisma.ranking.findFirst({
-    orderBy: {
-      updatedAt: "desc"
-    },
-    select: {
-      seasonId: true
-    },
-    where: {
-      scope: "GLOBAL",
-      season: {
-        rounds: {
-          some: {
-            league: {
-              members: {
-                some: {
-                  status: "ACTIVE",
-                  userId
-                }
-              }
-            }
-          }
-        }
-      },
-      seasonId: {
-        not: null
-      }
-    }
-  });
-
-  return latestSeasonRanking?.seasonId ?? "";
-}
-
 export async function getRankingPageData(
   userId: string,
   searchParams: SearchParams
 ): Promise<RankingDataResult<RankingPageData>> {
   const empty: RankingPageData = {
     filters: {
-      leagueId: "",
-      roundId: "",
-      scope: "GLOBAL",
-      seasonId: ""
+      leagueId: ""
     },
     leagues: [],
     myRanking: null,
@@ -234,123 +121,75 @@ export async function getRankingPageData(
   };
 
   try {
-    const requestedScope = getParam(searchParams, "scope");
-    const requestedScopeOption = isRankingScopeOption(requestedScope) ? requestedScope : undefined;
-
-    const [memberships, rounds, seasons, defaultRoundId, defaultSeasonId] = await Promise.all([
-      prisma.leagueMember.findMany({
-        orderBy: {
-          joinedAt: "desc"
-        },
-        select: {
-          league: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        },
-        where: {
-          status: "ACTIVE",
-          userId
-        }
-      }),
-      prisma.round.findMany({
-        orderBy: [
-          {
-            startsAt: "desc"
-          },
-          {
-            number: "desc"
-          }
-        ],
-        select: {
-          id: true,
-          name: true,
-          number: true,
-          season: {
-            select: {
-              championship: {
-                select: {
-                  name: true
+    const memberships = await prisma.leagueMember.findMany({
+      orderBy: {
+        joinedAt: "desc"
+      },
+      select: {
+        league: {
+          select: {
+            championship: {
+              select: {
+                name: true,
+                seasons: {
+                  orderBy: {
+                    year: "desc"
+                  },
+                  select: {
+                    name: true,
+                    year: true
+                  },
+                  take: 1
                 }
-              },
-              name: true,
-              year: true
-            }
-          }
-        },
-        take: 100,
-        where: {
-          league: {
-            members: {
-              some: {
-                status: "ACTIVE",
-                userId
               }
-            }
-          },
-          rankings: {
-            some: {
-              scope: "ROUND"
-            }
+            },
+            id: true,
+            name: true
           }
         }
-      }),
-      prisma.season.findMany({
-        orderBy: {
-          year: "desc"
-        },
-        select: {
+      },
+      where: {
+        league: {
           championship: {
-            select: {
-              name: true
-            }
+            deletedAt: null
           },
-          id: true,
-          name: true,
-          year: true
-        },
-        take: 100,
-        where: {
-          rounds: {
-            some: {
-              league: {
-                members: {
-                  some: {
-                    status: "ACTIVE",
-                    userId
-                  }
-                }
-              }
-            }
-          },
-          rankings: {
-            some: {
-              scope: "GLOBAL"
-            }
+          deletedAt: null,
+          status: {
+            not: "ARCHIVED"
           }
-        }
-      }),
-      getDefaultRoundId(userId),
-      getDefaultSeasonId(userId)
-    ]);
+        },
+        status: "ACTIVE",
+        userId
+      }
+    });
 
-    const leagues = memberships.map((membership) => ({
-      id: membership.league.id,
-      label: membership.league.name
-    }));
+    const leagues = memberships.map((membership) => {
+      const season = membership.league.championship.seasons[0];
+      const seasonLabel = season ? ` ${season.name || season.year}` : "";
+
+      return {
+        id: membership.league.id,
+        label: `${membership.league.name} - ${membership.league.championship.name}${seasonLabel}`
+      };
+    });
     const requestedLeagueId = getParam(searchParams, "league");
     const selectedLeagueId =
       leagues.find((league) => league.id === requestedLeagueId)?.id ?? leagues[0]?.id ?? "";
-    const filters = {
-      leagueId: selectedLeagueId,
-      roundId: getParam(searchParams, "round") ?? defaultRoundId,
-      scope: requestedScopeOption ?? (selectedLeagueId ? "LEAGUE" : "GLOBAL"),
-      seasonId: getParam(searchParams, "season") ?? defaultSeasonId
-    } satisfies RankingPageData["filters"];
-    const where = getRankingWhere(filters);
 
+    if (!selectedLeagueId) {
+      return {
+        ok: true,
+        data: {
+          ...empty,
+          leagues
+        }
+      };
+    }
+
+    const where: Prisma.RankingWhereInput = {
+      leagueId: selectedLeagueId,
+      scope: "LEAGUE"
+    };
     const [rankingRows, myRanking] = await prisma.$transaction([
       prisma.ranking.findMany({
         include: {
@@ -358,8 +197,10 @@ export async function getRankingPageData(
             select: {
               avatarUrl: true,
               id: true,
+              level: true,
               name: true,
-              username: true
+              username: true,
+              xp: true
             }
           }
         },
@@ -380,8 +221,10 @@ export async function getRankingPageData(
             select: {
               avatarUrl: true,
               id: true,
+              level: true,
               name: true,
-              username: true
+              username: true,
+              xp: true
             }
           }
         },
@@ -398,18 +241,14 @@ export async function getRankingPageData(
     return {
       ok: true,
       data: {
-        filters,
+        filters: {
+          leagueId: selectedLeagueId
+        },
         leagues,
         myRanking: myRankingView,
         rankings,
-        rounds: rounds.map((round) => ({
-          id: round.id,
-          label: `${round.name || `Rodada ${round.number}`} - ${round.season.championship.name} ${round.season.name || round.season.year}`
-        })),
-        seasons: seasons.map((season) => ({
-          id: season.id,
-          label: `${season.championship.name} - ${season.name || season.year}`
-        })),
+        rounds: [],
+        seasons: [],
         stats: {
           leaderPoints: rankings[0]?.points ?? 0,
           myPosition: myRankingView?.position ?? null,

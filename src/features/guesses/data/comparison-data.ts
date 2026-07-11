@@ -242,6 +242,7 @@ export async function getGuessComparisonData(
           select: {
             league: {
               select: {
+                championshipId: true,
                 name: true
               }
             },
@@ -251,6 +252,7 @@ export async function getGuessComparisonData(
               select: {
                 championship: {
                   select: {
+                    id: true,
                     name: true
                   }
                 },
@@ -279,7 +281,10 @@ export async function getGuessComparisonData(
       }
     });
 
-    const mappedMatches = matches.map((match) => {
+    const consistentMatches = matches.filter(
+      (match) => match.round.league?.championshipId === match.round.season.championship.id
+    );
+    const mappedMatches = consistentMatches.map((match) => {
       const isVisible = canShowOtherGuesses(match, now);
       const ownGuess = match.guesses.find((guess) => guess.userId === userId) ?? null;
       const guesses = isVisible

@@ -114,6 +114,7 @@ const matchRoundSelect = {
   id: true,
   league: {
     select: {
+      championshipId: true,
       id: true,
       name: true
     }
@@ -124,6 +125,7 @@ const matchRoundSelect = {
     select: {
       championship: {
         select: {
+          id: true,
           name: true
         }
       },
@@ -343,10 +345,19 @@ export async function getGuessesPageData(
       })
     ]);
 
-    const matchIds = matches.map((match) => match.id);
+    const consistentMatches = matches.filter(
+      (match) => match.round.league?.championshipId === match.round.season.championship.id
+    );
+    const consistentRecentGuesses = recentGuesses.filter(
+      (guess) =>
+        guess.match.round.league?.championshipId === guess.match.round.season.championship.id
+    );
+    const matchIds = consistentMatches.map((match) => match.id);
     const leagueIds = Array.from(
       new Set(
-        matches.map((match) => match.round.league?.id).filter((id): id is string => Boolean(id))
+        consistentMatches
+          .map((match) => match.round.league?.id)
+          .filter((id): id is string => Boolean(id))
       )
     );
     const existingGuesses =
@@ -371,7 +382,7 @@ export async function getGuessesPageData(
     const guessesByMatchAndLeague = new Map(
       existingGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
     );
-    const roundIds = Array.from(new Set(matches.map((match) => match.roundId)));
+    const roundIds = Array.from(new Set(consistentMatches.map((match) => match.roundId)));
     const roundJokers =
       roundIds.length > 0 && leagueIds.length > 0
         ? await prisma.guess.findMany({
@@ -407,7 +418,7 @@ export async function getGuessesPageData(
       return accumulator;
     }, {});
 
-    const availableMatches = matches.map((match) => {
+    const availableMatches = consistentMatches.map((match) => {
       const leagueId = match.round.league?.id ?? null;
       const existingGuessRecord = leagueId
         ? guessesByMatchAndLeague.get(`${match.id}:${leagueId}`)
@@ -441,7 +452,7 @@ export async function getGuessesPageData(
       ok: true,
       data: {
         availableMatches,
-        recentGuesses: recentGuesses.map((guess) => ({
+        recentGuesses: consistentRecentGuesses.map((guess) => ({
           awayTeam: guess.match.awayTeam,
           canEdit: getCanEditGuess(
             guess.match.kickoff,

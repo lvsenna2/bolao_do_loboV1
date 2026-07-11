@@ -19,7 +19,13 @@ type EditableMatch = {
   kickoff: Date;
   round: {
     endsAt: Date;
+    league: {
+      championshipId: string;
+    } | null;
     leagueId: string | null;
+    season: {
+      championshipId: string;
+    };
     startsAt: Date;
     status: string;
   };
@@ -53,6 +59,13 @@ function validateEditableMatch(match: EditableMatch | null, now = new Date()) {
 
   if (match.round.startsAt > now || match.round.endsAt < now) {
     return "A rodada nao esta dentro do periodo de envio.";
+  }
+
+  if (
+    !match.round.league ||
+    match.round.league.championshipId !== match.round.season.championshipId
+  ) {
+    return "Esta partida nao pertence ao campeonato da liga.";
   }
 
   return null;
@@ -114,7 +127,17 @@ export async function upsertGuessAction(
         round: {
           select: {
             endsAt: true,
+            league: {
+              select: {
+                championshipId: true
+              }
+            },
             leagueId: true,
+            season: {
+              select: {
+                championshipId: true
+              }
+            },
             startsAt: true,
             status: true
           }
@@ -303,7 +326,17 @@ export async function deleteGuessAction(input: DeleteGuessInput): Promise<GuessA
             round: {
               select: {
                 endsAt: true,
+                league: {
+                  select: {
+                    championshipId: true
+                  }
+                },
                 leagueId: true,
+                season: {
+                  select: {
+                    championshipId: true
+                  }
+                },
                 startsAt: true,
                 status: true
               }

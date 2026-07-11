@@ -120,7 +120,7 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                 <option value="">Liga do bolao</option>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>
-                    {league.name} - {league.status}
+                    {league.name} - {league.championship.name} - {league.status}
                   </option>
                 ))}
               </AdminSelect>
@@ -235,7 +235,7 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
           <option value="">Todas</option>
           {leagues.map((league) => (
             <option key={league.id} value={league.id}>
-              {league.name}
+              {league.name} - {league.championship.name}
             </option>
           ))}
         </AdminSelect>

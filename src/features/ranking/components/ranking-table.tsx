@@ -60,6 +60,8 @@ export function RankingTable({ myRanking, rankings }: RankingTableProps) {
                 <th className="px-4 py-3">Posicao</th>
                 <th className="px-4 py-3">Participante</th>
                 <th className="px-4 py-3">Pontos</th>
+                <th className="px-4 py-3">XP</th>
+                <th className="px-4 py-3">Nivel</th>
                 <th className="px-4 py-3">Exatos</th>
                 <th className="px-4 py-3">Acertos</th>
                 <th className="px-4 py-3">Erros</th>
@@ -89,6 +91,8 @@ export function RankingTable({ myRanking, rankings }: RankingTableProps) {
                     </div>
                   </td>
                   <td className="px-4 py-3 font-bold text-app-foreground">{ranking.points}</td>
+                  <td className="px-4 py-3">{ranking.user.xp}</td>
+                  <td className="px-4 py-3">{ranking.user.level}</td>
                   <td className="px-4 py-3">{ranking.exactScores}</td>
                   <td className="px-4 py-3">{ranking.hits}</td>
                   <td className="px-4 py-3">{ranking.losses}</td>

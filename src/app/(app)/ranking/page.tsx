@@ -19,11 +19,11 @@ export default async function RankingPage({ searchParams }: RankingPageProps) {
   const params = await searchParams;
   const user = await requireUser();
   const result = await getRankingPageData(user.id, params);
-  const { filters, leagues, myRanking, rankings, rounds, seasons, stats } = result.data;
+  const { filters, leagues, myRanking, rankings, stats } = result.data;
 
   return (
     <PageShell
-      description="Consulte ranking geral, por liga, rodada, temporada, mensal e historico."
+      description="Selecione uma liga para ver a classificacao independente dela."
       eyebrow="Area do usuario"
       title="Ranking"
     >
@@ -51,13 +51,17 @@ export default async function RankingPage({ searchParams }: RankingPageProps) {
       </div>
 
       <section className="mt-8">
-        <RankingFilterForm filters={filters} leagues={leagues} rounds={rounds} seasons={seasons} />
+        <RankingFilterForm filters={filters} leagues={leagues} />
 
         {rankings.length > 0 ? (
           <RankingTable myRanking={myRanking} rankings={rankings} />
         ) : (
           <EmptyState
-            description="Nenhum ranking foi processado para os filtros selecionados. Homologue resultados para gerar pontuacao e classificacao."
+            description={
+              leagues.length === 0
+                ? "Voce ainda nao participou de nenhuma liga."
+                : "O ranking desta liga ainda nao possui pontuacao processada."
+            }
             icon={Medal}
             title="Ranking vazio"
           />

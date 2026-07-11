@@ -6,6 +6,7 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   deleteLeagueAction,
+  updateLeagueChampionshipAction,
   updateLeagueStatusAction
 } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
@@ -33,11 +34,13 @@ type LeaguesPageProps = {
 };
 
 const deleteLeagueFormAction = deleteLeagueAction as unknown as FormAction;
+const updateLeagueChampionshipFormAction = updateLeagueChampionshipAction as unknown as FormAction;
 const updateLeagueStatusFormAction = updateLeagueStatusAction as unknown as FormAction;
 
 export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProps) {
   const params = await searchParams;
   const result = await getAdminLeagues(params);
+  const championshipOptions = result.data.championshipOptions;
   const leagues = result.data.items;
 
   return (
@@ -56,11 +59,28 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CreateLeagueForm admin />
+          <CreateLeagueForm admin championships={championshipOptions} />
+          {championshipOptions.length === 0 ? (
+            <p className="mt-3 text-sm text-amber-700 dark:text-amber-200">
+              Cadastre um campeonato ativo antes de criar ligas.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
       <AdminFilterForm placeholder="Nome da liga ou e-mail do dono" query={String(params.q ?? "")}>
+        <AdminSelect
+          defaultValue={String(params.championship ?? "")}
+          label="Campeonato"
+          name="championship"
+        >
+          <option value="">Todos</option>
+          {championshipOptions.map((championship) => (
+            <option key={championship.id} value={championship.id}>
+              {championship.label}
+            </option>
+          ))}
+        </AdminSelect>
         <AdminSelect defaultValue={String(params.status ?? "")} label="Status" name="status">
           <option value="">Todos</option>
           {Object.values(LeagueStatus).map((status) => (
@@ -79,6 +99,7 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
             <AdminTableHead>
               <tr>
                 <AdminTh>Liga</AdminTh>
+                <AdminTh>Campeonato</AdminTh>
                 <AdminTh>Dono</AdminTh>
                 <AdminTh>Status</AdminTh>
                 <AdminTh>Participantes</AdminTh>
@@ -98,6 +119,30 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                           Codigo: {league.inviteCode}
                         </p>
                       ) : null}
+                    </div>
+                  </AdminTd>
+                  <AdminTd>
+                    <div className="flex items-center gap-3">
+                      <span
+                        aria-hidden
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-cover bg-center text-xs font-bold text-app-foreground"
+                        style={
+                          league.championship.logo
+                            ? { backgroundImage: `url("${league.championship.logo}")` }
+                            : undefined
+                        }
+                      >
+                        {league.championship.logo ? null : league.championship.name.slice(0, 2)}
+                      </span>
+                      <div>
+                        <p className="font-semibold">{league.championship.name}</p>
+                        <p className="text-xs text-app-muted">
+                          {league.championship.country}
+                          {league.championship.seasons[0]
+                            ? ` | ${league.championship.seasons[0].name || league.championship.seasons[0].year}`
+                            : ""}
+                        </p>
+                      </div>
                     </div>
                   </AdminTd>
                   <AdminTd>
@@ -122,6 +167,27 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                       >
                         Rodadas
                       </Link>
+                      <form action={updateLeagueChampionshipFormAction} className="flex gap-2">
+                        <input name="leagueId" type="hidden" value={league.id} />
+                        <AdminSelect
+                          aria-label="Campeonato"
+                          className="w-44"
+                          defaultValue={league.championship.id}
+                          name="championshipId"
+                        >
+                          {championshipOptions.map((championship) => (
+                            <option key={championship.id} value={championship.id}>
+                              {championship.label}
+                            </option>
+                          ))}
+                        </AdminSelect>
+                        <button
+                          className="h-10 rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
+                          type="submit"
+                        >
+                          Campeonato
+                        </button>
+                      </form>
                       <form action={updateLeagueStatusFormAction} className="flex gap-2">
                         <input name="leagueId" type="hidden" value={league.id} />
                         <AdminSelect

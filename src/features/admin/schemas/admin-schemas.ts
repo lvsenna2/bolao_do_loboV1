@@ -25,8 +25,7 @@ function parseSaoPauloDateTimeLocal(value: unknown) {
   }
 
   const trimmedValue = value.trim();
-  const dateTimeLocalPattern =
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/;
+  const dateTimeLocalPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/;
 
   if (!dateTimeLocalPattern.test(trimmedValue)) {
     return value;
@@ -206,6 +205,15 @@ export const homologateMatchResultSchema = z.object({
 export const updateLeagueStatusSchema = z.object({
   leagueId: uuidSchema,
   status: leagueStatusSchema
+});
+
+export const updateLeagueChampionshipSchema = z.object({
+  championshipId: uuidSchema,
+  leagueId: uuidSchema
+});
+
+export const recalculateLeagueRankingSchema = z.object({
+  leagueId: uuidSchema
 });
 
 export const deleteLeagueSchema = z.object({

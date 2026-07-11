@@ -106,6 +106,11 @@ export const adminNavigationItems: NavigationItem[] = [
     label: "Ligas"
   },
   {
+    href: "/admin/rankings",
+    icon: Medal,
+    label: "Rankings"
+  },
+  {
     href: "/admin/pagamentos",
     icon: WalletCards,
     label: "Pagamentos"

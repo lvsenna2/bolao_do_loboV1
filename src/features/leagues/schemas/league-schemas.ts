@@ -25,6 +25,7 @@ const entryFeeSchema = z.preprocess(
 );
 
 const createLeagueBaseSchema = z.object({
+  championshipId: z.string().uuid("Selecione um campeonato valido."),
   name: z.string().min(2, "Informe o nome da liga.").max(120).trim(),
   description: z.string().max(500, "Use no maximo 500 caracteres.").optional().or(z.literal("")),
   imageUrl: z.string().url("Informe uma URL valida.").optional().or(z.literal("")),

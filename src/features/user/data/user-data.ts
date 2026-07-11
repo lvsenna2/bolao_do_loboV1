@@ -101,6 +101,24 @@ export async function getUserHomeData(userId: string) {
         include: {
           league: {
             include: {
+              championship: {
+                select: {
+                  country: true,
+                  id: true,
+                  logo: true,
+                  name: true,
+                  seasons: {
+                    orderBy: {
+                      year: "desc"
+                    },
+                    select: {
+                      name: true,
+                      year: true
+                    },
+                    take: 1
+                  }
+                }
+              },
               owner: {
                 select: {
                   name: true,
@@ -121,6 +139,9 @@ export async function getUserHomeData(userId: string) {
         take: 4,
         where: {
           league: {
+            championship: {
+              deletedAt: null
+            },
             deletedAt: null,
             status: {
               not: "ARCHIVED"
@@ -147,22 +168,6 @@ export async function getUserHomeData(userId: string) {
           unlockedAt: "desc"
         },
         take: 5,
-        where: {
-          userId
-        }
-      }),
-      prisma.guess.count({
-        where: {
-          userId,
-          deletedAt: null
-        }
-      }),
-      prisma.score.findMany({
-        select: {
-          exactScore: true,
-          totalPoints: true,
-          winnerHit: true
-        },
         where: {
           userId
         }
@@ -242,6 +247,11 @@ export async function getUserHomeData(userId: string) {
       }),
       prisma.round.findFirst({
         include: {
+          league: {
+            select: {
+              championshipId: true
+            }
+          },
           matches: {
             select: {
               id: true,
@@ -255,6 +265,7 @@ export async function getUserHomeData(userId: string) {
             select: {
               championship: {
                 select: {
+                  id: true,
                   name: true
                 }
               },
@@ -298,11 +309,17 @@ export async function getUserHomeData(userId: string) {
           kickoff: true,
           round: {
             select: {
+              league: {
+                select: {
+                  championshipId: true
+                }
+              },
               leagueId: true,
               season: {
                 select: {
                   championship: {
                     select: {
+                      id: true,
                       name: true
                     }
                   }
@@ -352,12 +369,18 @@ export async function getUserHomeData(userId: string) {
               kickoff: true,
               round: {
                 select: {
+                  league: {
+                    select: {
+                      championshipId: true
+                    }
+                  },
                   number: true,
                   name: true,
                   season: {
                     select: {
                       championship: {
                         select: {
+                          id: true,
                           name: true
                         }
                       }
@@ -424,8 +447,19 @@ export async function getUserHomeData(userId: string) {
       })
     ]);
 
+    const currentRoundView =
+      currentRound?.league?.championshipId === currentRound?.season.championship.id
+        ? currentRound
+        : null;
+    const consistentUpcomingMatches = upcomingMatches.filter(
+      (match) => match.round.league?.championshipId === match.round.season.championship.id
+    );
+    const consistentRecentGuesses = recentGuesses.filter(
+      (guess) =>
+        guess.match.round.league?.championshipId === guess.match.round.season.championship.id
+    );
     const upcomingMatchGuesses =
-      upcomingMatches.length > 0
+      consistentUpcomingMatches.length > 0
         ? await prisma.guess.findMany({
             select: {
               id: true,
@@ -439,7 +473,7 @@ export async function getUserHomeData(userId: string) {
                 in: activeLeagueIds
               },
               matchId: {
-                in: upcomingMatches.map((match) => match.id)
+                in: consistentUpcomingMatches.map((match) => match.id)
               },
               userId
             }
@@ -449,7 +483,7 @@ export async function getUserHomeData(userId: string) {
     const guessesByMatchAndLeague = new Map(
       upcomingMatchGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
     );
-    const todayMatches = upcomingMatches.map((match) => {
+    const todayMatches = consistentUpcomingMatches.map((match) => {
       const existingGuess = match.round.leagueId
         ? guessesByMatchAndLeague.get(`${match.id}:${match.round.leagueId}`)
         : undefined;
@@ -469,11 +503,11 @@ export async function getUserHomeData(userId: string) {
       ok: true as const,
       data: {
         achievements,
-        currentRound,
+        currentRound: currentRoundView,
         globalRanking,
         memberships,
         notifications,
-        recentGuesses,
+        recentGuesses: consistentRecentGuesses,
         stats: {
           exactScores,
           guesses: guessCount,
@@ -595,6 +629,24 @@ export async function getUserLeagues(userId: string) {
         include: {
           league: {
             include: {
+              championship: {
+                select: {
+                  country: true,
+                  id: true,
+                  logo: true,
+                  name: true,
+                  seasons: {
+                    orderBy: {
+                      year: "desc"
+                    },
+                    select: {
+                      name: true,
+                      year: true
+                    },
+                    take: 1
+                  }
+                }
+              },
               owner: {
                 select: {
                   name: true,
@@ -633,6 +685,9 @@ export async function getUserLeagues(userId: string) {
         },
         where: {
           league: {
+            championship: {
+              deletedAt: null
+            },
             deletedAt: null,
             status: {
               not: "ARCHIVED"
@@ -646,6 +701,24 @@ export async function getUserLeagues(userId: string) {
       }),
       prisma.league.findMany({
         include: {
+          championship: {
+            select: {
+              country: true,
+              id: true,
+              logo: true,
+              name: true,
+              seasons: {
+                orderBy: {
+                  year: "desc"
+                },
+                select: {
+                  name: true,
+                  year: true
+                },
+                take: 1
+              }
+            }
+          },
           _count: {
             select: {
               members: true,
@@ -660,12 +733,33 @@ export async function getUserLeagues(userId: string) {
           status: {
             not: "ARCHIVED"
           },
+          championship: {
+            deletedAt: null
+          },
           ownerId: userId,
           deletedAt: null
         }
       }),
       prisma.league.findMany({
         include: {
+          championship: {
+            select: {
+              country: true,
+              id: true,
+              logo: true,
+              name: true,
+              seasons: {
+                orderBy: {
+                  year: "desc"
+                },
+                select: {
+                  name: true,
+                  year: true
+                },
+                take: 1
+              }
+            }
+          },
           owner: {
             select: {
               name: true,
@@ -690,6 +784,10 @@ export async function getUserLeagues(userId: string) {
           },
           visibility: {
             in: ["PUBLIC", "PRIVATE"]
+          },
+          championship: {
+            deletedAt: null,
+            status: "ACTIVE"
           },
           members: {
             none: {

@@ -9,10 +9,7 @@ import {
   fetchApiFootballTeams,
   type ExternalFootballTeam
 } from "./client";
-import {
-  getFootballSyncCacheHours,
-  type FootballCompetitionConfig
-} from "./competitions";
+import { getFootballSyncCacheHours, type FootballCompetitionConfig } from "./competitions";
 
 type SyncCounter = {
   callsUsed: number;
@@ -154,9 +151,7 @@ async function logSync(
 async function upsertTeam(team: ExternalFootballTeam) {
   const existingByApiId = await prisma.team.findUnique({
     select: {
-      id: true,
-      logo: true,
-      shortName: true
+      id: true
     },
     where: {
       apiId: team.apiId
@@ -167,9 +162,9 @@ async function upsertTeam(team: ExternalFootballTeam) {
     return prisma.team.update({
       data: {
         country: team.country,
-        logo: team.logo || existingByApiId.logo,
+        logo: team.logo ?? undefined,
         name: team.name,
-        shortName: team.shortName || existingByApiId.shortName
+        shortName: team.shortName ?? undefined
       },
       where: {
         id: existingByApiId.id
@@ -179,9 +174,7 @@ async function upsertTeam(team: ExternalFootballTeam) {
 
   const existingByName = await prisma.team.findFirst({
     select: {
-      id: true,
-      logo: true,
-      shortName: true
+      id: true
     },
     where: {
       apiId: null,
@@ -200,8 +193,10 @@ async function upsertTeam(team: ExternalFootballTeam) {
     return prisma.team.update({
       data: {
         apiId: team.apiId,
-        logo: team.logo || existingByName.logo,
-        shortName: team.shortName || existingByName.shortName
+        country: team.country,
+        logo: team.logo ?? undefined,
+        name: team.name,
+        shortName: team.shortName ?? undefined
       },
       where: {
         id: existingByName.id
@@ -209,13 +204,22 @@ async function upsertTeam(team: ExternalFootballTeam) {
     });
   }
 
-  return prisma.team.create({
-    data: {
+  return prisma.team.upsert({
+    create: {
       apiId: team.apiId,
       country: team.country,
       logo: team.logo,
       name: team.name,
       shortName: team.shortName
+    },
+    update: {
+      country: team.country,
+      logo: team.logo ?? undefined,
+      name: team.name,
+      shortName: team.shortName ?? undefined
+    },
+    where: {
+      apiId: team.apiId
     }
   });
 }
@@ -298,16 +302,13 @@ async function upsertTeams(config: FootballCompetitionConfig, summary: SyncCount
   }
 
   for (const team of teamsResult.teams) {
+    console.log(team.name, team.logo);
     await upsertTeam(team);
     summary.teamsImported += 1;
   }
 }
 
-async function getRoundNumber(
-  seasonId: string,
-  roundName: string,
-  orderMap: Map<string, number>
-) {
+async function getRoundNumber(seasonId: string, roundName: string, orderMap: Map<string, number>) {
   const mappedNumber = orderMap.get(roundName);
 
   if (mappedNumber) {
@@ -450,8 +451,7 @@ async function upsertFixtures(
     const fixtureEnd = addHours(fixture.kickoff, 2);
 
     roundBounds.set(round.id, {
-      end:
-        currentBounds && currentBounds.end > fixtureEnd ? currentBounds.end : fixtureEnd,
+      end: currentBounds && currentBounds.end > fixtureEnd ? currentBounds.end : fixtureEnd,
       start:
         currentBounds && currentBounds.start < fixture.kickoff
           ? currentBounds.start

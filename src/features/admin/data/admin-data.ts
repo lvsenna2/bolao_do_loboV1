@@ -517,6 +517,7 @@ export async function getAdminRounds(searchParams: SearchParams) {
         include: {
           league: {
             select: {
+              championshipId: true,
               id: true,
               name: true,
               status: true
@@ -631,6 +632,13 @@ export async function getAdminRounds(searchParams: SearchParams) {
           id: true,
           name: true,
           number: true,
+          league: {
+            select: {
+              championshipId: true,
+              id: true,
+              name: true
+            }
+          },
           season: {
             select: {
               championship: {
@@ -658,6 +666,13 @@ export async function getAdminRounds(searchParams: SearchParams) {
           name: "asc"
         },
         select: {
+          championship: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          championshipId: true,
           id: true,
           name: true,
           status: true
@@ -689,6 +704,7 @@ export async function getAdminRounds(searchParams: SearchParams) {
 
 export async function getAdminLeagues(searchParams: SearchParams) {
   const empty = {
+    championshipOptions: [],
     items: [],
     page: getPage(searchParams),
     pageSize: DEFAULT_PAGE_SIZE,
@@ -698,6 +714,7 @@ export async function getAdminLeagues(searchParams: SearchParams) {
   try {
     const { page, skip, take } = getPagination(searchParams);
     const q = getParam(searchParams, "q");
+    const championshipId = getParam(searchParams, "championship");
     const status = getParam(searchParams, "status") as LeagueStatus | undefined;
     const where: Prisma.LeagueWhereInput = {
       deletedAt: null,
@@ -721,12 +738,31 @@ export async function getAdminLeagues(searchParams: SearchParams) {
             ]
           }
         : {}),
+      ...(championshipId ? { championshipId } : {}),
       ...(status ? { status } : {})
     };
 
-    const [items, total] = await prisma.$transaction([
+    const [items, total, championshipOptions] = await prisma.$transaction([
       prisma.league.findMany({
         include: {
+          championship: {
+            select: {
+              country: true,
+              id: true,
+              logo: true,
+              name: true,
+              seasons: {
+                orderBy: {
+                  year: "desc"
+                },
+                select: {
+                  name: true,
+                  year: true
+                },
+                take: 1
+              }
+            }
+          },
           owner: {
             select: {
               name: true,
@@ -749,12 +785,47 @@ export async function getAdminLeagues(searchParams: SearchParams) {
       }),
       prisma.league.count({
         where
+      }),
+      prisma.championship.findMany({
+        orderBy: {
+          name: "asc"
+        },
+        select: {
+          country: true,
+          id: true,
+          logo: true,
+          name: true,
+          seasons: {
+            orderBy: {
+              year: "desc"
+            },
+            select: {
+              name: true,
+              year: true
+            },
+            take: 1
+          }
+        },
+        where: {
+          deletedAt: null,
+          status: "ACTIVE"
+        }
       })
     ]);
 
     return {
       ok: true as const,
       data: {
+        championshipOptions: championshipOptions.map((championship) => {
+          const season = championship.seasons[0];
+
+          return {
+            country: championship.country,
+            id: championship.id,
+            label: `${championship.name}${season ? ` ${season.name || season.year}` : ""}`,
+            logo: championship.logo
+          };
+        }),
         items,
         page,
         pageSize: DEFAULT_PAGE_SIZE,
@@ -763,6 +834,121 @@ export async function getAdminLeagues(searchParams: SearchParams) {
     };
   } catch {
     return emptyResult("Nao foi possivel carregar ligas.", empty);
+  }
+}
+
+export async function getAdminLeagueRankings(searchParams: SearchParams) {
+  const empty = {
+    leagues: [],
+    rankings: [],
+    selectedLeague: null,
+    selectedLeagueId: ""
+  };
+
+  try {
+    const leagues = await prisma.league.findMany({
+      orderBy: {
+        name: "asc"
+      },
+      select: {
+        championship: {
+          select: {
+            name: true,
+            seasons: {
+              orderBy: {
+                year: "desc"
+              },
+              select: {
+                name: true,
+                year: true
+              },
+              take: 1
+            }
+          }
+        },
+        id: true,
+        name: true,
+        status: true,
+        _count: {
+          select: {
+            members: true
+          }
+        }
+      },
+      where: {
+        deletedAt: null,
+        status: {
+          not: "ARCHIVED"
+        }
+      }
+    });
+    const leagueOptions = leagues.map((league) => {
+      const season = league.championship.seasons[0];
+
+      return {
+        championshipName: league.championship.name,
+        id: league.id,
+        label: `${league.name} - ${league.championship.name}${season ? ` ${season.name || season.year}` : ""}`,
+        membersCount: league._count.members,
+        name: league.name,
+        status: league.status
+      };
+    });
+    const requestedLeagueId = getParam(searchParams, "league");
+    const selectedLeagueId =
+      leagueOptions.find((league) => league.id === requestedLeagueId)?.id ??
+      leagueOptions[0]?.id ??
+      "";
+
+    if (!selectedLeagueId) {
+      return {
+        ok: true as const,
+        data: {
+          ...empty,
+          leagues: leagueOptions
+        }
+      };
+    }
+
+    const rankings = await prisma.ranking.findMany({
+      include: {
+        user: {
+          select: {
+            avatarUrl: true,
+            email: true,
+            id: true,
+            level: true,
+            name: true,
+            username: true,
+            xp: true
+          }
+        }
+      },
+      orderBy: [
+        {
+          position: "asc"
+        },
+        {
+          points: "desc"
+        }
+      ],
+      where: {
+        leagueId: selectedLeagueId,
+        scope: "LEAGUE"
+      }
+    });
+
+    return {
+      ok: true as const,
+      data: {
+        leagues: leagueOptions,
+        rankings,
+        selectedLeague: leagueOptions.find((league) => league.id === selectedLeagueId) ?? null,
+        selectedLeagueId
+      }
+    };
+  } catch {
+    return emptyResult("Nao foi possivel carregar rankings por liga.", empty);
   }
 }
 
@@ -1186,8 +1372,7 @@ export async function getAdminFootballSyncStatus() {
       footballCompetitionConfigs.map(async (competition) => {
         const lastAttempt =
           logs.find(
-            (log) =>
-              log.competitionKey === competition.key && log.season === competition.season
+            (log) => log.competitionKey === competition.key && log.season === competition.season
           ) ?? null;
         const lastSuccess =
           logs.find(

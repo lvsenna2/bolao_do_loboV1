@@ -20,6 +20,12 @@ import {
 
 type CreateLeagueFormProps = {
   admin?: boolean;
+  championships: Array<{
+    country: string;
+    id: string;
+    label: string;
+    logo: string | null;
+  }>;
 };
 
 const fieldClass =
@@ -31,7 +37,7 @@ const visibilityLabels = {
   PUBLIC: "Publica"
 } satisfies Record<LeagueVisibility, string>;
 
-export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
+export function CreateLeagueForm({ admin = false, championships }: CreateLeagueFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | undefined>();
@@ -45,6 +51,7 @@ export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
   } = useForm<CreateAdminLeagueInput>({
     resolver: zodResolver(createAdminLeagueSchema),
     defaultValues: {
+      championshipId: championships[0]?.id ?? "",
       description: "",
       entryFee: 0,
       imageUrl: "",
@@ -73,6 +80,7 @@ export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
 
         setMessage(result.message);
         reset({
+          championshipId: championships[0]?.id ?? "",
           description: "",
           entryFee: 0,
           imageUrl: "",
@@ -103,6 +111,21 @@ export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
           {...register("ownerEmail")}
         />
       ) : null}
+
+      <label className="space-y-2">
+        <span className="text-sm font-medium text-app-foreground">Campeonato</span>
+        <select className={fieldClass} {...register("championshipId")}>
+          <option value="">Selecione</option>
+          {championships.map((championship) => (
+            <option key={championship.id} value={championship.id}>
+              {championship.label} - {championship.country}
+            </option>
+          ))}
+        </select>
+        {errors.championshipId?.message ? (
+          <p className="text-sm text-red-600 dark:text-red-300">{errors.championshipId.message}</p>
+        ) : null}
+      </label>
 
       <AuthField
         error={errors.name?.message}
@@ -187,7 +210,7 @@ export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
       <div className="flex items-end">
         <button
           className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
-          disabled={isPending}
+          disabled={isPending || championships.length === 0}
           type="submit"
         >
           {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
@@ -201,6 +224,7 @@ export function CreateLeagueForm({ admin = false }: CreateLeagueFormProps) {
 
 function toCreateLeagueInput(values: CreateAdminLeagueInput): CreateLeagueInput {
   return {
+    championshipId: values.championshipId,
     description: values.description,
     endsAt: values.endsAt,
     entryFee: values.entryFee,

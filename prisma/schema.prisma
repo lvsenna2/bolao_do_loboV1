@@ -214,33 +214,36 @@ model VerificationToken {
 }
 
 model League {
-  id          String           @id @default(uuid()) @db.Uuid
-  ownerId     String           @map("owner_id") @db.Uuid
-  name        String           @db.VarChar(120)
-  description String?
-  imageUrl    String?          @map("image_url")
-  visibility  LeagueVisibility @default(PRIVATE)
-  status      LeagueStatus     @default(DRAFT)
-  entryFee    Decimal          @default(0) @map("entry_fee") @db.Decimal(10, 2)
-  maxMembers  Int?             @map("max_members")
-  inviteCode  String?          @unique @map("invite_code") @db.VarChar(32)
-  rules       Json?
-  prizeRules  Json?            @map("prize_rules")
-  startsAt    DateTime?        @map("starts_at")
-  endsAt      DateTime?        @map("ends_at")
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
-  deletedAt   DateTime?        @map("deleted_at")
+  id             String           @id @default(uuid()) @db.Uuid
+  ownerId        String           @map("owner_id") @db.Uuid
+  championshipId String           @map("championship_id") @db.Uuid
+  name           String           @db.VarChar(120)
+  description    String?
+  imageUrl       String?          @map("image_url")
+  visibility     LeagueVisibility @default(PRIVATE)
+  status         LeagueStatus     @default(DRAFT)
+  entryFee       Decimal          @default(0) @map("entry_fee") @db.Decimal(10, 2)
+  maxMembers     Int?             @map("max_members")
+  inviteCode     String?          @unique @map("invite_code") @db.VarChar(32)
+  rules          Json?
+  prizeRules     Json?            @map("prize_rules")
+  startsAt       DateTime?        @map("starts_at")
+  endsAt         DateTime?        @map("ends_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  deletedAt      DateTime?        @map("deleted_at")
 
-  owner    User           @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members  LeagueMember[]
-  payments Payment[]
-  rankings Ranking[]
-  rounds   Round[]
-  guesses  Guess[]
-  scores   Score[]
+  owner        User           @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  championship Championship   @relation(fields: [championshipId], references: [id], onDelete: Restrict)
+  members      LeagueMember[]
+  payments     Payment[]
+  rankings     Ranking[]
+  rounds       Round[]
+  guesses      Guess[]
+  scores       Score[]
 
   @@index([ownerId])
+  @@index([championshipId])
   @@index([visibility])
   @@index([status])
   @@index([createdAt])
@@ -267,19 +270,20 @@ model LeagueMember {
 }
 
 model Championship {
-  id          String             @id @default(uuid()) @db.Uuid
-  name        String             @db.VarChar(120)
-  country     String             @db.VarChar(80)
-  logo        String?
-  provider    String?            @db.VarChar(40)
-  apiId       Int?               @map("api_id")
-  status      ChampionshipStatus @default(ACTIVE)
-  description String?
-  primaryColor String?           @map("primary_color") @db.VarChar(20)
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-  deletedAt   DateTime?          @map("deleted_at")
+  id           String             @id @default(uuid()) @db.Uuid
+  name         String             @db.VarChar(120)
+  country      String             @db.VarChar(80)
+  logo         String?
+  provider     String?            @db.VarChar(40)
+  apiId        Int?               @map("api_id")
+  status       ChampionshipStatus @default(ACTIVE)
+  description  String?
+  primaryColor String?            @map("primary_color") @db.VarChar(20)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  deletedAt    DateTime?          @map("deleted_at")
 
+  leagues League[]
   seasons Season[]
 
   @@unique([provider, apiId])
@@ -299,7 +303,7 @@ model Season {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  championship Championship @relation(fields: [championshipId], references: [id], onDelete: Restrict)
+  championship Championship          @relation(fields: [championshipId], references: [id], onDelete: Restrict)
   rounds       Round[]
   rankings     Ranking[]
   standings    CompetitionStanding[]
@@ -345,8 +349,8 @@ model Team {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  homeMatches Match[] @relation("HomeTeam")
-  awayMatches Match[] @relation("AwayTeam")
+  homeMatches Match[]               @relation("HomeTeam")
+  awayMatches Match[]               @relation("AwayTeam")
   standings   CompetitionStanding[]
 
   @@unique([apiId])
@@ -356,28 +360,28 @@ model Team {
 }
 
 model Match {
-  id          String      @id @default(uuid()) @db.Uuid
-  apiId       Int?        @unique @map("api_id")
-  roundId     String      @map("round_id") @db.Uuid
-  homeTeamId  String      @map("home_team_id") @db.Uuid
-  awayTeamId  String      @map("away_team_id") @db.Uuid
-  kickoff     DateTime
-  homeScore   Int?        @map("home_score")
-  awayScore   Int?        @map("away_score")
-  stadium     String?     @db.VarChar(160)
-  city        String?     @db.VarChar(100)
-  country     String?     @db.VarChar(80)
-  referee     String?     @db.VarChar(120)
-  broadcast   String?     @db.VarChar(120)
-  status      MatchStatus @default(SCHEDULED)
-  homologatedAt DateTime? @map("homologated_at")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  deletedAt   DateTime?   @map("deleted_at")
+  id            String      @id @default(uuid()) @db.Uuid
+  apiId         Int?        @unique @map("api_id")
+  roundId       String      @map("round_id") @db.Uuid
+  homeTeamId    String      @map("home_team_id") @db.Uuid
+  awayTeamId    String      @map("away_team_id") @db.Uuid
+  kickoff       DateTime
+  homeScore     Int?        @map("home_score")
+  awayScore     Int?        @map("away_score")
+  stadium       String?     @db.VarChar(160)
+  city          String?     @db.VarChar(100)
+  country       String?     @db.VarChar(80)
+  referee       String?     @db.VarChar(120)
+  broadcast     String?     @db.VarChar(120)
+  status        MatchStatus @default(SCHEDULED)
+  homologatedAt DateTime?   @map("homologated_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  deletedAt     DateTime?   @map("deleted_at")
 
-  round    Round  @relation(fields: [roundId], references: [id], onDelete: Restrict)
-  homeTeam Team   @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
-  awayTeam Team   @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  round    Round   @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  homeTeam Team    @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam Team    @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
   guesses  Guess[]
   scores   Score[]
 
@@ -406,7 +410,7 @@ model Guess {
   user   User    @relation(fields: [userId], references: [id], onDelete: Restrict)
   league League? @relation(fields: [leagueId], references: [id], onDelete: Restrict)
   match  Match   @relation(fields: [matchId], references: [id], onDelete: Restrict)
-  score Score?
+  score  Score?
 
   @@unique([userId, leagueId, matchId])
   @@index([leagueId])
@@ -574,20 +578,20 @@ model Setting {
 }
 
 model FootballSyncLog {
-  id             String    @id @default(uuid()) @db.Uuid
-  competitionKey String    @map("competition_key") @db.VarChar(80)
-  leagueId       Int       @map("league_id")
-  season         Int
-  status         String    @db.VarChar(20)
-  message        String?
-  callsUsed      Int       @default(0) @map("calls_used")
-  teamsImported  Int       @default(0) @map("teams_imported")
-  roundsImported Int       @default(0) @map("rounds_imported")
-  matchesImported Int      @default(0) @map("matches_imported")
-  standingsImported Int    @default(0) @map("standings_imported")
-  startedAt      DateTime  @default(now()) @map("started_at")
-  finishedAt     DateTime? @map("finished_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id                String    @id @default(uuid()) @db.Uuid
+  competitionKey    String    @map("competition_key") @db.VarChar(80)
+  leagueId          Int       @map("league_id")
+  season            Int
+  status            String    @db.VarChar(20)
+  message           String?
+  callsUsed         Int       @default(0) @map("calls_used")
+  teamsImported     Int       @default(0) @map("teams_imported")
+  roundsImported    Int       @default(0) @map("rounds_imported")
+  matchesImported   Int       @default(0) @map("matches_imported")
+  standingsImported Int       @default(0) @map("standings_imported")
+  startedAt         DateTime  @default(now()) @map("started_at")
+  finishedAt        DateTime? @map("finished_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
   @@index([competitionKey, season])
   @@index([status])
