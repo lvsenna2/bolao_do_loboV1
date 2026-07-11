@@ -122,6 +122,7 @@ export default async function UserHomePage() {
                   <p className="text-sm text-app-muted">@{user.username}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Badge tone="info">Nivel {user.level}</Badge>
+                    <Badge tone="warning">{user.xp} XP</Badge>
                     <Badge tone={stats.myGlobalPosition ? "success" : "neutral"}>
                       Liga #{stats.myGlobalPosition ?? "-"}
                     </Badge>
