@@ -1,8 +1,10 @@
 import {
+  buildGuessReminderEmail,
   buildIntegrationAnnouncementEmail,
   buildPasswordResetEmail,
   buildWelcomeEmail
 } from "@/features/auth/emails/auth-emails";
+import { getSaoPauloDayRangeUtc } from "@/lib/date-time";
 import { isEmailDeliveryConfigured, sendTransactionalEmail } from "@/server/email/resend";
 import { prisma } from "@/server/db";
 
@@ -19,8 +21,16 @@ type PasswordResetEmailInput = {
   userName?: string | null;
 };
 
+export type GuessReminderLeague = {
+  championshipName: string;
+  name: string;
+  nextKickoff: string | null;
+  pendingMatches: number;
+};
+
 const WELCOME_EMAIL_ACTION = "email.welcome.sent";
 const INTEGRATION_ANNOUNCEMENT_ACTION = "email.integration_announcement.sent";
+const GUESS_REMINDER_ACTION = "email.guess_reminder.sent";
 
 export function getPublicAppUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -144,6 +154,65 @@ export async function sendIntegrationAnnouncementEmailOnce(
       metadata: {
         adminId,
         emailId: result.id ?? null
+      },
+      userId: user.id
+    }
+  });
+
+  return "sent" as const;
+}
+
+export async function sendGuessReminderEmailOncePerDay(
+  adminId: string,
+  user: UserEmailRecipient,
+  leagues: GuessReminderLeague[]
+) {
+  const { end, start } = getSaoPauloDayRangeUtc();
+  const alreadySentToday = await prisma.auditLog.findFirst({
+    where: {
+      action: GUESS_REMINDER_ACTION,
+      createdAt: {
+        gte: start,
+        lt: end
+      },
+      entity: "User",
+      entityId: user.id
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (alreadySentToday) {
+    return "skipped" as const;
+  }
+
+  const appUrl = getPublicAppUrl();
+  const email = buildGuessReminderEmail({
+    appUrl,
+    leagues,
+    userName: user.name
+  });
+  const result = await sendTransactionalEmail({
+    html: email.html,
+    subject: email.subject,
+    text: email.text,
+    to: user.email
+  });
+
+  if (!result.ok) {
+    return "failed" as const;
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      action: GUESS_REMINDER_ACTION,
+      entity: "User",
+      entityId: user.id,
+      metadata: {
+        adminId,
+        emailId: result.id ?? null,
+        leagues
       },
       userId: user.id
     }

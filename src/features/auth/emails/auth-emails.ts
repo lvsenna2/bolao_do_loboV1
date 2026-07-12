@@ -3,6 +3,17 @@ type AuthEmailInput = {
   userName?: string | null;
 };
 
+type GuessReminderLeague = {
+  championshipName: string;
+  name: string;
+  nextKickoff: string | null;
+  pendingMatches: number;
+};
+
+type GuessReminderEmailInput = AuthEmailInput & {
+  leagues: GuessReminderLeague[];
+};
+
 type PasswordResetEmailInput = AuthEmailInput & {
   expiresInMinutes: number;
   resetUrl: string;
@@ -21,6 +32,10 @@ function escapeHtml(value: string) {
 
 function getGreeting(userName?: string | null) {
   return userName?.trim() ? `Ola, ${escapeHtml(userName.trim())}!` : "Ola!";
+}
+
+function getPlural(value: number, singular: string, plural: string) {
+  return value === 1 ? singular : plural;
 }
 
 function createEmailLayout(title: string, content: string, appUrl: string) {
@@ -65,6 +80,66 @@ function createButton(label: string, href: string) {
   )}" style="display:inline-block;border-radius:12px;background:#f59e0b;color:#061342;font-weight:700;text-decoration:none;padding:13px 18px;">${escapeHtml(
     label
   )}</a></p>`;
+}
+
+export function buildGuessReminderEmail({ appUrl, leagues, userName }: GuessReminderEmailInput) {
+  const subject = "Voce tem palpites pendentes no Bolao do Lobo";
+  const greeting = getGreeting(userName);
+  const totalPendingMatches = leagues.reduce((sum, league) => sum + league.pendingMatches, 0);
+  const leagueItemsHtml = leagues
+    .map(
+      (league) => `<tr>
+        <td style="padding:12px 0;border-bottom:1px solid rgba(219,234,254,.14);">
+          <strong style="display:block;color:#ffffff;font-size:15px;">${escapeHtml(league.name)}</strong>
+          <span style="display:block;color:#b6c4e2;font-size:13px;">${escapeHtml(league.championshipName)}</span>
+          <span style="display:block;margin-top:4px;color:#f59e0b;font-size:13px;font-weight:700;">${league.pendingMatches} ${getPlural(
+            league.pendingMatches,
+            "partida sem palpite",
+            "partidas sem palpite"
+          )}</span>
+          ${
+            league.nextKickoff
+              ? `<span style="display:block;margin-top:4px;color:#b6c4e2;font-size:12px;">Proxima partida: ${escapeHtml(league.nextKickoff)}</span>`
+              : ""
+          }
+        </td>
+      </tr>`
+    )
+    .join("");
+  const html = createEmailLayout(
+    subject,
+    `<p style="margin:0 0 14px;">${greeting}</p>
+    <p style="margin:0 0 14px;">Voce tem ${totalPendingMatches} ${getPlural(
+      totalPendingMatches,
+      "palpite pendente",
+      "palpites pendentes"
+    )} em ligas que ja estao com rodadas abertas.</p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0 4px;">
+      ${leagueItemsHtml}
+    </table>
+    ${createButton("Fazer meus palpites", `${appUrl.replace(/\/$/, "")}/palpites`)}`,
+    appUrl
+  );
+
+  return {
+    html,
+    subject,
+    text: `${greeting}\n\nVoce tem ${totalPendingMatches} ${getPlural(
+      totalPendingMatches,
+      "palpite pendente",
+      "palpites pendentes"
+    )} no Bolao do Lobo.\n\n${leagues
+      .map((league) => {
+        const nextKickoff = league.nextKickoff ? ` Proxima partida: ${league.nextKickoff}.` : "";
+
+        return `- ${league.name} (${league.championshipName}): ${league.pendingMatches} ${getPlural(
+          league.pendingMatches,
+          "partida sem palpite",
+          "partidas sem palpite"
+        )}.${nextKickoff}`;
+      })
+      .join("\n")}\n\nFazer palpites: ${appUrl.replace(/\/$/, "")}/palpites`
+  };
 }
 
 export function buildWelcomeEmail({ appUrl, userName }: AuthEmailInput) {

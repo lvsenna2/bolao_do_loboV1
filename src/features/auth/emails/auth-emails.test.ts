@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildGuessReminderEmail,
   buildIntegrationAnnouncementEmail,
   buildPasswordResetEmail,
   buildWelcomeEmail
@@ -33,5 +34,25 @@ describe("auth email templates", () => {
 
     expect(welcome.text).toContain("https://app.example.com");
     expect(announcement.text).toContain("recuperar sua senha");
+  });
+
+  it("builds guess reminder emails with pending leagues", () => {
+    const email = buildGuessReminderEmail({
+      appUrl: "https://app.example.com/",
+      leagues: [
+        {
+          championshipName: "Brasileirao",
+          name: "Liga do Brasileirao",
+          nextKickoff: "12/07/2026 as 20:00",
+          pendingMatches: 3
+        }
+      ],
+      userName: "Lucas"
+    });
+
+    expect(email.subject).toContain("palpites pendentes");
+    expect(email.html).toContain("Liga do Brasileirao");
+    expect(email.html).toContain("https://app.example.com/palpites");
+    expect(email.text).toContain("3 partidas sem palpite");
   });
 });

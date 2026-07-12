@@ -4,7 +4,12 @@ import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { getTeamPreset } from "@/features/admin/data/team-presets";
-import { sendIntegrationAnnouncementEmailOnce } from "@/features/auth/services/auth-email-service";
+import {
+  sendGuessReminderEmailOncePerDay,
+  sendIntegrationAnnouncementEmailOnce,
+  sendWelcomeEmailOnce,
+  type GuessReminderLeague
+} from "@/features/auth/services/auth-email-service";
 import {
   recalculateLeagueRanking,
   recalculateRankingsForMatch
@@ -19,7 +24,7 @@ import {
   setPaidLeagueMinimumEntryFee,
   syncActiveLeagueMissionProgress
 } from "@/features/xp/services/xp-service";
-import { serverNow } from "@/lib/date-time";
+import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import { isEmailDeliveryConfigured } from "@/server/email/resend";
@@ -687,6 +692,287 @@ export async function sendEmailIntegrationAnnouncementAction(): Promise<AdminAct
   return {
     ok: true,
     message: `Aviso enviado para ${sent} usuario(s). ${skipped} ja haviam recebido.`
+  };
+}
+
+async function getGuessReminderRecipients() {
+  const now = serverNow();
+  const memberships = await prisma.leagueMember.findMany({
+    orderBy: {
+      joinedAt: "asc"
+    },
+    select: {
+      league: {
+        select: {
+          championship: {
+            select: {
+              name: true
+            }
+          },
+          id: true,
+          name: true,
+          rounds: {
+            select: {
+              matches: {
+                orderBy: {
+                  kickoff: "asc"
+                },
+                select: {
+                  id: true,
+                  kickoff: true
+                },
+                where: {
+                  deletedAt: null,
+                  kickoff: {
+                    gt: now
+                  },
+                  status: "SCHEDULED"
+                }
+              }
+            },
+            where: {
+              endsAt: {
+                gte: now
+              },
+              matches: {
+                some: {
+                  deletedAt: null,
+                  kickoff: {
+                    gt: now
+                  },
+                  status: "SCHEDULED"
+                }
+              },
+              startsAt: {
+                lte: now
+              },
+              status: "OPEN"
+            }
+          }
+        }
+      },
+      user: {
+        select: {
+          email: true,
+          id: true,
+          name: true
+        }
+      }
+    },
+    where: {
+      league: {
+        deletedAt: null,
+        rounds: {
+          some: {
+            endsAt: {
+              gte: now
+            },
+            matches: {
+              some: {
+                deletedAt: null,
+                kickoff: {
+                  gt: now
+                },
+                status: "SCHEDULED"
+              }
+            },
+            startsAt: {
+              lte: now
+            },
+            status: "OPEN"
+          }
+        },
+        status: "OPEN"
+      },
+      status: "ACTIVE",
+      user: {
+        deletedAt: null,
+        status: "ACTIVE"
+      }
+    }
+  });
+  const recipientsByUser = new Map<
+    string,
+    {
+      leagues: GuessReminderLeague[];
+      user: {
+        email: string;
+        id: string;
+        name: string | null;
+      };
+    }
+  >();
+
+  for (const membership of memberships) {
+    const matches = membership.league.rounds.flatMap((round) => round.matches);
+    const matchIds = Array.from(new Set(matches.map((match) => match.id)));
+
+    if (matchIds.length === 0) {
+      continue;
+    }
+
+    const guesses = await prisma.guess.findMany({
+      select: {
+        matchId: true
+      },
+      where: {
+        deletedAt: null,
+        leagueId: membership.league.id,
+        matchId: {
+          in: matchIds
+        },
+        userId: membership.user.id
+      }
+    });
+    const guessedMatchIds = new Set(guesses.map((guess) => guess.matchId));
+    const pendingMatches = matches.filter((match) => !guessedMatchIds.has(match.id));
+
+    if (pendingMatches.length === 0) {
+      continue;
+    }
+
+    const nextKickoff = pendingMatches.reduce<Date | null>((earliest, match) => {
+      return !earliest || match.kickoff < earliest ? match.kickoff : earliest;
+    }, null);
+    const recipient = recipientsByUser.get(membership.user.id) ?? {
+      leagues: [],
+      user: membership.user
+    };
+
+    recipient.leagues.push({
+      championshipName: membership.league.championship.name,
+      name: membership.league.name,
+      nextKickoff: nextKickoff ? formatDateTimeInSaoPaulo(nextKickoff) : null,
+      pendingMatches: pendingMatches.length
+    });
+    recipientsByUser.set(membership.user.id, recipient);
+  }
+
+  return Array.from(recipientsByUser.values());
+}
+
+export async function sendOpenGuessReminderEmailsAction(): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+
+  if (!isEmailDeliveryConfigured()) {
+    return {
+      ok: false,
+      message: "Envio de e-mail nao configurado. Configure RESEND_API_KEY no ambiente."
+    };
+  }
+
+  const recipients = await getGuessReminderRecipients();
+  let failed = 0;
+  let sent = 0;
+  let skipped = 0;
+
+  for (const recipient of recipients) {
+    const result = await sendGuessReminderEmailOncePerDay(
+      admin.id,
+      recipient.user,
+      recipient.leagues
+    );
+
+    if (result === "sent") {
+      sent += 1;
+    } else if (result === "skipped") {
+      skipped += 1;
+    } else {
+      failed += 1;
+    }
+  }
+
+  await createAuditLog(
+    admin.id,
+    "admin.email.guess_reminder.sent",
+    "Email",
+    "guess-reminder",
+    undefined,
+    {
+      failed,
+      recipients: recipients.length,
+      sent,
+      skipped
+    }
+  );
+
+  if (failed > 0) {
+    return {
+      ok: false,
+      message: `Lembrete enviado para ${sent} usuario(s), ${skipped} ja receberam hoje e ${failed} falharam.`
+    };
+  }
+
+  return {
+    ok: true,
+    message: `Lembrete enviado para ${sent} usuario(s). ${skipped} ja haviam recebido hoje.`
+  };
+}
+
+export async function sendPendingWelcomeEmailsAction(): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+
+  if (!isEmailDeliveryConfigured()) {
+    return {
+      ok: false,
+      message: "Envio de e-mail nao configurado. Configure RESEND_API_KEY no ambiente."
+    };
+  }
+
+  const users = await prisma.user.findMany({
+    orderBy: {
+      createdAt: "asc"
+    },
+    select: {
+      email: true,
+      id: true,
+      name: true
+    },
+    where: {
+      deletedAt: null,
+      status: "ACTIVE"
+    }
+  });
+  let failed = 0;
+  let sent = 0;
+  let skipped = 0;
+
+  for (const user of users) {
+    const result = await sendWelcomeEmailOnce(user);
+
+    if (result.ok && result.skipped) {
+      skipped += 1;
+    } else if (result.ok) {
+      sent += 1;
+    } else {
+      failed += 1;
+    }
+  }
+
+  await createAuditLog(
+    admin.id,
+    "admin.email.welcome_pending.sent",
+    "Email",
+    "welcome-pending",
+    undefined,
+    {
+      failed,
+      sent,
+      skipped,
+      total: users.length
+    }
+  );
+
+  if (failed > 0) {
+    return {
+      ok: false,
+      message: `Boas-vindas enviadas para ${sent} usuario(s), ${skipped} ja tinham recebido e ${failed} falharam.`
+    };
+  }
+
+  return {
+    ok: true,
+    message: `Boas-vindas enviadas para ${sent} usuario(s). ${skipped} ja tinham recebido.`
   };
 }
 

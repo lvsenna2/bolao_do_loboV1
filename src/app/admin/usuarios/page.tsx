@@ -16,7 +16,9 @@ import {
   AdminTh
 } from "@/features/admin/components/admin-table";
 import {
+  sendOpenGuessReminderEmailsAction,
   sendEmailIntegrationAnnouncementAction,
+  sendPendingWelcomeEmailsAction,
   softDeleteUserAction,
   updateUserRoleAction,
   updateUserStatusAction
@@ -32,8 +34,11 @@ type UsersPageProps = {
 };
 
 const softDeleteUserFormAction = softDeleteUserAction as unknown as FormAction;
+const sendOpenGuessReminderEmailsFormAction =
+  sendOpenGuessReminderEmailsAction as unknown as FormAction;
 const sendEmailIntegrationAnnouncementFormAction =
   sendEmailIntegrationAnnouncementAction as unknown as FormAction;
+const sendPendingWelcomeEmailsFormAction = sendPendingWelcomeEmailsAction as unknown as FormAction;
 const updateUserRoleFormAction = updateUserRoleAction as unknown as FormAction;
 const updateUserStatusFormAction = updateUserStatusAction as unknown as FormAction;
 
@@ -74,22 +79,57 @@ export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
       </AdminFilterForm>
 
       <div className="rounded-card border border-app-border bg-app-surface p-5 shadow-soft">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-app-foreground">Central de e-mails</h2>
+          <p className="mt-1 max-w-3xl text-sm text-app-muted">
+            Envie comunicados para usuarios ativos com seguranca. Os lembretes de palpites sao
+            enviados apenas para quem tem partidas abertas sem palpite e nao repetem no mesmo dia.
+          </p>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="rounded-control border border-brand-gold/30 bg-brand-gold/10 p-4">
+            <h3 className="font-semibold text-app-foreground">Lembrete de palpites</h3>
+            <p className="mt-1 text-sm text-app-muted">
+              Avisa usuarios com rodadas abertas e palpites pendentes nas ligas em que participam.
+            </p>
+            <form action={sendOpenGuessReminderEmailsFormAction} className="mt-4">
+              <AdminSubmitButton
+                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
+                pendingLabel="Enviando..."
+              >
+                Enviar lembretes
+              </AdminSubmitButton>
+            </form>
+          </div>
           <div>
-            <h2 className="text-lg font-semibold text-app-foreground">Comunicado por e-mail</h2>
-            <p className="mt-1 max-w-2xl text-sm text-app-muted">
+            <h3 className="font-semibold text-app-foreground">Aviso da integracao</h3>
+            <p className="mt-1 text-sm text-app-muted">
               Envie um aviso unico para usuarios ativos informando que a recuperacao de senha por
               e-mail esta disponivel.
             </p>
+            <form action={sendEmailIntegrationAnnouncementFormAction} className="mt-4">
+              <AdminSubmitButton
+                className="h-10 rounded-button border border-app-border px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
+                pendingLabel="Enviando..."
+              >
+                Enviar aviso
+              </AdminSubmitButton>
+            </form>
           </div>
-          <form action={sendEmailIntegrationAnnouncementFormAction}>
-            <AdminSubmitButton
-              className="h-11 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
-              pendingLabel="Enviando..."
-            >
-              Enviar aviso
-            </AdminSubmitButton>
-          </form>
+          <div>
+            <h3 className="font-semibold text-app-foreground">Boas-vindas pendentes</h3>
+            <p className="mt-1 text-sm text-app-muted">
+              Envia boas-vindas somente para usuarios ativos que ainda nao receberam esse e-mail.
+            </p>
+            <form action={sendPendingWelcomeEmailsFormAction} className="mt-4">
+              <AdminSubmitButton
+                className="h-10 rounded-button border border-app-border px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
+                pendingLabel="Enviando..."
+              >
+                Enviar pendentes
+              </AdminSubmitButton>
+            </form>
+          </div>
         </div>
       </div>
 
