@@ -17,6 +17,7 @@ describe("auth email templates", () => {
 
     expect(email.subject).toContain("Redefinicao");
     expect(email.html).toContain("https://app.example.com/reset-password?token=abc");
+    expect(email.html).toContain("https://app.example.com/brand/bolao-do-lobo-email.png");
     expect(email.text).toContain("30 minutos");
   });
 
