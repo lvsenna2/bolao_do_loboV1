@@ -126,7 +126,7 @@ export default async function ProfilePage() {
               </CardContent>
             </Card>
 
-            <XpProgress level={user.level} progress={xpProgress} xp={user.xp} />
+            <XpProgress progress={xpProgress} xp={user.xp} />
 
             <section className="grid gap-4">
               <UserStatCard

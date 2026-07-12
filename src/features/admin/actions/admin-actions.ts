@@ -277,10 +277,6 @@ async function importTeamsIntoDatabase(
   };
 
   for (const team of prepared.teams) {
-    if (source === "api-football") {
-      console.log(team.name, team.logo);
-    }
-
     const existingByApiId = team.apiId
       ? await prisma.team.findUnique({
           select: {

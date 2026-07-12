@@ -1,21 +1,20 @@
-import { getXpProgress } from "../data/user-data";
 import type { XpProgressView } from "@/features/xp/services/xp-service";
 
 type XpProgressProps = {
-  level: number;
   progress?: XpProgressView | null;
   xp: number;
 };
 
-export function XpProgress({ level, progress, xp }: XpProgressProps) {
-  const fallbackProgress = getXpProgress(xp);
-  const percentage = progress?.progress ?? fallbackProgress.progress;
+export function XpProgress({ progress, xp }: XpProgressProps) {
+  const percentage = progress?.progress ?? 0;
   const levelColor = progress?.currentLevel.color ?? "#F59E0B";
-  const levelLabel = progress ? progress.currentLevel.name : `Nivel ${level}`;
+  const levelLabel = progress?.currentLevel.name ?? "Patente indisponivel";
   const medal = progress?.currentLevel.medal ?? "XP";
   const nextLabel = progress?.nextLevel
     ? `${progress.remainingXp} XP para ${progress.nextLevel.name}`
-    : `Proximo marco em ${fallbackProgress.nextThreshold} XP.`;
+    : progress
+      ? "Voce chegou a patente maxima."
+      : "Os niveis serao exibidos quando a configuracao de XP estiver disponivel.";
   const nextLevelName = progress?.nextLevel?.name ?? "Patente maxima";
 
   return (

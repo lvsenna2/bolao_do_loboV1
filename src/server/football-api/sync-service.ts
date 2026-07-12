@@ -393,7 +393,6 @@ async function upsertTeams(config: FootballCompetitionConfig, summary: SyncCount
   }
 
   for (const team of teamsResult.teams) {
-    console.log(team.name, team.logo);
     await upsertTeam(team);
     summary.teamsImported += 1;
   }

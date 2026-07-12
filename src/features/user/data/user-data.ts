@@ -37,29 +37,11 @@ export function formatCurrency(value: Prisma.Decimal | number | null | undefined
   }).format(amount);
 }
 
-export function getXpProgress(xp: number) {
-  const thresholds = [0, 250, 750, 2000, 5000, 10000, 20000, 40000, 80000, 150000];
-  const nextThreshold = thresholds.find((threshold) => threshold > xp) ?? xp + 1000;
-  const previousThreshold =
-    thresholds
-      .slice()
-      .reverse()
-      .find((threshold) => threshold <= xp) ?? 0;
-  const span = Math.max(1, nextThreshold - previousThreshold);
-  const progress = Math.min(100, Math.max(0, ((xp - previousThreshold) / span) * 100));
-
-  return {
-    nextThreshold,
-    previousThreshold,
-    progress
-  };
-}
-
 export async function getUserHomeData(userId: string) {
   const empty = {
     achievements: [],
     currentRound: null,
-    globalRanking: [],
+    leagueRanking: [],
     memberships: [],
     notifications: [],
     recentGuesses: [],
@@ -68,7 +50,7 @@ export async function getUserHomeData(userId: string) {
       guesses: 0,
       leagues: 0,
       losses: 0,
-      myGlobalPosition: null,
+      myLeaguePosition: null,
       points: 0,
       unreadNotifications: 0,
       winRate: 0,
@@ -92,7 +74,6 @@ export async function getUserHomeData(userId: string) {
           email: true,
           avatarUrl: true,
           xp: true,
-          level: true,
           role: true,
           status: true,
           createdAt: true,
@@ -192,7 +173,7 @@ export async function getUserHomeData(userId: string) {
         data: {
           achievements,
           currentRound: null,
-          globalRanking: [],
+          leagueRanking: [],
           memberships,
           notifications,
           recentGuesses: [],
@@ -201,7 +182,7 @@ export async function getUserHomeData(userId: string) {
             guesses: 0,
             leagues: 0,
             losses: 0,
-            myGlobalPosition: null,
+            myLeaguePosition: null,
             points: 0,
             unreadNotifications: unread,
             winRate: 0,
@@ -221,8 +202,8 @@ export async function getUserHomeData(userId: string) {
       currentRound,
       upcomingMatches,
       recentGuesses,
-      globalRanking,
-      myGlobalRanking
+      leagueRanking,
+      myLeagueRanking
     ] = await prisma.$transaction([
       prisma.guess.count({
         where: {
@@ -508,7 +489,7 @@ export async function getUserHomeData(userId: string) {
       data: {
         achievements,
         currentRound: currentRoundView,
-        globalRanking,
+        leagueRanking,
         memberships,
         notifications,
         recentGuesses: consistentRecentGuesses,
@@ -517,7 +498,7 @@ export async function getUserHomeData(userId: string) {
           guesses: guessCount,
           leagues: memberships.length,
           losses,
-          myGlobalPosition: myGlobalRanking?.position ?? null,
+          myLeaguePosition: myLeagueRanking?.position ?? null,
           points,
           unreadNotifications: unread,
           winRate: scores.length > 0 ? Math.round((winnerHits / scores.length) * 100) : 0,
@@ -569,7 +550,6 @@ export async function getUserProfileData(userId: string) {
             locale: true,
             theme: true,
             xp: true,
-            level: true,
             role: true,
             status: true,
             createdAt: true,

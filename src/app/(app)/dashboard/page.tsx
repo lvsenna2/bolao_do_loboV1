@@ -76,7 +76,7 @@ export default async function UserHomePage() {
   const {
     achievements,
     currentRound,
-    globalRanking,
+    leagueRanking,
     memberships,
     notifications,
     recentGuesses,
@@ -90,7 +90,7 @@ export default async function UserHomePage() {
     currentRound?.matches.filter((match) =>
       ["SCHEDULED", "LIVE", "HALFTIME", "POSTPONED"].includes(match.status)
     ).length ?? 0;
-  const leader = globalRanking[0];
+  const leader = leagueRanking[0];
 
   return (
     <PageShell
@@ -129,11 +129,11 @@ export default async function UserHomePage() {
                     <Badge tone="info">
                       {xpProgress
                         ? `${xpProgress.currentLevel.medal} ${xpProgress.currentLevel.name}`
-                        : `Nivel ${user.level}`}
+                        : "Patente indisponivel"}
                     </Badge>
                     <Badge tone="warning">{user.xp} XP</Badge>
-                    <Badge tone={stats.myGlobalPosition ? "success" : "neutral"}>
-                      Liga #{stats.myGlobalPosition ?? "-"}
+                    <Badge tone={stats.myLeaguePosition ? "success" : "neutral"}>
+                      Posicao #{stats.myLeaguePosition ?? "-"}
                     </Badge>
                   </div>
                 </div>
@@ -368,7 +368,7 @@ export default async function UserHomePage() {
                     })
                   ) : (
                     <EmptyState
-                      description="Seus palpites aparecerao aqui depois do primeiro envio."
+                      description="Voce ainda nao realizou palpites."
                       icon={ClipboardList}
                       title="Nenhum palpite"
                     />
@@ -378,7 +378,7 @@ export default async function UserHomePage() {
             </div>
 
             <aside className="space-y-6">
-              <XpProgress level={user.level} progress={xpProgress} xp={user.xp} />
+              <XpProgress progress={xpProgress} xp={user.xp} />
 
               <Card>
                 <CardHeader>
@@ -405,8 +405,8 @@ export default async function UserHomePage() {
                       <p className="text-sm text-app-muted">{leader.points} pontos</p>
                     </div>
                   ) : null}
-                  {globalRanking.length > 0 ? (
-                    globalRanking.slice(0, 10).map((ranking) => (
+                  {leagueRanking.length > 0 ? (
+                    leagueRanking.slice(0, 10).map((ranking) => (
                       <div className="flex items-center justify-between gap-3" key={ranking.id}>
                         <div className="flex min-w-0 items-center gap-3">
                           <Avatar name={ranking.user.name} src={ranking.user.avatarUrl} />
