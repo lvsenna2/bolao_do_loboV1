@@ -2020,6 +2020,149 @@ export async function updateLeagueStatusAction(formData: FormData): Promise<Admi
   };
 }
 
+type LeagueRoundSyncSummary = {
+  matchesCreated: number;
+  matchesUpdated: number;
+  roundsCreated: number;
+  roundsUpdated: number;
+};
+
+function createEmptyLeagueRoundSyncSummary(): LeagueRoundSyncSummary {
+  return {
+    matchesCreated: 0,
+    matchesUpdated: 0,
+    roundsCreated: 0,
+    roundsUpdated: 0
+  };
+}
+
+async function syncChampionshipRoundsIntoLeague(leagueId: string, championshipId: string) {
+  const summary = createEmptyLeagueRoundSyncSummary();
+  const sourceRounds = await prisma.round.findMany({
+    include: {
+      matches: {
+        orderBy: {
+          kickoff: "asc"
+        },
+        where: {
+          deletedAt: null
+        }
+      }
+    },
+    orderBy: [
+      {
+        startsAt: "asc"
+      },
+      {
+        number: "asc"
+      }
+    ],
+    where: {
+      leagueId: null,
+      season: {
+        championshipId
+      }
+    }
+  });
+
+  for (const sourceRound of sourceRounds) {
+    const roundData = {
+      description: sourceRound.description,
+      endsAt: sourceRound.endsAt,
+      name: sourceRound.name,
+      startsAt: sourceRound.startsAt,
+      status: sourceRound.status
+    };
+    const existingRound = await prisma.round.findFirst({
+      select: {
+        id: true
+      },
+      where: {
+        leagueId,
+        number: sourceRound.number,
+        seasonId: sourceRound.seasonId
+      }
+    });
+    const targetRound = existingRound
+      ? await prisma.round.update({
+          data: roundData,
+          select: {
+            id: true
+          },
+          where: {
+            id: existingRound.id
+          }
+        })
+      : await prisma.round.create({
+          data: {
+            ...roundData,
+            leagueId,
+            number: sourceRound.number,
+            seasonId: sourceRound.seasonId
+          },
+          select: {
+            id: true
+          }
+        });
+
+    if (existingRound) {
+      summary.roundsUpdated += 1;
+    } else {
+      summary.roundsCreated += 1;
+    }
+
+    for (const match of sourceRound.matches) {
+      const matchData = {
+        awayScore: match.awayScore,
+        awayTeamId: match.awayTeamId,
+        broadcast: match.broadcast,
+        city: match.city,
+        country: match.country,
+        deletedAt: null,
+        homeScore: match.homeScore,
+        homeTeamId: match.homeTeamId,
+        homologatedAt: match.homologatedAt,
+        kickoff: match.kickoff,
+        referee: match.referee,
+        stadium: match.stadium,
+        status: match.status
+      };
+      const existingMatch = await prisma.match.findFirst({
+        select: {
+          id: true
+        },
+        where: {
+          awayTeamId: match.awayTeamId,
+          homeTeamId: match.homeTeamId,
+          kickoff: match.kickoff,
+          roundId: targetRound.id
+        }
+      });
+
+      if (existingMatch) {
+        await prisma.match.update({
+          data: matchData,
+          where: {
+            id: existingMatch.id
+          }
+        });
+        summary.matchesUpdated += 1;
+      } else {
+        await prisma.match.create({
+          data: {
+            ...matchData,
+            apiId: null,
+            roundId: targetRound.id
+          }
+        });
+        summary.matchesCreated += 1;
+      }
+    }
+  }
+
+  return summary;
+}
+
 export async function updateLeagueChampionshipAction(
   formData: FormData
 ): Promise<AdminActionResult> {
@@ -2118,6 +2261,7 @@ export async function updateLeagueChampionshipAction(
       id: league.id
     }
   });
+  const syncSummary = await syncChampionshipRoundsIntoLeague(updatedLeague.id, championship.id);
 
   await createAuditLog(
     admin.id,
@@ -2127,14 +2271,15 @@ export async function updateLeagueChampionshipAction(
     league,
     {
       ...updatedLeague,
-      championshipName: championship.name
+      championshipName: championship.name,
+      syncSummary
     }
   );
   revalidateAdminPaths();
 
   return {
     ok: true,
-    message: "Campeonato da liga atualizado."
+    message: `Campeonato da liga atualizado. ${syncSummary.roundsCreated} rodada(s) e ${syncSummary.matchesCreated} partida(s) sincronizadas.`
   };
 }
 
