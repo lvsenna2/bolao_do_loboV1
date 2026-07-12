@@ -1,0 +1,124 @@
+type AuthEmailInput = {
+  appUrl: string;
+  userName?: string | null;
+};
+
+type PasswordResetEmailInput = AuthEmailInput & {
+  expiresInMinutes: number;
+  resetUrl: string;
+};
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function getGreeting(userName?: string | null) {
+  return userName?.trim() ? `Ola, ${escapeHtml(userName.trim())}!` : "Ola!";
+}
+
+function createEmailLayout(title: string, content: string) {
+  return `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+  </head>
+  <body style="margin:0;background:#061342;color:#f8fafc;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#061342;padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;border:1px solid rgba(255,193,7,.35);border-radius:18px;background:#0b1c5f;overflow:hidden;">
+            <tr>
+              <td style="padding:28px 28px 18px;">
+                <p style="margin:0 0 8px;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;">Bolao do Lobo</p>
+                <h1 style="margin:0;color:#ffffff;font-size:28px;line-height:1.15;">${escapeHtml(title)}</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 28px 28px;color:#dbeafe;font-size:15px;line-height:1.6;">
+                ${content}
+              </td>
+            </tr>
+          </table>
+          <p style="margin:18px 0 0;color:#93a4c7;font-size:12px;">Este e-mail foi enviado automaticamente pelo Bolao do Lobo.</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function createButton(label: string, href: string) {
+  return `<p style="margin:24px 0;"><a href="${escapeHtml(
+    href
+  )}" style="display:inline-block;border-radius:12px;background:#f59e0b;color:#061342;font-weight:700;text-decoration:none;padding:13px 18px;">${escapeHtml(
+    label
+  )}</a></p>`;
+}
+
+export function buildWelcomeEmail({ appUrl, userName }: AuthEmailInput) {
+  const subject = "Bem-vindo ao Bolao do Lobo";
+  const greeting = getGreeting(userName);
+  const html = createEmailLayout(
+    subject,
+    `<p style="margin:0 0 14px;">${greeting}</p>
+    <p style="margin:0 0 14px;">Sua conta esta pronta para acompanhar ligas, palpites, ranking e recompensas do Bolao do Lobo.</p>
+    <p style="margin:0;">Entre no app para conferir suas ligas e continuar sua jornada.</p>
+    ${createButton("Abrir Bolao do Lobo", appUrl)}`
+  );
+
+  return {
+    html,
+    subject,
+    text: `${greeting}\n\nSua conta esta pronta para acompanhar ligas, palpites, ranking e recompensas do Bolao do Lobo.\n\nAcesse: ${appUrl}`
+  };
+}
+
+export function buildPasswordResetEmail({
+  appUrl,
+  expiresInMinutes,
+  resetUrl,
+  userName
+}: PasswordResetEmailInput) {
+  const subject = "Redefinicao de senha do Bolao do Lobo";
+  const greeting = getGreeting(userName);
+  const html = createEmailLayout(
+    subject,
+    `<p style="margin:0 0 14px;">${greeting}</p>
+    <p style="margin:0 0 14px;">Recebemos uma solicitacao para redefinir a senha da sua conta.</p>
+    <p style="margin:0;">O link abaixo expira em ${expiresInMinutes} minutos.</p>
+    ${createButton("Redefinir senha", resetUrl)}
+    <p style="margin:0 0 12px;color:#b6c4e2;">Se voce nao solicitou isso, ignore este e-mail.</p>
+    <p style="margin:0;color:#b6c4e2;">App: ${escapeHtml(appUrl)}</p>`
+  );
+
+  return {
+    html,
+    subject,
+    text: `${greeting}\n\nRecebemos uma solicitacao para redefinir a senha da sua conta.\nO link expira em ${expiresInMinutes} minutos.\n\nRedefinir senha: ${resetUrl}\n\nSe voce nao solicitou isso, ignore este e-mail.\nApp: ${appUrl}`
+  };
+}
+
+export function buildIntegrationAnnouncementEmail({ appUrl, userName }: AuthEmailInput) {
+  const subject = "Novidade no Bolao do Lobo: e-mails ativados";
+  const greeting = getGreeting(userName);
+  const html = createEmailLayout(
+    subject,
+    `<p style="margin:0 0 14px;">${greeting}</p>
+    <p style="margin:0 0 14px;">A central de e-mails do Bolao do Lobo esta ativa. Agora voce podera receber comunicados importantes e recuperar sua senha com mais seguranca.</p>
+    <p style="margin:0;">Nenhuma acao e necessaria agora. Quando precisar, use a opcao "Esqueci minha senha" na tela de login.</p>
+    ${createButton("Acessar o app", appUrl)}`
+  );
+
+  return {
+    html,
+    subject,
+    text: `${greeting}\n\nA central de e-mails do Bolao do Lobo esta ativa. Agora voce podera receber comunicados importantes e recuperar sua senha com mais seguranca.\n\nAcesse: ${appUrl}`
+  };
+}

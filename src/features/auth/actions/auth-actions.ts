@@ -6,6 +6,11 @@ import { hashPassword } from "@/server/auth/password";
 import { addMinutes, createSecureToken } from "@/server/auth/tokens";
 import { serverNow } from "@/lib/date-time";
 import {
+  getPublicAppUrl,
+  sendPasswordResetEmail,
+  sendWelcomeEmailOnce
+} from "@/features/auth/services/auth-email-service";
+import {
   forgotPasswordSchema,
   registerSchema,
   resetPasswordSchema,
@@ -42,13 +47,9 @@ function getEmailFromResetIdentifier(identifier: string) {
   return identifier.slice(PASSWORD_RESET_IDENTIFIER_PREFIX.length);
 }
 
-function getAppUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-}
-
-function logPasswordResetUrl(token: string) {
+function logPasswordResetUrl(resetUrl: string) {
   if (process.env.NODE_ENV !== "production") {
-    console.info(`Bolao do Lobo password reset: ${getAppUrl()}/reset-password?token=${token}`);
+    console.info(`Bolao do Lobo password reset: ${resetUrl}`);
   }
 }
 
@@ -120,7 +121,9 @@ export async function registerUserAction(input: RegisterInput): Promise<AuthActi
         termsAcceptedAt: now
       },
       select: {
-        id: true
+        email: true,
+        id: true,
+        name: true
       }
     });
 
@@ -132,6 +135,8 @@ export async function registerUserAction(input: RegisterInput): Promise<AuthActi
         entityId: user.id
       }
     });
+
+    await sendWelcomeEmailOnce(user).catch(() => null);
 
     return {
       ok: true,
@@ -179,6 +184,7 @@ export async function requestPasswordResetAction(
       deletedAt: null
     },
     select: {
+      name: true,
       id: true,
       email: true,
       status: true
@@ -215,7 +221,22 @@ export async function requestPasswordResetAction(
     })
   ]);
 
-  logPasswordResetUrl(token);
+  const resetUrl = `${getPublicAppUrl()}/reset-password?token=${token}`;
+  const emailResult = await sendPasswordResetEmail({
+    email: user.email,
+    expiresInMinutes: PASSWORD_RESET_EXPIRATION_MINUTES,
+    resetUrl,
+    userName: user.name
+  });
+
+  if (!emailResult.ok) {
+    logPasswordResetUrl(resetUrl);
+
+    return {
+      ok: false,
+      message: emailResult.message
+    };
+  }
 
   return successResponse;
 }

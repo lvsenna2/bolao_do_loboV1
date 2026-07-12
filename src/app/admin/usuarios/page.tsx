@@ -16,6 +16,7 @@ import {
   AdminTh
 } from "@/features/admin/components/admin-table";
 import {
+  sendEmailIntegrationAnnouncementAction,
   softDeleteUserAction,
   updateUserRoleAction,
   updateUserStatusAction
@@ -31,6 +32,8 @@ type UsersPageProps = {
 };
 
 const softDeleteUserFormAction = softDeleteUserAction as unknown as FormAction;
+const sendEmailIntegrationAnnouncementFormAction =
+  sendEmailIntegrationAnnouncementAction as unknown as FormAction;
 const updateUserRoleFormAction = updateUserRoleAction as unknown as FormAction;
 const updateUserStatusFormAction = updateUserStatusAction as unknown as FormAction;
 
@@ -69,6 +72,26 @@ export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
           ))}
         </AdminSelect>
       </AdminFilterForm>
+
+      <div className="rounded-card border border-app-border bg-app-surface p-5 shadow-soft">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-app-foreground">Comunicado por e-mail</h2>
+            <p className="mt-1 max-w-2xl text-sm text-app-muted">
+              Envie um aviso unico para usuarios ativos informando que a recuperacao de senha por
+              e-mail esta disponivel.
+            </p>
+          </div>
+          <form action={sendEmailIntegrationAnnouncementFormAction}>
+            <AdminSubmitButton
+              className="h-11 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
+              pendingLabel="Enviando..."
+            >
+              Enviar aviso
+            </AdminSubmitButton>
+          </form>
+        </div>
+      </div>
 
       {users.length === 0 ? (
         <AdminEmpty />

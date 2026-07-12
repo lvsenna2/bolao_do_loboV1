@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { getTeamPreset } from "@/features/admin/data/team-presets";
+import { sendIntegrationAnnouncementEmailOnce } from "@/features/auth/services/auth-email-service";
 import {
   recalculateLeagueRanking,
   recalculateRankingsForMatch
@@ -21,6 +22,7 @@ import {
 import { serverNow } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
+import { isEmailDeliveryConfigured } from "@/server/email/resend";
 import { fetchApiFootballTeams } from "@/server/football-api/client";
 import {
   footballCompetitionConfigs,
@@ -574,6 +576,76 @@ export async function softDeleteUserAction(formData: FormData): Promise<AdminAct
   return {
     ok: true,
     message: "Usuario removido com soft delete."
+  };
+}
+
+export async function sendEmailIntegrationAnnouncementAction(): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+
+  if (!isEmailDeliveryConfigured()) {
+    return {
+      ok: false,
+      message: "Envio de e-mail nao configurado. Configure RESEND_API_KEY no ambiente."
+    };
+  }
+
+  const users = await prisma.user.findMany({
+    orderBy: {
+      createdAt: "asc"
+    },
+    select: {
+      email: true,
+      id: true,
+      name: true
+    },
+    where: {
+      deletedAt: null,
+      status: "ACTIVE"
+    }
+  });
+
+  let failed = 0;
+  let sent = 0;
+  let skipped = 0;
+
+  for (const user of users) {
+    const result = await sendIntegrationAnnouncementEmailOnce(admin.id, user);
+
+    if (result === "sent") {
+      sent += 1;
+    } else if (result === "skipped") {
+      skipped += 1;
+    } else {
+      failed += 1;
+    }
+  }
+
+  await createAuditLog(
+    admin.id,
+    "admin.email.integration_announcement.sent",
+    "Email",
+    "integration-announcement",
+    undefined,
+    {
+      failed,
+      sent,
+      skipped,
+      total: users.length
+    }
+  );
+
+  revalidateAdminPaths();
+
+  if (failed > 0) {
+    return {
+      ok: false,
+      message: `Aviso enviado para ${sent} usuario(s), ${skipped} ja haviam recebido e ${failed} falharam.`
+    };
+  }
+
+  return {
+    ok: true,
+    message: `Aviso enviado para ${sent} usuario(s). ${skipped} ja haviam recebido.`
   };
 }
 
