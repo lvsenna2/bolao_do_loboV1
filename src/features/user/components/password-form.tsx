@@ -1,10 +1,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { KeyRound, Loader2 } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
+import { LoadingButton } from "@/components/ui/loading-button";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { AuthField } from "@/features/auth/components/auth-field";
 import { applyServerFieldErrors } from "@/features/auth/components/form-error-utils";
@@ -76,15 +77,16 @@ export function PasswordForm() {
         type="password"
         {...register("confirmPassword")}
       />
-      <button
+      <LoadingButton
         className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
         disabled={isPending}
+        icon={<KeyRound aria-hidden className="h-4 w-4" />}
+        isLoading={isPending}
+        loadingLabel="Salvando..."
         type="submit"
       >
-        {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
         Atualizar senha
-        {!isPending ? <KeyRound aria-hidden className="h-4 w-4" /> : null}
-      </button>
+      </LoadingButton>
     </form>
   );
 }

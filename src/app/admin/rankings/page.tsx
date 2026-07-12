@@ -11,6 +11,7 @@ import {
 import { AdminAlert } from "@/features/admin/components/admin-alert";
 import { AdminEmpty } from "@/features/admin/components/admin-empty";
 import { AdminSelect } from "@/features/admin/components/admin-select";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import {
   AdminTable,
   AdminTableBody,
@@ -73,25 +74,25 @@ export default async function AdminRankingsPage({ searchParams }: AdminRankingsP
                   </option>
                 ))}
               </AdminSelect>
-              <button
+              <AdminSubmitButton
                 className="h-10 rounded-button border border-app-border px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold disabled:opacity-60"
                 disabled={leagues.length === 0}
-                type="submit"
+                pendingLabel="Carregando..."
               >
                 Ver ranking
-              </button>
+              </AdminSubmitButton>
             </form>
 
             <form action={recalculateLeagueRankingFormAction}>
               <input name="leagueId" type="hidden" value={selectedLeagueId} />
-              <button
+              <AdminSubmitButton
                 className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
                 disabled={!selectedLeagueId}
-                type="submit"
+                pendingLabel="Recalculando..."
               >
                 <RefreshCw aria-hidden className="h-4 w-4" />
                 Recalcular liga
-              </button>
+              </AdminSubmitButton>
             </form>
           </div>
 
@@ -149,13 +150,13 @@ export default async function AdminRankingsPage({ searchParams }: AdminRankingsP
                 required
               />
             </label>
-            <button
+            <AdminSubmitButton
               className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:opacity-60"
               disabled={!selectedLeagueId || participants.length === 0}
-              type="submit"
+              pendingLabel="Aplicando..."
             >
               Aplicar
-            </button>
+            </AdminSubmitButton>
           </form>
         </CardContent>
       </Card>

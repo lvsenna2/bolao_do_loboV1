@@ -2,24 +2,32 @@
 
 import { LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
+import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
+import { buttonVariants } from "@/components/ui/button";
 
 type SignOutButtonProps = {
   compact?: boolean;
 };
 
 export function SignOutButton({ compact = false }: SignOutButtonProps) {
+  const [isPending, setIsPending] = useState(false);
+
   return (
-    <Button
+    <LoadingButton
       aria-label={compact ? "Sair" : undefined}
-      onClick={() => void signOut({ callbackUrl: "/login" })}
-      size="sm"
+      className={buttonVariants({ size: "sm", variant: "ghost" })}
+      icon={<LogOut aria-hidden className="h-4 w-4" />}
+      isLoading={isPending}
+      loadingLabel={compact ? "" : "Saindo..."}
+      onClick={() => {
+        setIsPending(true);
+        void signOut({ callbackUrl: "/login" });
+      }}
       type="button"
-      variant="ghost"
     >
-      <LogOut aria-hidden className="h-4 w-4" />
       {!compact ? "Sair" : null}
-    </Button>
+    </LoadingButton>
   );
 }

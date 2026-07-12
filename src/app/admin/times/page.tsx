@@ -13,6 +13,7 @@ import { AdminAlert } from "@/features/admin/components/admin-alert";
 import { AdminEmpty } from "@/features/admin/components/admin-empty";
 import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import {
   AdminTable,
   AdminTableBody,
@@ -85,12 +86,12 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
               <input className={inputClass} name="country" placeholder="Pais" required />
               <input className={inputClass} name="logo" placeholder="URL do escudo" type="url" />
               <input className={inputClass} name="apiId" placeholder="ID na API" type="number" />
-              <button
+              <AdminSubmitButton
                 className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
-                type="submit"
+                pendingLabel="Salvando..."
               >
                 Cadastrar time
-              </button>
+              </AdminSubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -110,13 +111,13 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
                 placeholder={`Brasil;BRA;Brasil;https://flagcdn.com/w80/br.png\nArgentina;ARG;Argentina;https://flagcdn.com/w80/ar.png\nFlamengo;FLA;Brasil`}
                 required
               />
-              <button
+              <AdminSubmitButton
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
-                type="submit"
+                pendingLabel="Importando..."
               >
                 <UploadCloud aria-hidden className="h-4 w-4" />
                 Importar lote
-              </button>
+              </AdminSubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -135,9 +136,9 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
               {teamPresetOptions.map((preset) => (
                 <form action={importTeamPresetFormAction} key={preset.id}>
                   <input name="preset" type="hidden" value={preset.id} />
-                  <button
+                  <AdminSubmitButton
                     className="h-full w-full rounded-card border border-app-border bg-app-background p-4 text-left transition hover:border-brand-gold hover:bg-app-elevated"
-                    type="submit"
+                    pendingLabel="Importando..."
                   >
                     <span className="flex items-start gap-3">
                       <Database aria-hidden className="mt-0.5 h-5 w-5 text-brand-gold" />
@@ -153,7 +154,7 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
                         </span>
                       </span>
                     </span>
-                  </button>
+                  </AdminSubmitButton>
                 </form>
               ))}
             </div>
@@ -195,13 +196,13 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
                 placeholder="Temporada"
                 type="number"
               />
-              <button
+              <AdminSubmitButton
                 className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-3"
                 disabled={!result.data.apiConfigured}
-                type="submit"
+                pendingLabel="Importando..."
               >
                 Importar da API
-              </button>
+              </AdminSubmitButton>
             </form>
           </CardContent>
         </Card>

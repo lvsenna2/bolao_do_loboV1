@@ -2,6 +2,7 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { saveGeneralSettingsAction } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import { getAdminSettings } from "@/features/admin/data/admin-data";
 
 export const dynamic = "force-dynamic";
@@ -74,12 +75,12 @@ export default async function AdminSettingsPage() {
               />
             </label>
             <div className="md:col-span-2">
-              <button
+              <AdminSubmitButton
                 className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
-                type="submit"
+                pendingLabel="Salvando..."
               >
                 Salvar configuracoes
-              </button>
+              </AdminSubmitButton>
             </div>
           </form>
         </CardContent>

@@ -14,6 +14,7 @@ import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
 import { AdminSelect } from "@/features/admin/components/admin-select";
 import { AdminStatusBadge } from "@/features/admin/components/admin-status-badge";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import {
   AdminTable,
   AdminTableBody,
@@ -83,12 +84,12 @@ export default async function AdminChampionshipsPage({ searchParams }: Champions
               name="description"
               placeholder="Descricao"
             />
-            <button
+            <AdminSubmitButton
               className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 lg:self-end"
-              type="submit"
+              pendingLabel="Salvando..."
             >
               Cadastrar
-            </button>
+            </AdminSubmitButton>
           </form>
         </CardContent>
       </Card>
@@ -157,12 +158,12 @@ export default async function AdminChampionshipsPage({ searchParams }: Champions
                             </option>
                           ))}
                         </AdminSelect>
-                        <button
+                        <AdminSubmitButton
                           className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                          type="submit"
+                          pendingLabel="Salvando..."
                         >
                           Salvar
-                        </button>
+                        </AdminSubmitButton>
                       </form>
                       <form action={deleteChampionshipFormAction}>
                         <input name="championshipId" type="hidden" value={championship.id} />

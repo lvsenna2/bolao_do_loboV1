@@ -1,7 +1,7 @@
 import { Filter } from "lucide-react";
 import { RoundStatus } from "@prisma/client";
 
-import { Button } from "@/components/ui/button";
+import { FormLoadingButton } from "@/components/ui/loading-button";
 import type { RoundFilterOption } from "../data/round-data";
 import { getRoundStatusLabel } from "../data/round-data";
 
@@ -68,10 +68,14 @@ export function RoundFilterForm({ championships, leagues, searchParams }: RoundF
           ))}
         </select>
       </label>
-      <Button type="submit" variant="secondary">
+      <FormLoadingButton
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-blue hover:text-brand-blue"
+        pendingLabel="Carregando..."
+        type="submit"
+      >
         <Filter aria-hidden className="h-4 w-4" />
         Filtrar
-      </Button>
+      </FormLoadingButton>
     </form>
   );
 }

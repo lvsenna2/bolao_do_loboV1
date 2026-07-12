@@ -1,10 +1,11 @@
 "use client";
 
-import { CreditCard, LogIn, Loader2 } from "lucide-react";
+import { CreditCard, LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { PixPaymentCard } from "@/features/payments/components/pix-payment-card";
 import { joinAvailableLeagueAction } from "../actions/league-actions";
@@ -46,22 +47,23 @@ export function JoinAvailableLeagueButton({
 
   return (
     <div className="space-y-3">
-      <button
+      <LoadingButton
         className={buttonVariants({ size: "sm", variant: requiresPayment ? "primary" : "accent" })}
         disabled={isPending}
-        onClick={onJoin}
-        type="button"
-      >
-        {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
-        {requiresPayment ? "Pagar e entrar" : "Entrar"}
-        {!isPending ? (
+        icon={
           requiresPayment ? (
             <CreditCard aria-hidden className="h-4 w-4" />
           ) : (
             <LogIn aria-hidden className="h-4 w-4" />
           )
-        ) : null}
-      </button>
+        }
+        isLoading={isPending}
+        loadingLabel={requiresPayment ? "Processando..." : "Entrando..."}
+        onClick={onJoin}
+        type="button"
+      >
+        {requiresPayment ? "Pagar e entrar" : "Entrar"}
+      </LoadingButton>
       <ActionAlert message={message} tone="success" />
       <ActionAlert message={error} />
       {paymentIntent ? <PixPaymentCard {...paymentIntent} /> : null}

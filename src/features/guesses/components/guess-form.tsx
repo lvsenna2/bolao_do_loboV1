@@ -1,12 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Save, Trash2, Wand2 } from "lucide-react";
+import { Save, Trash2, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
-import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { cn } from "@/lib/utils";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { applyServerFieldErrors } from "@/features/auth/components/form-error-utils";
@@ -298,28 +298,28 @@ export function GuessForm({
       <ActionAlert message={error} />
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={isPending || isDeleting} type="submit" variant="accent">
-          {isPending ? (
-            <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save aria-hidden className="h-4 w-4" />
-          )}
+        <LoadingButton
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:pointer-events-none disabled:opacity-60"
+          disabled={isDeleting}
+          icon={<Save aria-hidden className="h-4 w-4" />}
+          isLoading={isPending}
+          loadingLabel="Salvando..."
+          type="submit"
+        >
           {existingGuess ? "Atualizar palpite" : "Confirmar palpite"}
-        </Button>
+        </LoadingButton>
         {existingGuess ? (
-          <Button
-            disabled={isPending || isDeleting}
+          <LoadingButton
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-blue hover:text-brand-blue disabled:pointer-events-none disabled:opacity-60"
+            disabled={isPending}
+            icon={<Trash2 aria-hidden className="h-4 w-4" />}
+            isLoading={isDeleting}
+            loadingLabel="Excluindo..."
             onClick={onDelete}
             type="button"
-            variant="secondary"
           >
-            {isDeleting ? (
-              <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 aria-hidden className="h-4 w-4" />
-            )}
             Excluir
-          </Button>
+          </LoadingButton>
         ) : null}
       </div>
     </form>

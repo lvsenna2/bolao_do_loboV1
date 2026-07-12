@@ -93,6 +93,35 @@ async function createLeagueForOwner(
     return null;
   }
 
+  const existingLeague = await prisma.league.findFirst({
+    select: {
+      championship: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      id: true,
+      inviteCode: true,
+      name: true,
+      status: true,
+      visibility: true
+    },
+    where: {
+      championshipId: championship.id,
+      deletedAt: null,
+      name: {
+        equals: input.name,
+        mode: "insensitive"
+      },
+      ownerId
+    }
+  });
+
+  if (existingLeague) {
+    return existingLeague;
+  }
+
   const inviteCode = input.visibility === "PUBLIC" ? null : await createInviteCode();
 
   const league = await prisma.$transaction(async (tx) => {

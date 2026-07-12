@@ -2,11 +2,12 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LeagueVisibility } from "@prisma/client";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
+import { LoadingButton } from "@/components/ui/loading-button";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { AuthField } from "@/features/auth/components/auth-field";
 import { applyServerFieldErrors } from "@/features/auth/components/form-error-utils";
@@ -208,15 +209,16 @@ export function CreateLeagueForm({ admin = false, championships }: CreateLeagueF
       </label>
 
       <div className="flex items-end">
-        <button
+        <LoadingButton
           className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
           disabled={isPending || championships.length === 0}
+          icon={<Plus aria-hidden className="h-4 w-4" />}
+          isLoading={isPending}
+          loadingLabel="Salvando..."
           type="submit"
         >
-          {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
           Criar liga
-          {!isPending ? <Plus aria-hidden className="h-4 w-4" /> : null}
-        </button>
+        </LoadingButton>
       </div>
     </form>
   );

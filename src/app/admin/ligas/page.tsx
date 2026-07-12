@@ -17,6 +17,7 @@ import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
 import { AdminSelect } from "@/features/admin/components/admin-select";
 import { AdminStatusBadge } from "@/features/admin/components/admin-status-badge";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import {
   AdminTable,
   AdminTableBody,
@@ -174,12 +175,12 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                         />
                         {league.xpEnabled ? "Ativo" : "Inativo"}
                       </label>
-                      <button
+                      <AdminSubmitButton
                         className="h-8 rounded-button border border-app-border px-2 text-xs font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
-                        type="submit"
+                        pendingLabel="Salvando..."
                       >
                         Salvar
-                      </button>
+                      </AdminSubmitButton>
                     </form>
                   </AdminTd>
                   <AdminTd>{league._count.members}</AdminTd>
@@ -209,12 +210,12 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                             </option>
                           ))}
                         </AdminSelect>
-                        <button
+                        <AdminSubmitButton
                           className="h-10 rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
-                          type="submit"
+                          pendingLabel="Salvando..."
                         >
                           Campeonato
-                        </button>
+                        </AdminSubmitButton>
                       </form>
                       <form action={updateLeagueStatusFormAction} className="flex gap-2">
                         <input name="leagueId" type="hidden" value={league.id} />
@@ -230,12 +231,12 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                             </option>
                           ))}
                         </AdminSelect>
-                        <button
+                        <AdminSubmitButton
                           className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                          type="submit"
+                          pendingLabel="Salvando..."
                         >
                           Salvar
-                        </button>
+                        </AdminSubmitButton>
                       </form>
                       <form action={deleteLeagueFormAction}>
                         <input name="leagueId" type="hidden" value={league.id} />

@@ -7,6 +7,7 @@ import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
 import { AdminSelect } from "@/features/admin/components/admin-select";
 import { AdminStatusBadge } from "@/features/admin/components/admin-status-badge";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import {
   AdminTable,
   AdminTableBody,
@@ -117,12 +118,12 @@ export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
                           </option>
                         ))}
                       </AdminSelect>
-                      <button
+                      <AdminSubmitButton
                         className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                        type="submit"
+                        pendingLabel="Salvando..."
                       >
                         Salvar
-                      </button>
+                      </AdminSubmitButton>
                     </form>
                   </AdminTd>
                   <AdminTd>
@@ -143,21 +144,21 @@ export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
                           type="hidden"
                           value={user.status === "BLOCKED" ? "ACTIVE" : "BLOCKED"}
                         />
-                        <button
+                        <AdminSubmitButton
                           className="h-9 rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
-                          type="submit"
+                          pendingLabel="Processando..."
                         >
                           {user.status === "BLOCKED" ? "Desbloquear" : "Bloquear"}
-                        </button>
+                        </AdminSubmitButton>
                       </form>
                       <form action={softDeleteUserFormAction}>
                         <input name="userId" type="hidden" value={user.id} />
-                        <button
+                        <AdminSubmitButton
                           className="h-9 rounded-button border border-red-500/30 px-3 text-sm font-semibold text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
-                          type="submit"
+                          pendingLabel="Processando..."
                         >
                           Excluir
-                        </button>
+                        </AdminSubmitButton>
                       </form>
                     </div>
                   </AdminTd>

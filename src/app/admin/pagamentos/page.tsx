@@ -8,6 +8,7 @@ import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
 import { AdminSelect } from "@/features/admin/components/admin-select";
 import { AdminStatusBadge } from "@/features/admin/components/admin-status-badge";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import {
   AdminTable,
   AdminTableBody,
@@ -112,12 +113,12 @@ export default async function AdminPaymentsPage({ searchParams }: PaymentsPagePr
                           </option>
                         ))}
                       </AdminSelect>
-                      <button
+                      <AdminSubmitButton
                         className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                        type="submit"
+                        pendingLabel="Salvando..."
                       >
                         Salvar
-                      </button>
+                      </AdminSubmitButton>
                     </form>
                   </AdminTd>
                 </tr>

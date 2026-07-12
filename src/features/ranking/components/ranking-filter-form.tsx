@@ -1,6 +1,6 @@
 import { Filter } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { FormLoadingButton } from "@/components/ui/loading-button";
 import type { RankingOption, RankingPageData } from "../data/ranking-data";
 
 type RankingFilterFormProps = {
@@ -26,10 +26,15 @@ export function RankingFilterForm({ filters, leagues }: RankingFilterFormProps) 
         </select>
       </label>
 
-      <Button disabled={leagues.length === 0} type="submit" variant="secondary">
+      <FormLoadingButton
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-blue hover:text-brand-blue"
+        disabled={leagues.length === 0}
+        pendingLabel="Carregando..."
+        type="submit"
+      >
         <Filter aria-hidden className="h-4 w-4" />
         Filtrar
-      </Button>
+      </FormLoadingButton>
     </form>
   );
 }

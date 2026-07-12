@@ -9,6 +9,7 @@ import {
   syncFootballCompetitionAction
 } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import { getAdminFootballSyncStatus } from "@/features/admin/data/admin-data";
 
 export const dynamic = "force-dynamic";
@@ -98,34 +99,34 @@ export default async function AdminFootballSyncPage() {
 
           <div className="flex flex-wrap gap-3">
             <form action={syncAllFootballCompetitionsFormAction}>
-              <button
+              <AdminSubmitButton
                 className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!apiConfigured}
-                type="submit"
+                pendingLabel="Sincronizando..."
               >
                 <RefreshCw aria-hidden className="h-4 w-4" />
                 Sincronizar todas
-              </button>
+              </AdminSubmitButton>
             </form>
             <form action={syncAllFootballCompetitionScoresFormAction}>
-              <button
+              <AdminSubmitButton
                 className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!apiConfigured}
-                type="submit"
+                pendingLabel="Atualizando..."
               >
                 <RefreshCw aria-hidden className="h-4 w-4" />
                 Atualizar placares
-              </button>
+              </AdminSubmitButton>
             </form>
             <form action={syncAllFootballCompetitionsFormAction}>
               <input name="force" type="hidden" value="true" />
-              <button
+              <AdminSubmitButton
                 className="inline-flex h-10 items-center gap-2 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!apiConfigured}
-                type="submit"
+                pendingLabel="Sincronizando..."
               >
                 Forcar todas
-              </button>
+              </AdminSubmitButton>
             </form>
           </div>
         </CardContent>
@@ -187,36 +188,36 @@ export default async function AdminFootballSyncPage() {
               <div className="mt-4 flex flex-wrap gap-3">
                 <form action={syncFootballCompetitionFormAction}>
                   <input name="competitionKey" type="hidden" value={competition.key} />
-                  <button
+                  <AdminSubmitButton
                     className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={!apiConfigured}
-                    type="submit"
+                    pendingLabel="Sincronizando..."
                   >
                     <Database aria-hidden className="h-4 w-4" />
                     Sincronizar
-                  </button>
+                  </AdminSubmitButton>
                 </form>
                 <form action={syncFootballCompetitionScoresFormAction}>
                   <input name="competitionKey" type="hidden" value={competition.key} />
-                  <button
+                  <AdminSubmitButton
                     className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={!apiConfigured}
-                    type="submit"
+                    pendingLabel="Atualizando..."
                   >
                     <RefreshCw aria-hidden className="h-4 w-4" />
                     Atualizar placares
-                  </button>
+                  </AdminSubmitButton>
                 </form>
                 <form action={syncFootballCompetitionFormAction}>
                   <input name="competitionKey" type="hidden" value={competition.key} />
                   <input name="force" type="hidden" value="true" />
-                  <button
+                  <AdminSubmitButton
                     className="h-10 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={!apiConfigured}
-                    type="submit"
+                    pendingLabel="Sincronizando..."
                   >
                     Forcar
-                  </button>
+                  </AdminSubmitButton>
                 </form>
               </div>
             </CardContent>

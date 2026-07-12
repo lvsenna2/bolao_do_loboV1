@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FormLoadingButton } from "@/components/ui/loading-button";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { UserStatCard } from "@/features/user/components/user-stat-card";
 import { getXpRankingData } from "@/features/xp/data/xp-ranking-data";
@@ -102,12 +103,12 @@ export default async function XpRankingPage({ searchParams }: XpRankingPageProps
                 ))}
               </select>
             </label>
-            <button
+            <FormLoadingButton
               className="h-10 rounded-button bg-brand-gold px-4 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-              type="submit"
+              pendingLabel="Carregando..."
             >
               Aplicar
-            </button>
+            </FormLoadingButton>
           </form>
         </CardContent>
       </Card>

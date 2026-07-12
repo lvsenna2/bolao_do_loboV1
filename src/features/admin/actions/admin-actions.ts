@@ -589,6 +589,42 @@ export async function createChampionshipAction(formData: FormData): Promise<Admi
   }
 
   const data = parsedInput.data;
+  const existingChampionship = await prisma.championship.findFirst({
+    select: {
+      id: true,
+      name: true
+    },
+    where: {
+      deletedAt: null,
+      OR: [
+        {
+          country: {
+            equals: data.country,
+            mode: "insensitive"
+          },
+          name: {
+            equals: data.name,
+            mode: "insensitive"
+          }
+        },
+        ...(typeof data.apiId === "number" && data.provider
+          ? [
+              {
+                apiId: data.apiId,
+                provider: data.provider
+              }
+            ]
+          : [])
+      ]
+    }
+  });
+
+  if (existingChampionship) {
+    return {
+      ok: true,
+      message: `Campeonato ${existingChampionship.name} ja estava cadastrado.`
+    };
+  }
 
   const championship = await prisma.championship.create({
     data: {
@@ -853,6 +889,26 @@ export async function createTeamAction(formData: FormData): Promise<AdminActionR
   }
 
   const data = parsedInput.data;
+  const parsedApiId = typeof data.apiId === "number" ? data.apiId : null;
+  const existingByApiId = parsedApiId
+    ? await prisma.team.findUnique({
+        select: {
+          id: true,
+          name: true
+        },
+        where: {
+          apiId: parsedApiId
+        }
+      })
+    : null;
+
+  if (existingByApiId) {
+    return {
+      ok: true,
+      message: `Equipe ${existingByApiId.name} ja estava cadastrada.`
+    };
+  }
+
   const existingTeam = await prisma.team.findFirst({
     where: {
       country: data.country,
@@ -872,7 +928,7 @@ export async function createTeamAction(formData: FormData): Promise<AdminActionR
 
   const team = await prisma.team.create({
     data: {
-      apiId: typeof data.apiId === "number" ? data.apiId : null,
+      apiId: parsedApiId,
       country: data.country,
       logo: data.logo || null,
       name: data.name,
@@ -1259,6 +1315,25 @@ export async function createRoundAction(formData: FormData): Promise<AdminAction
     };
   }
 
+  const existingRound = await prisma.round.findFirst({
+    select: {
+      id: true,
+      number: true
+    },
+    where: {
+      leagueId: data.leagueId || null,
+      number: data.number,
+      seasonId: data.seasonId
+    }
+  });
+
+  if (existingRound) {
+    return {
+      ok: true,
+      message: `Rodada ${existingRound.number} ja estava cadastrada.`
+    };
+  }
+
   const round = await prisma.round.create({
     data: {
       description: data.description || null,
@@ -1596,6 +1671,26 @@ export async function createMatchAction(formData: FormData): Promise<AdminAction
     return {
       ok: false,
       message: "A rodada pertence a um campeonato diferente da liga."
+    };
+  }
+
+  const existingMatch = await prisma.match.findFirst({
+    select: {
+      id: true
+    },
+    where: {
+      awayTeamId: data.awayTeamId,
+      deletedAt: null,
+      homeTeamId: data.homeTeamId,
+      kickoff: data.kickoff,
+      roundId: data.roundId
+    }
+  });
+
+  if (existingMatch) {
+    return {
+      ok: true,
+      message: "Partida ja estava cadastrada."
     };
   }
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
+import { LoadingButton } from "@/components/ui/loading-button";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { AuthField } from "@/features/auth/components/auth-field";
 import { applyServerFieldErrors } from "@/features/auth/components/form-error-utils";
@@ -52,15 +53,16 @@ export function DeleteAccountForm() {
         label="Digite EXCLUIR para confirmar"
         {...register("confirm")}
       />
-      <button
+      <LoadingButton
         className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-red px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
         disabled={isPending}
+        icon={<Trash2 aria-hidden className="h-4 w-4" />}
+        isLoading={isPending}
+        loadingLabel="Processando..."
         type="submit"
       >
-        {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
         Excluir conta
-        {!isPending ? <Trash2 aria-hidden className="h-4 w-4" /> : null}
-      </button>
+      </LoadingButton>
     </form>
   );
 }

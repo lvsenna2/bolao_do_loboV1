@@ -1,9 +1,6 @@
-"use client";
-
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { useFormStatus } from "react-dom";
 
-import { cn } from "@/lib/utils";
+import { FormLoadingButton } from "@/components/ui/loading-button";
 
 type AdminSubmitButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
@@ -18,16 +15,15 @@ export function AdminSubmitButton({
   type = "submit",
   ...props
 }: AdminSubmitButtonProps) {
-  const { pending } = useFormStatus();
-
   return (
-    <button
-      className={cn("disabled:cursor-not-allowed disabled:opacity-60", className)}
-      disabled={disabled || pending}
+    <FormLoadingButton
+      className={className}
+      disabled={disabled}
+      pendingLabel={pendingLabel}
       type={type}
       {...props}
     >
-      {pending ? pendingLabel : children}
-    </button>
+      {children}
+    </FormLoadingButton>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
+import { LoadingButton } from "@/components/ui/loading-button";
 import { resetPasswordAction } from "../actions/auth-actions";
 import { resetPasswordSchema, type ResetPasswordInput } from "../schemas/auth-schemas";
 import { ActionAlert } from "./action-alert";
@@ -74,15 +75,16 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
         type="password"
         {...register("confirmPassword")}
       />
-      <button
+      <LoadingButton
         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-70"
         disabled={isPending}
+        icon={<ArrowRight aria-hidden className="h-4 w-4" />}
+        isLoading={isPending}
+        loadingLabel="Salvando..."
         type="submit"
       >
-        {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
         Atualizar senha
-        {!isPending ? <ArrowRight aria-hidden className="h-4 w-4" /> : null}
-      </button>
+      </LoadingButton>
     </form>
   );
 }

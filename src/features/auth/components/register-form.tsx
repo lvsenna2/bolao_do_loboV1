@@ -1,11 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
+import { LoadingButton } from "@/components/ui/loading-button";
 import { registerUserAction } from "../actions/auth-actions";
 import { registerSchema, type RegisterInput } from "../schemas/auth-schemas";
 import { ActionAlert } from "./action-alert";
@@ -119,15 +120,16 @@ export function RegisterForm() {
       {errors.acceptTerms?.message ? (
         <p className="text-sm text-red-600 dark:text-red-300">{errors.acceptTerms.message}</p>
       ) : null}
-      <button
+      <LoadingButton
         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-70"
         disabled={isPending}
+        icon={<ArrowRight aria-hidden className="h-4 w-4" />}
+        isLoading={isPending}
+        loadingLabel="Salvando..."
         type="submit"
       >
-        {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
         Criar conta
-        {!isPending ? <ArrowRight aria-hidden className="h-4 w-4" /> : null}
-      </button>
+      </LoadingButton>
     </form>
   );
 }

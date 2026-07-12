@@ -1,10 +1,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
+import { LoadingButton } from "@/components/ui/loading-button";
 import { requestPasswordResetAction } from "../actions/auth-actions";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "../schemas/auth-schemas";
 import { ActionAlert } from "./action-alert";
@@ -56,15 +57,16 @@ export function ForgotPasswordForm() {
         type="email"
         {...register("email")}
       />
-      <button
+      <LoadingButton
         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-70"
         disabled={isPending}
+        icon={<Mail aria-hidden className="h-4 w-4" />}
+        isLoading={isPending}
+        loadingLabel="Enviando..."
         type="submit"
       >
-        {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
         Enviar instrucoes
-        {!isPending ? <Mail aria-hidden className="h-4 w-4" /> : null}
-      </button>
+      </LoadingButton>
     </form>
   );
 }

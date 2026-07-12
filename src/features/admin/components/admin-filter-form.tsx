@@ -1,5 +1,7 @@
 import { Search } from "lucide-react";
 
+import { FormLoadingButton } from "@/components/ui/loading-button";
+
 type AdminFilterFormProps = {
   actionLabel?: string;
   children?: React.ReactNode;
@@ -32,12 +34,13 @@ export function AdminFilterForm({
         </div>
       </label>
       {children}
-      <button
+      <FormLoadingButton
         className="inline-flex h-10 items-center justify-center rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+        pendingLabel="Carregando..."
         type="submit"
       >
         {actionLabel}
-      </button>
+      </FormLoadingButton>
     </form>
   );
 }

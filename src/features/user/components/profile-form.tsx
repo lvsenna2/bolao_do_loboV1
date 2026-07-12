@@ -1,12 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Camera, Loader2, Save, Trash2 } from "lucide-react";
+import { Camera, Save, Trash2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
 import { Avatar } from "@/components/ui/avatar";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { AuthField } from "@/features/auth/components/auth-field";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { applyServerFieldErrors } from "@/features/auth/components/form-error-utils";
@@ -174,7 +175,11 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
       <div className="space-y-3 md:col-span-2">
         <span className="text-sm font-medium text-app-foreground">Foto de perfil</span>
         <div className="flex flex-col gap-4 rounded-control border border-app-border bg-app-background p-4 sm:flex-row sm:items-center">
-          <Avatar className="h-20 w-20 text-xl" name={defaultValues.firstName} src={avatarPreview} />
+          <Avatar
+            className="h-20 w-20 text-xl"
+            name={defaultValues.firstName}
+            src={avatarPreview}
+          />
           <div className="flex-1 space-y-3">
             <div className="flex flex-wrap gap-2">
               <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400">
@@ -232,15 +237,16 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
         </select>
       </label>
       <div className="md:col-span-2">
-        <button
+        <LoadingButton
           className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
           disabled={isPending}
+          icon={<Save aria-hidden className="h-4 w-4" />}
+          isLoading={isPending}
+          loadingLabel="Salvando..."
           type="submit"
         >
-          {isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : null}
           Salvar perfil
-          {!isPending ? <Save aria-hidden className="h-4 w-4" /> : null}
-        </button>
+        </LoadingButton>
       </div>
     </form>
   );

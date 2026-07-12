@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FormLoadingButton } from "@/components/ui/loading-button";
 import { requireUser } from "@/server/auth/session";
 import {
   markAllNotificationsReadAction,
@@ -92,14 +93,14 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
       actions={
         <form action={markAllNotificationsReadAction}>
           <input name="filter" type="hidden" value={filter} />
-          <button
+          <FormLoadingButton
             className="inline-flex h-9 items-center justify-center gap-2 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
             disabled={filterUnread === 0}
-            type="submit"
+            pendingLabel="Processando..."
           >
             <CheckCheck aria-hidden className="h-4 w-4" />
             Marcar todas como lidas
-          </button>
+          </FormLoadingButton>
         </form>
       }
       description="Central de resultados, pagamentos, convites, conquistas e avisos do sistema."
@@ -174,12 +175,12 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
                     {!notification.isRead ? (
                       <form action={markNotificationReadAction}>
                         <input name="notificationId" type="hidden" value={notification.id} />
-                        <button
+                        <FormLoadingButton
                           className="h-9 rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-blue hover:text-brand-blue"
-                          type="submit"
+                          pendingLabel="Salvando..."
                         >
                           Marcar como lida
-                        </button>
+                        </FormLoadingButton>
                       </form>
                     ) : null}
                   </div>

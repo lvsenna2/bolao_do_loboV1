@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FormLoadingButton } from "@/components/ui/loading-button";
 import { getGuessComparisonData } from "@/features/guesses/data/comparison-data";
 import type { ComparisonGuessView } from "@/features/guesses/data/comparison-data";
 import { UserAlert } from "@/features/user/components/user-alert";
@@ -83,12 +84,12 @@ export default async function CompareGuessesPage({ searchParams }: CompareGuesse
                   ))}
                 </select>
               </label>
-              <button
+              <FormLoadingButton
                 className="h-11 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
-                type="submit"
+                pendingLabel="Carregando..."
               >
                 Ver comparacao
-              </button>
+              </FormLoadingButton>
             </form>
           ) : (
             <EmptyState

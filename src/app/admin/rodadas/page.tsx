@@ -146,13 +146,13 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                 ))}
               </AdminSelect>
               <textarea className={textareaClass} name="description" placeholder="Descricao" />
-              <button
+              <AdminSubmitButton
                 className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
                 disabled={seasons.length === 0}
-                type="submit"
+                pendingLabel="Salvando..."
               >
                 Cadastrar rodada
-              </button>
+              </AdminSubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -207,13 +207,13 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                   </option>
                 ))}
               </AdminSelect>
-              <button
+              <AdminSubmitButton
                 className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
                 disabled={!canCreateMatch}
-                type="submit"
+                pendingLabel="Salvando..."
               >
                 Cadastrar partida
-              </button>
+              </AdminSubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -300,22 +300,22 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                           </option>
                         ))}
                       </AdminSelect>
-                      <button
+                      <AdminSubmitButton
                         className="h-9 rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
-                        type="submit"
+                        pendingLabel="Salvando..."
                       >
                         Salvar
-                      </button>
+                      </AdminSubmitButton>
                     </form>
                     <form action={openRoundFormAction} className="mt-2">
                       <input name="roundId" type="hidden" value={round.id} />
-                      <button
+                      <AdminSubmitButton
                         className="h-9 rounded-button bg-brand-gold px-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={round.status === "OPEN"}
-                        type="submit"
+                        pendingLabel="Abrindo..."
                       >
                         {round.status === "OPEN" ? "Aberta" : "Abrir"}
-                      </button>
+                      </AdminSubmitButton>
                     </form>
                     <form action={deleteRoundFormAction} className="mt-2">
                       <input name="roundId" type="hidden" value={round.id} />
@@ -364,12 +364,12 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                                     </option>
                                   ))}
                                 </AdminSelect>
-                                <button
+                                <AdminSubmitButton
                                   className="h-9 rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
-                                  type="submit"
+                                  pendingLabel="Salvando..."
                                 >
                                   Salvar
-                                </button>
+                                </AdminSubmitButton>
                               </form>
                             </div>
 
