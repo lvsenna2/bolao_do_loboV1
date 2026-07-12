@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getTeamLogoSrc } from "@/lib/team-logo";
 import { cn } from "@/lib/utils";
 import { getMatchStatusLabel, getRoundStatusLabel } from "@/features/rounds/data/round-data";
 import { UserAlert } from "@/features/user/components/user-alert";
@@ -42,14 +43,18 @@ function getInitials(name: string) {
 }
 
 function TeamMark({
+  apiId,
   logo,
   name,
   shortName
 }: {
+  apiId: number | null;
   logo: string | null;
   name: string;
   shortName: string | null;
 }) {
+  const logoSrc = getTeamLogoSrc({ apiId, logo });
+
   return (
     <span className="flex min-w-0 items-center gap-2">
       <span
@@ -57,8 +62,13 @@ function TeamMark({
         className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground"
         role="img"
       >
-        {logo ? (
-          <img alt="" className="h-7 w-7 object-contain" referrerPolicy="no-referrer" src={logo} />
+        {logoSrc ? (
+          <img
+            alt=""
+            className="h-7 w-7 object-contain"
+            referrerPolicy="no-referrer"
+            src={logoSrc}
+          />
         ) : (
           getInitials(shortName || name)
         )}
@@ -497,7 +507,9 @@ export default async function UserHomePage() {
                         key={notification.id}
                       >
                         <p className="font-medium text-app-foreground">{notification.title}</p>
-                        <p className="mt-1 text-sm text-app-muted">{notification.body}</p>
+                        <p className="mt-1 text-sm text-app-muted">
+                          {notification.message ?? notification.body}
+                        </p>
                       </div>
                     ))
                   ) : (

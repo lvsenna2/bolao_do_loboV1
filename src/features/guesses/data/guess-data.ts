@@ -12,6 +12,7 @@ import type { GuessDataResult } from "../types/guess-action-result";
 export { getPointsPreview, getScoringDefaults, type ScoringDefaults };
 
 type TeamView = {
+  apiId: number | null;
   id: string;
   logo: string | null;
   name: string;
@@ -104,6 +105,7 @@ const guessSelect = {
 } satisfies Prisma.GuessSelect;
 
 const teamSelect = {
+  apiId: true,
   id: true,
   logo: true,
   name: true,

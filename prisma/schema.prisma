@@ -120,6 +120,7 @@ enum NotificationType {
   MATCH
   PAYMENT
   RANKING
+  XP
 }
 
 enum BadgeRarity {
@@ -646,19 +647,28 @@ model Payment {
 }
 
 model Notification {
-  id        String           @id @default(uuid()) @db.Uuid
-  userId    String           @map("user_id") @db.Uuid
-  title     String           @db.VarChar(200)
-  body      String
-  type      NotificationType @default(INFO)
-  readAt    DateTime?        @map("read_at")
-  createdAt DateTime         @default(now()) @map("created_at")
+  id              String           @id @default(uuid()) @db.Uuid
+  userId          String           @map("user_id") @db.Uuid
+  title           String           @db.VarChar(200)
+  body            String
+  message         String?
+  type            NotificationType @default(INFO)
+  readAt          DateTime?        @map("read_at")
+  isRead          Boolean          @default(false) @map("is_read")
+  xpReceived      Int?             @map("xp_received")
+  levelAfter      Int?             @map("level_after")
+  relatedEntityId String?          @map("related_entity_id") @db.VarChar(180)
+  uniqueKey       String?          @unique @map("unique_key") @db.VarChar(220)
+  icon            String?          @db.VarChar(40)
+  createdAt       DateTime         @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([type])
   @@index([createdAt])
+  @@index([userId, type, createdAt], map: "notifications_user_type_created_at_idx")
+  @@index([userId, isRead], map: "notifications_user_is_read_idx")
   @@map("notifications")
 }
 

@@ -12,11 +12,14 @@ import { ThemeToggle } from "./theme-toggle";
 
 type AppTopbarProps = {
   mode?: "user" | "admin";
+  unreadNotificationCount?: number;
   user: Session["user"];
 };
 
-export function AppTopbar({ mode = "user", user }: AppTopbarProps) {
+export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: AppTopbarProps) {
   const userMode = mode === "user";
+  const notificationBadgeLabel =
+    unreadNotificationCount > 99 ? "99+" : String(unreadNotificationCount);
 
   return (
     <header
@@ -63,7 +66,11 @@ export function AppTopbar({ mode = "user", user }: AppTopbarProps) {
             href={"/notificacoes" as Route}
           >
             <Bell aria-hidden className="h-4 w-4" />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-brand-gold" />
+            {unreadNotificationCount > 0 ? (
+              <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold leading-5 text-slate-950">
+                {notificationBadgeLabel}
+              </span>
+            ) : null}
           </Link>
           {userMode ? null : <ThemeToggle />}
           <div

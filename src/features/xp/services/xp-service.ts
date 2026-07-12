@@ -7,6 +7,7 @@ type XpClient = typeof prisma | Prisma.TransactionClient;
 
 export const XP_EVENT_TYPES = {
   ADMIN_ADJUSTMENT: "ADMIN_ADJUSTMENT",
+  DAILY_LOGIN: "DAILY_LOGIN",
   EXACT_SCORE: "EXACT_SCORE",
   GUESS_SUBMITTED: "GUESS_SUBMITTED",
   MISSION_REWARD: "MISSION_REWARD",
@@ -83,6 +84,15 @@ function getDayDifference(a: Date, b: Date) {
   return Math.round((first - second) / 86_400_000);
 }
 
+function getSaoPauloDateKey(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+    year: "numeric"
+  }).format(date);
+}
+
 function normalizeJson(value: unknown): Prisma.InputJsonValue | undefined {
   if (value === undefined) {
     return undefined;
@@ -120,6 +130,196 @@ function isUniqueConstraintError(error: unknown) {
     "code" in error &&
     (error as { code?: string }).code === "P2002"
   );
+}
+
+function getRelatedEntityId(input: {
+  adminId?: string | null;
+  guessId?: string | null;
+  leagueId?: string | null;
+  matchId?: string | null;
+  seasonId?: string | null;
+  uniqueKey: string;
+}) {
+  const missionMatch = input.uniqueKey.match(/^mission:([^:]+):/);
+
+  return (
+    input.guessId ??
+    input.matchId ??
+    missionMatch?.[1] ??
+    input.leagueId ??
+    input.seasonId ??
+    input.adminId ??
+    null
+  );
+}
+
+function getXpNotificationContent(type: XpEventType, amount: number) {
+  const signedAmount = amount >= 0 ? `+${amount}` : String(amount);
+
+  switch (type) {
+    case XP_EVENT_TYPES.GUESS_SUBMITTED:
+      return {
+        icon: "clipboard-check",
+        title: `${signedAmount} XP`,
+        message: `Voce recebeu ${signedAmount} XP por realizar um palpite.`
+      };
+    case XP_EVENT_TYPES.RESULT_HIT:
+      return {
+        icon: "target",
+        title: "Resultado correto!",
+        message: `Voce recebeu ${signedAmount} XP por acertar o vencedor da partida.`
+      };
+    case XP_EVENT_TYPES.EXACT_SCORE:
+      return {
+        icon: "crosshair",
+        title: "Placar exato!",
+        message: `Voce recebeu ${signedAmount} XP por acertar o placar exato.`
+      };
+    case XP_EVENT_TYPES.MISSION_REWARD:
+      return {
+        icon: "trophy",
+        title: "Missao concluida",
+        message: `Parabens! Voce ganhou ${signedAmount} XP.`
+      };
+    case XP_EVENT_TYPES.DAILY_LOGIN:
+      return {
+        icon: "calendar-check",
+        title: "Login diario",
+        message: `Voce recebeu ${signedAmount} XP pelo bonus de login.`
+      };
+    case XP_EVENT_TYPES.STREAK_3_DAYS:
+    case XP_EVENT_TYPES.STREAK_7_DAYS:
+    case XP_EVENT_TYPES.STREAK_15_DAYS:
+      return {
+        icon: "flame",
+        title: "Sequencia de participacao",
+        message: `Voce recebeu ${signedAmount} XP por manter sua sequencia ativa.`
+      };
+    case XP_EVENT_TYPES.ADMIN_ADJUSTMENT:
+      return {
+        icon: amount >= 0 ? "gift" : "settings",
+        title: amount >= 0 ? "Recompensa especial" : "Ajuste de XP",
+        message:
+          amount >= 0
+            ? `Voce recebeu ${signedAmount} XP como recompensa especial.`
+            : `Seu XP foi ajustado em ${signedAmount} XP.`
+      };
+    default:
+      return {
+        icon: "sparkles",
+        title: `${signedAmount} XP`,
+        message: `Voce recebeu ${signedAmount} XP.`
+      };
+  }
+}
+
+async function createXpNotification(
+  client: Prisma.TransactionClient,
+  input: {
+    adminId?: string | null;
+    amount: number;
+    guessId?: string | null;
+    leagueId?: string | null;
+    matchId?: string | null;
+    seasonId?: string | null;
+    type: XpEventType;
+    uniqueKey: string;
+    userId: string;
+  },
+  levelAfter: number
+) {
+  const content = getXpNotificationContent(input.type, input.amount);
+  const notificationKey = `xp:${input.uniqueKey}`;
+
+  await client.notification.upsert({
+    create: {
+      body: content.message,
+      icon: content.icon,
+      isRead: false,
+      levelAfter,
+      message: content.message,
+      relatedEntityId: getRelatedEntityId(input),
+      title: content.title,
+      type: "XP",
+      uniqueKey: notificationKey,
+      userId: input.userId,
+      xpReceived: input.amount
+    },
+    update: {},
+    where: {
+      uniqueKey: notificationKey
+    }
+  });
+}
+
+async function createLevelUpNotification(
+  client: Prisma.TransactionClient,
+  input: {
+    amount: number;
+    uniqueKey: string;
+    userId: string;
+  },
+  level: XpLevelView
+) {
+  await client.notification.upsert({
+    create: {
+      body: `Voce alcancou a patente ${level.name}.`,
+      icon: "medal",
+      isRead: false,
+      levelAfter: level.sortOrder,
+      message: `Voce alcancou a patente ${level.name}.`,
+      relatedEntityId: level.id,
+      title: "Novo nivel!",
+      type: "XP",
+      uniqueKey: `xp-level:${input.userId}:${level.key}`,
+      userId: input.userId,
+      xpReceived: input.amount
+    },
+    update: {},
+    where: {
+      uniqueKey: `xp-level:${input.userId}:${level.key}`
+    }
+  });
+}
+
+async function createAchievementNotification(
+  client: XpClient,
+  userId: string,
+  badge: {
+    description: string;
+    id: string;
+    key: string | null;
+    title: string;
+  }
+) {
+  const user = await client.user.findUnique({
+    select: {
+      level: true
+    },
+    where: {
+      id: userId
+    }
+  });
+
+  await client.notification.upsert({
+    create: {
+      body: `Conquista desbloqueada: ${badge.description}`,
+      icon: "award",
+      isRead: false,
+      levelAfter: user?.level ?? null,
+      message: `Conquista desbloqueada: ${badge.description}`,
+      relatedEntityId: badge.id,
+      title: badge.title,
+      type: "XP",
+      uniqueKey: `achievement:${userId}:${badge.key ?? badge.id}`,
+      userId,
+      xpReceived: 0
+    },
+    update: {},
+    where: {
+      uniqueKey: `achievement:${userId}:${badge.key ?? badge.id}`
+    }
+  });
 }
 
 function isTestLeagueName(name: string) {
@@ -267,6 +467,19 @@ export async function grantXp(input: {
       };
     }
 
+    const [currentUser, levels] = await Promise.all([
+      tx.user.findUnique({
+        select: {
+          xp: true
+        },
+        where: {
+          id: input.userId
+        }
+      }),
+      getActiveXpLevels(tx)
+    ]);
+    const previousLevel = getLevelForXp(currentUser?.xp ?? 0, levels);
+
     try {
       await tx.xpEvent.create({
         data: {
@@ -295,6 +508,33 @@ export async function grantXp(input: {
     }
 
     const snapshot = await syncUserXpSnapshot(input.userId, tx);
+    await createXpNotification(
+      tx,
+      {
+        adminId: input.adminId ?? null,
+        amount,
+        guessId: input.guessId ?? null,
+        leagueId: input.leagueId ?? null,
+        matchId: input.matchId ?? null,
+        seasonId: input.seasonId ?? null,
+        type: input.type,
+        uniqueKey: input.uniqueKey,
+        userId: input.userId
+      },
+      snapshot.level.sortOrder
+    );
+
+    if (snapshot.level.minXp > previousLevel.minXp) {
+      await createLevelUpNotification(
+        tx,
+        {
+          amount,
+          uniqueKey: input.uniqueKey,
+          userId: input.userId
+        },
+        snapshot.level
+      );
+    }
 
     return {
       created: true,
@@ -792,7 +1032,10 @@ export async function evaluateAchievementsForUser(userId: string) {
 
   const badges = await prisma.badge.findMany({
     select: {
-      id: true
+      description: true,
+      id: true,
+      key: true,
+      title: true
     },
     where: {
       key: {
@@ -805,15 +1048,49 @@ export async function evaluateAchievementsForUser(userId: string) {
     return 0;
   }
 
+  const existingAchievements = await prisma.achievement.findMany({
+    select: {
+      badgeId: true
+    },
+    where: {
+      badgeId: {
+        in: badges.map((badge) => badge.id)
+      },
+      userId
+    }
+  });
+  const existingBadgeIds = new Set(existingAchievements.map((achievement) => achievement.badgeId));
+  const newBadges = badges.filter((badge) => !existingBadgeIds.has(badge.id));
+
+  if (newBadges.length === 0) {
+    return 0;
+  }
+
   const result = await prisma.achievement.createMany({
-    data: badges.map((badge) => ({
+    data: newBadges.map((badge) => ({
       badgeId: badge.id,
       userId
     })),
     skipDuplicates: true
   });
 
+  await Promise.all(newBadges.map((badge) => createAchievementNotification(prisma, userId, badge)));
+
   return result.count;
+}
+
+export async function grantDailyLoginXp(userId: string, date = new Date()) {
+  const dateKey = getSaoPauloDateKey(date);
+
+  return grantXp({
+    metadata: {
+      date: dateKey,
+      source: "daily-login"
+    },
+    type: XP_EVENT_TYPES.DAILY_LOGIN,
+    uniqueKey: `daily-login:${userId}:${dateKey}`,
+    userId
+  });
 }
 
 export async function grantManualXp(input: {

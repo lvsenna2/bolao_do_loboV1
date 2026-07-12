@@ -6,14 +6,21 @@ import { cn } from "@/lib/utils";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopbar } from "./app-topbar";
 import { MobileBottomNav } from "./mobile-bottom-nav";
+import { XpNotificationToast } from "./xp-notification-toast";
 
 type AppShellProps = {
   children: ReactNode;
   mode?: "user" | "admin";
+  unreadNotificationCount?: number;
   user: Session["user"];
 };
 
-export function AppShell({ children, mode = "user", user }: AppShellProps) {
+export function AppShell({
+  children,
+  mode = "user",
+  unreadNotificationCount = 0,
+  user
+}: AppShellProps) {
   return (
     <div
       className={cn(
@@ -40,10 +47,11 @@ export function AppShell({ children, mode = "user", user }: AppShellProps) {
             mode === "user" ? "min-h-screen" : ""
           )}
         >
-          <AppTopbar mode={mode} user={user} />
+          <AppTopbar mode={mode} unreadNotificationCount={unreadNotificationCount} user={user} />
           <main className="flex-1">{children}</main>
         </div>
       </div>
+      {mode === "user" ? <XpNotificationToast /> : null}
       {mode === "user" ? <MobileBottomNav /> : null}
     </div>
   );

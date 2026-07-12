@@ -203,6 +203,7 @@ export async function markNotificationReadAction(formData: FormData): Promise<vo
       userId: sessionUser.id
     },
     data: {
+      isRead: true,
       readAt: new Date()
     }
   });
@@ -210,15 +211,18 @@ export async function markNotificationReadAction(formData: FormData): Promise<vo
   revalidatePath("/notificacoes");
 }
 
-export async function markAllNotificationsReadAction(): Promise<void> {
+export async function markAllNotificationsReadAction(formData: FormData): Promise<void> {
   const sessionUser = await requireUser();
+  const filter = formData.get("filter");
 
   await prisma.notification.updateMany({
     where: {
-      userId: sessionUser.id,
-      readAt: null
+      ...(filter === "xp" ? { type: "XP" as const } : {}),
+      isRead: false,
+      userId: sessionUser.id
     },
     data: {
+      isRead: true,
       readAt: new Date()
     }
   });

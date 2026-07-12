@@ -5,6 +5,7 @@ import { prisma } from "@/server/db";
 type SearchParams = Record<string, string | string[] | undefined>;
 
 type TeamView = {
+  apiId: number | null;
   id: string;
   logo: string | null;
   name: string;
@@ -84,6 +85,7 @@ export type RoundDataResult<T> =
     };
 
 const teamSelect = {
+  apiId: true,
   id: true,
   logo: true,
   name: true,

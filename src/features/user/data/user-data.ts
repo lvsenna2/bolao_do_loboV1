@@ -157,8 +157,8 @@ export async function getUserHomeData(userId: string) {
       }),
       prisma.notification.count({
         where: {
-          userId,
-          readAt: null
+          isRead: false,
+          userId
         }
       })
     ]);
@@ -278,6 +278,7 @@ export async function getUserHomeData(userId: string) {
         select: {
           awayTeam: {
             select: {
+              apiId: true,
               logo: true,
               name: true,
               shortName: true
@@ -285,6 +286,7 @@ export async function getUserHomeData(userId: string) {
           },
           homeTeam: {
             select: {
+              apiId: true,
               logo: true,
               name: true,
               shortName: true
@@ -905,33 +907,53 @@ export async function getUserNotifications(
 ) {
   const empty = {
     filter: "all",
+    filterUnread: 0,
     items: [],
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
     unread: 0
   };
 
   try {
     const filterValue = searchParams.filter;
     const filter = Array.isArray(filterValue) ? filterValue[0] : (filterValue ?? "all");
+    const pageValue = searchParams.page;
+    const pageNumber = Number(Array.isArray(pageValue) ? pageValue[0] : pageValue);
+    const page = Number.isFinite(pageNumber) && pageNumber > 0 ? Math.floor(pageNumber) : 1;
+    const pageSize = 20;
     const where = {
       userId,
-      ...(filter === "unread" ? { readAt: null } : {}),
+      ...(filter === "unread" ? { isRead: false } : {}),
       ...(filter === "system" ? { type: "SYSTEM" as const } : {}),
-      ...(filter === "payment" ? { type: "PAYMENT" as const } : {})
+      ...(filter === "payment" ? { type: "PAYMENT" as const } : {}),
+      ...(filter === "xp" ? { type: "XP" as const } : {})
     };
 
-    const [items, unread] = await prisma.$transaction([
+    const [items, unread, filterUnread, total] = await prisma.$transaction([
       prisma.notification.findMany({
         orderBy: {
           createdAt: "desc"
         },
-        take: 50,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
         where
       }),
       prisma.notification.count({
         where: {
           userId,
-          readAt: null
+          isRead: false
         }
+      }),
+      prisma.notification.count({
+        where: {
+          ...where,
+          isRead: false
+        }
+      }),
+      prisma.notification.count({
+        where
       })
     ]);
 
@@ -939,12 +961,30 @@ export async function getUserNotifications(
       ok: true as const,
       data: {
         filter,
+        filterUnread,
         items,
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
         unread
       }
     };
   } catch {
     return emptyResult("Nao foi possivel carregar suas notificacoes.", empty);
+  }
+}
+
+export async function getUnreadNotificationCount(userId: string) {
+  try {
+    return prisma.notification.count({
+      where: {
+        isRead: false,
+        userId
+      }
+    });
+  } catch {
+    return 0;
   }
 }
 

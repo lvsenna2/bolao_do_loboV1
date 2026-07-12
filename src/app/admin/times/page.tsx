@@ -22,6 +22,7 @@ import {
 } from "@/features/admin/components/admin-table";
 import { teamPresetOptions } from "@/features/admin/data/team-presets";
 import { getAdminTeams } from "@/features/admin/data/admin-data";
+import { getTeamLogoSrc } from "@/lib/team-logo";
 
 export const dynamic = "force-dynamic";
 
@@ -226,37 +227,41 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
               </tr>
             </AdminTableHead>
             <AdminTableBody>
-              {teams.map((team) => (
-                <tr key={team.id}>
-                  <AdminTd>
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground">
-                        {team.logo ? (
-                          <img
-                            alt=""
-                            className="h-8 w-8 object-contain"
-                            referrerPolicy="no-referrer"
-                            src={team.logo}
-                          />
-                        ) : (
-                          getInitials(team.name)
-                        )}
-                      </span>
-                      <div>
-                        <p className="font-semibold">{team.name}</p>
-                        <p className="text-xs text-app-muted">{team.shortName || "Sem sigla"}</p>
+              {teams.map((team) => {
+                const logoSrc = getTeamLogoSrc(team);
+
+                return (
+                  <tr key={team.id}>
+                    <AdminTd>
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground">
+                          {logoSrc ? (
+                            <img
+                              alt=""
+                              className="h-8 w-8 object-contain"
+                              referrerPolicy="no-referrer"
+                              src={logoSrc}
+                            />
+                          ) : (
+                            getInitials(team.name)
+                          )}
+                        </span>
+                        <div>
+                          <p className="font-semibold">{team.name}</p>
+                          <p className="text-xs text-app-muted">{team.shortName || "Sem sigla"}</p>
+                        </div>
                       </div>
-                    </div>
-                  </AdminTd>
-                  <AdminTd>{team.country}</AdminTd>
-                  <AdminTd>
-                    <p>{team.apiId ? "API-Football" : "Manual"}</p>
-                    <p className="text-xs text-app-muted">{team.apiId ?? ""}</p>
-                  </AdminTd>
-                  <AdminTd>{team._count.homeMatches + team._count.awayMatches} partidas</AdminTd>
-                  <AdminTd>{formatDate(team.createdAt)}</AdminTd>
-                </tr>
-              ))}
+                    </AdminTd>
+                    <AdminTd>{team.country}</AdminTd>
+                    <AdminTd>
+                      <p>{team.apiId ? "API-Football" : "Manual"}</p>
+                      <p className="text-xs text-app-muted">{team.apiId ?? ""}</p>
+                    </AdminTd>
+                    <AdminTd>{team._count.homeMatches + team._count.awayMatches} partidas</AdminTd>
+                    <AdminTd>{formatDate(team.createdAt)}</AdminTd>
+                  </tr>
+                );
+              })}
             </AdminTableBody>
           </AdminTable>
           <AdminPagination

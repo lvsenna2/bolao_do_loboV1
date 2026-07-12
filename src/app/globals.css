@@ -198,6 +198,10 @@ textarea {
   animation: xp-medal-breathe 3.4s ease-in-out infinite;
 }
 
+.xp-toast {
+  animation: xp-toast-enter 320ms ease-out both;
+}
+
 [data-shell-mode="user"] .bg-app-surface {
   border-color: rgb(255 255 255 / 0.14);
   background:
@@ -501,9 +505,22 @@ textarea {
   }
 }
 
+@keyframes xp-toast-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(16px, -8px, 0) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .xp-progress-fill::after,
-  .xp-medal-breathe {
+  .xp-medal-breathe,
+  .xp-toast {
     animation: none;
   }
 }

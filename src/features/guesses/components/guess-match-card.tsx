@@ -3,6 +3,7 @@ import { CalendarClock, MapPin, ShieldCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getTeamLogoSrc } from "@/lib/team-logo";
 import { formatGuessDate, type AvailableMatchView } from "../data/guess-data";
 import { GuessForm } from "./guess-form";
 
@@ -11,6 +12,7 @@ type GuessMatchCardProps = {
 };
 
 type TeamMarkProps = {
+  apiId: number | null;
   logo: string | null;
   name: string;
   shortName: string | null;
@@ -26,7 +28,9 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function TeamMark({ logo, name, shortName }: TeamMarkProps) {
+function TeamMark({ apiId, logo, name, shortName }: TeamMarkProps) {
+  const logoSrc = getTeamLogoSrc({ apiId, logo });
+
   return (
     <div className="flex min-w-0 items-center gap-3">
       <span
@@ -34,8 +38,13 @@ function TeamMark({ logo, name, shortName }: TeamMarkProps) {
         className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-sm font-bold text-app-foreground"
         role="img"
       >
-        {logo ? (
-          <img alt="" className="h-8 w-8 object-contain" referrerPolicy="no-referrer" src={logo} />
+        {logoSrc ? (
+          <img
+            alt=""
+            className="h-8 w-8 object-contain"
+            referrerPolicy="no-referrer"
+            src={logoSrc}
+          />
         ) : (
           getInitials(shortName || name)
         )}

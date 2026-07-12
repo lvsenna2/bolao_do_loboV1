@@ -3,6 +3,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
 import { loginSchema } from "@/features/auth/schemas/auth-schemas";
+import { grantDailyLoginXp } from "@/features/xp/services/xp-service";
 import { prisma } from "@/server/db";
 import { verifyPassword } from "./password";
 
@@ -103,6 +104,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         await registerLoginAudit(user.id, true);
+        await grantDailyLoginXp(user.id).catch(() => null);
 
         return {
           id: user.id,
