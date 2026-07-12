@@ -19,6 +19,15 @@ type LoginFormProps = {
 const adminRoles = new Set(["ADMIN", "SUPER_ADMIN"]);
 const defaultCallbackUrl = "/dashboard";
 
+async function getSessionWithTimeout() {
+  return Promise.race([
+    getSession(),
+    new Promise<null>((resolve) => {
+      window.setTimeout(() => resolve(null), 2500);
+    })
+  ]);
+}
+
 export function LoginForm({ callbackUrl, registered = false }: LoginFormProps) {
   const [message, setMessage] = useState<string | undefined>(
     registered ? "Conta criada com sucesso. Entre para continuar." : undefined
@@ -42,29 +51,34 @@ export function LoginForm({ callbackUrl, registered = false }: LoginFormProps) {
     setError(undefined);
     setMessage(undefined);
 
-    const result = await signIn("credentials", {
-      email: values.email,
-      password: values.password,
-      redirect: false,
-      callbackUrl: callbackUrl ?? defaultCallbackUrl
-    });
+    try {
+      const result = await signIn("credentials", {
+        callbackUrl: callbackUrl ?? defaultCallbackUrl,
+        email: values.email,
+        password: values.password,
+        redirect: false
+      });
 
-    setIsSubmitting(false);
+      if (!result || result.error) {
+        setError("E-mail ou senha invalidos.");
+        return;
+      }
 
-    if (!result || result.error) {
-      setError("E-mail ou senha invalidos.");
-      return;
+      if (callbackUrl) {
+        window.location.assign(result.url ?? callbackUrl);
+        return;
+      }
+
+      const session = await getSessionWithTimeout();
+      const role = session?.user?.role;
+      const destination = adminRoles.has(String(role)) ? "/admin" : defaultCallbackUrl;
+
+      window.location.assign(destination);
+    } catch {
+      setError("Nao foi possivel entrar agora. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (callbackUrl) {
-      window.location.assign(result.url ?? callbackUrl);
-      return;
-    }
-
-    const session = await getSession();
-    const role = session?.user?.role;
-
-    window.location.assign(adminRoles.has(String(role)) ? "/admin" : defaultCallbackUrl);
   }
 
   return (

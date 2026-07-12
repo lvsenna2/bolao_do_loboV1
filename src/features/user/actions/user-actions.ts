@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/server/auth/session";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
+import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import {
   deleteAccountSchema,
@@ -204,7 +205,7 @@ export async function markNotificationReadAction(formData: FormData): Promise<vo
     },
     data: {
       isRead: true,
-      readAt: new Date()
+      readAt: serverNow()
     }
   });
 
@@ -223,7 +224,7 @@ export async function markAllNotificationsReadAction(formData: FormData): Promis
     },
     data: {
       isRead: true,
-      readAt: new Date()
+      readAt: serverNow()
     }
   });
 
@@ -247,7 +248,7 @@ export async function deleteOwnAccountAction(input: DeleteAccountInput): Promise
       id: sessionUser.id
     },
     data: {
-      deletedAt: new Date(),
+      deletedAt: serverNow(),
       status: "DELETED"
     }
   });

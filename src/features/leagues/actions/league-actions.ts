@@ -15,6 +15,7 @@ import {
   getUserPaidLeaguePricing,
   syncActiveLeagueMissionProgress
 } from "@/features/xp/services/xp-service";
+import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import {
@@ -393,7 +394,7 @@ async function joinLeagueForUser(
       if (existingMembership) {
         await tx.leagueMember.update({
           data: {
-            joinedAt: new Date(),
+            joinedAt: serverNow(),
             leftAt: null,
             role: "MEMBER",
             status: "PENDING_PAYMENT"
@@ -452,7 +453,7 @@ async function joinLeagueForUser(
     if (existingMembership) {
       await tx.leagueMember.update({
         data: {
-          joinedAt: new Date(),
+          joinedAt: serverNow(),
           leftAt: null,
           role: "MEMBER",
           status: "ACTIVE"

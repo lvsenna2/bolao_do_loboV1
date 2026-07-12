@@ -68,8 +68,7 @@ function MatchRow({
   match: RoundMatchView;
   roundStatus: RoundView["status"];
 }) {
-  const canGuess =
-    roundStatus === "OPEN" && match.status === "SCHEDULED" && new Date(match.kickoff) > new Date();
+  const canGuess = roundStatus === "OPEN" && match.canGuess;
   const score =
     match.homeScore === null || match.awayScore === null
       ? "x"

@@ -21,8 +21,9 @@ import {
   AdminTd,
   AdminTh
 } from "@/features/admin/components/admin-table";
-import { teamPresetOptions } from "@/features/admin/data/team-presets";
 import { getAdminTeams } from "@/features/admin/data/admin-data";
+import { teamPresetOptions } from "@/features/admin/data/team-presets";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { getTeamLogoSrc } from "@/lib/team-logo";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +45,7 @@ const textareaClass =
   "min-h-36 rounded-control border border-app-border bg-app-background px-3 py-2 text-sm text-app-foreground outline-none transition placeholder:text-app-muted focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20";
 
 function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
+  return formatDateTimeInSaoPaulo(date);
 }
 
 function getInitials(name: string) {

@@ -17,6 +17,7 @@ import {
   AdminTh
 } from "@/features/admin/components/admin-table";
 import { getAdminPayments, toCurrency } from "@/features/admin/data/admin-data";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +29,7 @@ type PaymentsPageProps = {
 const updatePaymentStatusFormAction = updatePaymentStatusAction as unknown as FormAction;
 
 function formatDate(date: Date | null) {
-  if (!date) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
+  return formatDateTimeInSaoPaulo(date);
 }
 
 export default async function AdminPaymentsPage({ searchParams }: PaymentsPageProps) {

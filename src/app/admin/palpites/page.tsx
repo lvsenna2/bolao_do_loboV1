@@ -13,6 +13,7 @@ import {
   AdminTh
 } from "@/features/admin/components/admin-table";
 import { getAdminGuesses } from "@/features/admin/data/admin-data";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,7 @@ type AdminGuessesPageProps = {
 };
 
 function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
+  return formatDateTimeInSaoPaulo(date);
 }
 
 function getScoreLabel(guess: { awayPrediction: number | null; homePrediction: number | null }) {
@@ -62,10 +60,7 @@ export default async function AdminGuessesPage({ searchParams }: AdminGuessesPag
     >
       <AdminAlert message={result.ok ? undefined : result.message} />
 
-      <AdminFilterForm
-        placeholder="Usuario, e-mail, liga ou time"
-        query={String(params.q ?? "")}
-      />
+      <AdminFilterForm placeholder="Usuario, e-mail, liga ou time" query={String(params.q ?? "")} />
 
       {guesses.length === 0 ? (
         <AdminEmpty />
@@ -129,7 +124,9 @@ export default async function AdminGuessesPage({ searchParams }: AdminGuessesPag
                   </AdminTd>
                   <AdminTd>
                     <p>Enviado: {formatDate(guess.submittedAt)}</p>
-                    <p className="text-xs text-app-muted">Atualizado: {formatDate(guess.updatedAt)}</p>
+                    <p className="text-xs text-app-muted">
+                      Atualizado: {formatDate(guess.updatedAt)}
+                    </p>
                   </AdminTd>
                 </tr>
               ))}

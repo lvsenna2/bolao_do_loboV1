@@ -18,6 +18,7 @@ import {
   setPaidLeagueMinimumEntryFee,
   syncActiveLeagueMissionProgress
 } from "@/features/xp/services/xp-service";
+import { serverNow } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import { fetchApiFootballTeams } from "@/server/football-api/client";
@@ -497,7 +498,7 @@ export async function updateUserStatusAction(formData: FormData): Promise<AdminA
     };
   }
 
-  const deletedAt = parsedInput.data.status === "DELETED" ? new Date() : null;
+  const deletedAt = parsedInput.data.status === "DELETED" ? serverNow() : null;
 
   await prisma.$transaction([
     prisma.user.update({
@@ -558,7 +559,7 @@ export async function softDeleteUserAction(formData: FormData): Promise<AdminAct
     },
     data: {
       status: "DELETED",
-      deletedAt: new Date()
+      deletedAt: serverNow()
     },
     select: {
       id: true,
@@ -1450,9 +1451,8 @@ export async function openRoundAction(formData: FormData): Promise<AdminActionRe
     };
   }
 
-  const now = new Date();
-  const fallbackEnd = new Date(now);
-  fallbackEnd.setDate(fallbackEnd.getDate() + 7);
+  const now = serverNow();
+  const fallbackEnd = new Date(now.getTime() + 7 * 86_400_000);
 
   const round = await prisma.round.update({
     data: {
@@ -1826,7 +1826,7 @@ export async function homologateMatchResultAction(formData: FormData): Promise<A
     data: {
       awayScore: data.awayScore,
       homeScore: data.homeScore,
-      homologatedAt: new Date(),
+      homologatedAt: serverNow(),
       status: "FINISHED"
     },
     select: {
@@ -2772,7 +2772,7 @@ export async function updatePaymentStatusAction(formData: FormData): Promise<Adm
     };
   }
 
-  const paidAt = parsedInput.data.status === "APPROVED" ? new Date() : null;
+  const paidAt = parsedInput.data.status === "APPROVED" ? serverNow() : null;
 
   const payment = await prisma.$transaction(async (tx) => {
     const updatedPayment = await tx.payment.update({
@@ -2801,7 +2801,7 @@ export async function updatePaymentStatusAction(formData: FormData): Promise<Adm
           userId: updatedPayment.userId
         },
         update: {
-          joinedAt: new Date(),
+          joinedAt: serverNow(),
           leftAt: null,
           status: "ACTIVE"
         },

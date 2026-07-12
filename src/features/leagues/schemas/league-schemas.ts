@@ -1,8 +1,10 @@
 import { LeagueVisibility } from "@prisma/client";
 import { z } from "zod";
 
+import { preprocessSaoPauloDateTimeLocal } from "@/lib/date-time";
+
 const optionalDateSchema = z.preprocess(
-  (value) => (value === "" || value == null ? undefined : value),
+  (value) => (value === "" || value == null ? undefined : preprocessSaoPauloDateTimeLocal(value)),
   z.coerce.date({ invalid_type_error: "Informe uma data valida." }).optional()
 );
 

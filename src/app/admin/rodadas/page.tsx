@@ -27,6 +27,7 @@ import {
   AdminTh
 } from "@/features/admin/components/admin-table";
 import { getAdminRounds } from "@/features/admin/data/admin-data";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +51,7 @@ const textareaClass =
   "min-h-24 rounded-control border border-app-border bg-app-background px-3 py-2 text-sm text-app-foreground outline-none transition placeholder:text-app-muted focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20";
 
 function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
+  return formatDateTimeInSaoPaulo(date);
 }
 
 function getSeasonLabel(season: {

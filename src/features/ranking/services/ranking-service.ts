@@ -1,5 +1,6 @@
 import { Prisma, type RankingScope } from "@prisma/client";
 
+import { getSaoPauloMonthRangeUtc, serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 
 type RankingContext = {
@@ -52,17 +53,7 @@ export type RankingRecalculationSummary = {
 };
 
 export function getMonthRange(date: Date) {
-  const start = new Date(date);
-  start.setDate(1);
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(start);
-  end.setMonth(end.getMonth() + 1);
-
-  return {
-    end,
-    start
-  };
+  return getSaoPauloMonthRangeUtc(date);
 }
 
 export function getCurrentStreak(scores: ScoreRecord[]) {
@@ -318,7 +309,7 @@ export async function recalculateHistoricalRankings() {
   );
 }
 
-export async function recalculateMonthlyRankings(referenceDate = new Date()) {
+export async function recalculateMonthlyRankings(referenceDate = serverNow()) {
   const { end, start } = getMonthRange(referenceDate);
   const scores = await getScores({
     match: {

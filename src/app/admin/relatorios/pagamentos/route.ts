@@ -1,6 +1,7 @@
+import { createCsv, createCsvResponse } from "@/features/admin/data/csv";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
-import { createCsv, createCsvResponse } from "@/features/admin/data/csv";
 
 export const dynamic = "force-dynamic";
 
@@ -46,8 +47,8 @@ export async function GET() {
       payment.transactionId ?? "",
       payment.amount.toString(),
       payment.status,
-      payment.createdAt.toISOString(),
-      payment.paidAt?.toISOString() ?? ""
+      formatDateTimeInSaoPaulo(payment.createdAt, { seconds: true }),
+      payment.paidAt ? formatDateTimeInSaoPaulo(payment.paidAt, { seconds: true }) : ""
     ])
   );
 

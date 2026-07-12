@@ -6,6 +6,7 @@ import {
   getScoringDefaults,
   type ScoringDefaults
 } from "@/features/scoring/data/scoring-settings";
+import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import type { GuessDataResult } from "../types/guess-action-result";
 
@@ -149,14 +150,7 @@ function emptyResult<T>(message: string, data: T): GuessDataResult<T> {
 }
 
 export function formatGuessDate(date: string | Date | null | undefined) {
-  if (!date) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(typeof date === "string" ? new Date(date) : date);
+  return formatDateTimeInSaoPaulo(date);
 }
 
 export function getPredictionLabel(prediction: GuessView["prediction"]) {
@@ -208,7 +202,7 @@ function getRoundLabel(round: {
 }
 
 function getCanEditGuess(kickoff: Date, roundStatus: string, matchStatus: string) {
-  const now = new Date();
+  const now = serverNow();
 
   return kickoff > now && roundStatus === "OPEN" && matchStatus === "SCHEDULED";
 }
@@ -228,7 +222,7 @@ export async function getGuessesPageData(
   };
 
   try {
-    const now = new Date();
+    const now = serverNow();
     const scoring = await getScoringDefaults();
 
     const [matches, recentGuesses, submittedGuesses, usedJokers] = await prisma.$transaction([

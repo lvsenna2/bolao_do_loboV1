@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { serverNow } from "@/lib/date-time";
 import { getCurrentSession } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 
@@ -10,8 +11,7 @@ export async function GET() {
     return NextResponse.json({ notification: null }, { status: 401 });
   }
 
-  const createdAfter = new Date();
-  createdAfter.setMinutes(createdAfter.getMinutes() - 10);
+  const createdAfter = new Date(serverNow().getTime() - 10 * 60 * 1000);
 
   const notification = await prisma.notification.findFirst({
     orderBy: {

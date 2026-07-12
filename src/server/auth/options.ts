@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 
 import { loginSchema } from "@/features/auth/schemas/auth-schemas";
 import { grantDailyLoginXp } from "@/features/xp/services/xp-service";
+import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import { verifyPassword } from "./password";
 
@@ -99,7 +100,7 @@ export const authOptions: NextAuthOptions = {
             id: user.id
           },
           data: {
-            lastLoginAt: new Date()
+            lastLoginAt: serverNow()
           }
         });
 

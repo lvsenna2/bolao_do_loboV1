@@ -15,6 +15,7 @@ import {
   getFootballSyncCacheHours
 } from "@/server/football-api/competitions";
 import type { AdminDataResult } from "../types";
+import { getSaoPauloDayRangeUtc } from "@/lib/date-time";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -65,15 +66,7 @@ function toCurrency(value: Prisma.Decimal | number | null | undefined) {
 }
 
 function todayRange() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-
-  return {
-    end,
-    start
-  };
+  return getSaoPauloDayRangeUtc();
 }
 
 export async function getAdminDashboardData() {

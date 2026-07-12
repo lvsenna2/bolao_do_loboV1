@@ -9,6 +9,8 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 
+import { preprocessSaoPauloDateTimeLocal } from "@/lib/date-time";
+
 export const userRoleSchema = z.nativeEnum(UserRole);
 export const accountStatusSchema = z.nativeEnum(AccountStatus);
 export const championshipStatusSchema = z.nativeEnum(ChampionshipStatus);
@@ -23,26 +25,9 @@ const formBooleanSchema = z.preprocess(
   z.boolean()
 );
 
-function parseSaoPauloDateTimeLocal(value: unknown) {
-  if (typeof value !== "string") {
-    return value;
-  }
-
-  const trimmedValue = value.trim();
-  const dateTimeLocalPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/;
-
-  if (!dateTimeLocalPattern.test(trimmedValue)) {
-    return value;
-  }
-
-  const withSeconds = trimmedValue.length === 16 ? `${trimmedValue}:00` : trimmedValue;
-
-  return new Date(`${withSeconds}-03:00`);
-}
-
 function saoPauloDateTimeSchema(message: string) {
   return z.preprocess(
-    parseSaoPauloDateTimeLocal,
+    preprocessSaoPauloDateTimeLocal,
     z.coerce.date({
       invalid_type_error: message
     })

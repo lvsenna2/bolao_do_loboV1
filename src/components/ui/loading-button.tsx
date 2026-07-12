@@ -34,37 +34,66 @@ export const LoadingButton = forwardRef<HTMLButtonElement, LoadingButtonProps>(
     },
     ref
   ) => {
-    const [clicked, setClicked] = useState(false);
-    const locked = isLoading || clicked;
+    const [localLoading, setLocalLoading] = useState(false);
+    const lockRef = useRef(false);
+    const isSubmitButton = type === "submit";
+    const visuallyLoading = isLoading || localLoading;
 
     function handleClick(event: MouseEvent<HTMLButtonElement>) {
-      if (locked || disabled) {
+      if (isLoading || localLoading || lockRef.current || disabled) {
         event.preventDefault();
         event.stopPropagation();
         return;
       }
 
-      setClicked(true);
-      window.setTimeout(() => setClicked(false), 700);
+      lockRef.current = true;
 
-      onClick?.(event);
+      if (!isSubmitButton) {
+        setLocalLoading(true);
+      }
+
+      const clickResult = onClick?.(event) as unknown;
+
+      if (isSubmitButton) {
+        window.setTimeout(() => {
+          lockRef.current = false;
+        }, 700);
+        return;
+      }
+
+      const release = () => {
+        lockRef.current = false;
+        setLocalLoading(false);
+      };
+
+      if (
+        clickResult &&
+        typeof clickResult === "object" &&
+        "finally" in clickResult &&
+        typeof clickResult.finally === "function"
+      ) {
+        clickResult.finally(release);
+        return;
+      }
+
+      window.setTimeout(release, 700);
     }
 
     return (
       <button
         ref={ref}
-        aria-busy={locked}
+        aria-busy={visuallyLoading}
         className={cn(
           "inline-flex items-center justify-center gap-2 transition disabled:cursor-not-allowed disabled:opacity-70",
           className
         )}
-        disabled={disabled || locked}
+        disabled={disabled || isLoading || localLoading}
         onClick={handleClick}
         type={type}
         {...props}
       >
-        {locked ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : icon}
-        {locked ? loadingLabel : children}
+        {visuallyLoading ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : icon}
+        {visuallyLoading ? loadingLabel : children}
       </button>
     );
   }

@@ -6,6 +6,7 @@ import { requireUser } from "@/server/auth/session";
 import { getDatabaseErrorCode } from "@/server/db/errors";
 import { prisma } from "@/server/db";
 import { grantGuessSubmittedXp } from "@/features/xp/services/xp-service";
+import { serverNow } from "@/lib/date-time";
 import { getPointsPreview, getScoringDefaults } from "../data/guess-data";
 import {
   deleteGuessSchema,
@@ -41,7 +42,7 @@ function normalizeFieldErrors(fieldErrors: Record<string, string[] | undefined>)
   );
 }
 
-function validateEditableMatch(match: EditableMatch | null, now = new Date()) {
+function validateEditableMatch(match: EditableMatch | null, now = serverNow()) {
   if (!match || match.deletedAt) {
     return "Partida nao encontrada.";
   }
@@ -253,7 +254,7 @@ export async function upsertGuessAction(
         joker: data.joker,
         leagueId: match.round.leagueId,
         prediction: data.prediction,
-        submittedAt: currentGuess?.deletedAt ? new Date() : undefined
+        submittedAt: currentGuess?.deletedAt ? serverNow() : undefined
       },
       where: {
         userId_leagueId_matchId: {
@@ -400,7 +401,7 @@ export async function deleteGuessAction(input: DeleteGuessInput): Promise<GuessA
 
     await prisma.guess.update({
       data: {
-        deletedAt: new Date(),
+        deletedAt: serverNow(),
         joker: false
       },
       where: {

@@ -9,6 +9,7 @@ import { FormLoadingButton } from "@/components/ui/loading-button";
 import { getGuessComparisonData } from "@/features/guesses/data/comparison-data";
 import type { ComparisonGuessView } from "@/features/guesses/data/comparison-data";
 import { UserAlert } from "@/features/user/components/user-alert";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { requireUser } from "@/server/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +19,7 @@ type CompareGuessesPageProps = {
 };
 
 function formatDate(date: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(date));
+  return formatDateTimeInSaoPaulo(date);
 }
 
 function getScoreLabel(guess: ComparisonGuessView) {

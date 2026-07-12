@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 
+import { getSaoPauloDateKey, getSaoPauloDayDifference, serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 
 type XpClient = typeof prisma | Prisma.TransactionClient;
@@ -73,24 +74,8 @@ const streakMilestones = [
   }
 ] as const;
 
-function getDateOnly(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
 function getDayDifference(a: Date, b: Date) {
-  const first = getDateOnly(a).getTime();
-  const second = getDateOnly(b).getTime();
-
-  return Math.round((first - second) / 86_400_000);
-}
-
-function getSaoPauloDateKey(date: Date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "America/Sao_Paulo",
-    year: "numeric"
-  }).format(date);
+  return getSaoPauloDayDifference(a, b);
 }
 
 function normalizeJson(value: unknown): Prisma.InputJsonValue | undefined {
@@ -751,7 +736,7 @@ export async function grantMatchResultXp(matchId: string) {
   };
 }
 
-export async function recordParticipationStreak(userId: string, participationDate = new Date()) {
+export async function recordParticipationStreak(userId: string, participationDate = serverNow()) {
   const current = await prisma.userStreak.findUnique({
     where: {
       userId
@@ -821,7 +806,7 @@ export async function recordParticipationStreak(userId: string, participationDat
 }
 
 export async function updateMissionProgress(userId: string, type: string, increment: number) {
-  const now = new Date();
+  const now = serverNow();
   const missions = await prisma.mission.findMany({
     where: {
       active: true,
@@ -896,7 +881,7 @@ export async function updateMissionProgress(userId: string, type: string, increm
 }
 
 export async function syncActiveLeagueMissionProgress(userId: string) {
-  const now = new Date();
+  const now = serverNow();
   const [activeLeagueCount, missions] = await Promise.all([
     prisma.leagueMember.count({
       where: {
@@ -1079,7 +1064,7 @@ export async function evaluateAchievementsForUser(userId: string) {
   return result.count;
 }
 
-export async function grantDailyLoginXp(userId: string, date = new Date()) {
+export async function grantDailyLoginXp(userId: string, date = serverNow()) {
   const dateKey = getSaoPauloDateKey(date);
 
   return grantXp({

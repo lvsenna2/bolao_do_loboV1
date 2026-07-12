@@ -22,15 +22,9 @@ import {
   AdminTh
 } from "@/features/admin/components/admin-table";
 import { getAdminDashboardData } from "@/features/admin/data/admin-data";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
-}
 
 export default async function AdminDashboardPage() {
   const result = await getAdminDashboardData();
@@ -122,7 +116,7 @@ export default async function AdminDashboardPage() {
                     <AdminTd>
                       <AdminStatusBadge value={user.status} />
                     </AdminTd>
-                    <AdminTd>{formatDate(user.createdAt)}</AdminTd>
+                    <AdminTd>{formatDateTimeInSaoPaulo(user.createdAt)}</AdminTd>
                   </tr>
                 ))}
               </AdminTableBody>
@@ -149,7 +143,7 @@ export default async function AdminDashboardPage() {
                   <tr key={log.id}>
                     <AdminTd>{log.action}</AdminTd>
                     <AdminTd>{log.user?.email ?? "Sistema"}</AdminTd>
-                    <AdminTd>{formatDate(log.createdAt)}</AdminTd>
+                    <AdminTd>{formatDateTimeInSaoPaulo(log.createdAt)}</AdminTd>
                   </tr>
                 ))}
               </AdminTableBody>

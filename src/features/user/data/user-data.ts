@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db";
 import { getActiveXpLevels, getXpProgressFromLevels } from "@/features/xp/services/xp-service";
+import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
 import type { UserDataResult } from "../types/user-action-result";
 
 function emptyResult<T>(message: string, data: T): UserDataResult<T> {
@@ -13,14 +14,7 @@ function emptyResult<T>(message: string, data: T): UserDataResult<T> {
 }
 
 export function formatDate(date: Date | null | undefined) {
-  if (!date) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
+  return formatDateTimeInSaoPaulo(date);
 }
 
 export function formatCurrency(value: Prisma.Decimal | number | null | undefined) {
@@ -195,7 +189,7 @@ export async function getUserHomeData(userId: string) {
       };
     }
 
-    const now = new Date();
+    const now = serverNow();
     const [
       guessCount,
       scores,

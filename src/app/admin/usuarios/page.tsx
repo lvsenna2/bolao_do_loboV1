@@ -21,6 +21,7 @@ import {
   updateUserStatusAction
 } from "@/features/admin/actions/admin-actions";
 import { getAdminUsers } from "@/features/admin/data/admin-data";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
@@ -34,14 +35,7 @@ const updateUserRoleFormAction = updateUserRoleAction as unknown as FormAction;
 const updateUserStatusFormAction = updateUserStatusAction as unknown as FormAction;
 
 function formatDate(date: Date | null) {
-  if (!date) {
-    return "Nunca";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
+  return date ? formatDateTimeInSaoPaulo(date) : "Nunca";
 }
 
 export default async function AdminUsersPage({ searchParams }: UsersPageProps) {

@@ -1,5 +1,6 @@
 import type { Prediction } from "@prisma/client";
 
+import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import { getScoringDefaults, type ScoringDefaults } from "../data/scoring-settings";
 
@@ -120,7 +121,7 @@ export async function processMatchScores(matchId: string): Promise<MatchScoringS
     })
   ]);
 
-  const now = new Date();
+  const now = serverNow();
   const calculatedScores = guesses.map((guess) => ({
     guess,
     score: calculateGuessScore(

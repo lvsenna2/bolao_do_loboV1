@@ -3,6 +3,7 @@ import { Prisma, type MatchStatus, type RoundStatus } from "@prisma/client";
 import { recalculateRankingsForMatch } from "@/features/ranking/services/ranking-service";
 import { processMatchScores } from "@/features/scoring/services/scoring-service";
 import { grantMatchResultXp } from "@/features/xp/services/xp-service";
+import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import {
   fetchApiFootballFixtures,
@@ -154,10 +155,7 @@ function getRoundStatus(statuses: MatchStatus[]): RoundStatus {
 }
 
 function addHours(date: Date, hours: number) {
-  const nextDate = new Date(date);
-  nextDate.setHours(nextDate.getHours() + hours);
-
-  return nextDate;
+  return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
 
 function getScoreSyncKey(config: FootballCompetitionConfig) {
@@ -171,8 +169,7 @@ async function getFreshSuccessfulSync(config: FootballCompetitionConfig) {
     return null;
   }
 
-  const minFinishedAt = new Date();
-  minFinishedAt.setHours(minFinishedAt.getHours() - cacheHours);
+  const minFinishedAt = new Date(serverNow().getTime() - cacheHours * 60 * 60 * 1000);
 
   return prisma.footballSyncLog.findFirst({
     orderBy: {
@@ -200,7 +197,7 @@ async function logSync(
     data: {
       callsUsed: summary.callsUsed,
       competitionKey: config.key,
-      finishedAt: new Date(),
+      finishedAt: serverNow(),
       leagueId: config.leagueId,
       matchesImported: summary.matchesImported,
       message,
@@ -225,7 +222,7 @@ async function logScoreSync(
     data: {
       callsUsed: summary.callsUsed,
       competitionKey: getScoreSyncKey(config),
-      finishedAt: new Date(),
+      finishedAt: serverNow(),
       leagueId: config.leagueId,
       matchesImported: summary.matchesUpdated,
       message,
@@ -740,7 +737,7 @@ async function updateMatchFromFixture(
   }
 
   if (needsHomologation) {
-    updateData.homologatedAt = new Date();
+    updateData.homologatedAt = serverNow();
   }
 
   if (scoreChanged || statusChanged || needsHomologation) {
@@ -778,7 +775,7 @@ async function updateMatchFromFixture(
 export async function syncFootballCompetitionScores(
   config: FootballCompetitionConfig
 ): Promise<FootballScoreSyncResult> {
-  const startedAt = new Date();
+  const startedAt = serverNow();
   const summary = emptyScoreSummary();
 
   try {
@@ -832,7 +829,7 @@ export async function syncFootballCompetition(
     force?: boolean;
   } = {}
 ): Promise<FootballSyncResult> {
-  const startedAt = new Date();
+  const startedAt = serverNow();
   const summary = emptySummary();
 
   if (!options.force) {

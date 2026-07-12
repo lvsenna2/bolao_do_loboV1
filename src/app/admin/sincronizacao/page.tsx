@@ -11,6 +11,7 @@ import {
 import { AdminAlert } from "@/features/admin/components/admin-alert";
 import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import { getAdminFootballSyncStatus } from "@/features/admin/data/admin-data";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
@@ -25,14 +26,7 @@ const syncAllFootballCompetitionScoresFormAction =
   syncAllFootballCompetitionScoresAction as unknown as FormAction;
 
 function formatDate(date: Date | null | undefined) {
-  if (!date) {
-    return "Nunca";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
+  return date ? formatDateTimeInSaoPaulo(date) : "Nunca";
 }
 
 function StatusPill({ status }: { status?: string | null }) {

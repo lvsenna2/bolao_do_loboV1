@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 
 export const dynamic = "force-dynamic";
@@ -11,14 +12,14 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       service: "bolao-do-lobo",
-      timestamp: new Date().toISOString()
+      timestamp: serverNow().toISOString()
     });
   } catch {
     return NextResponse.json(
       {
         ok: false,
         service: "bolao-do-lobo",
-        timestamp: new Date().toISOString()
+        timestamp: serverNow().toISOString()
       },
       {
         status: 503

@@ -4,6 +4,7 @@ import { getDatabaseErrorCode } from "@/server/db/errors";
 import { prisma } from "@/server/db";
 import { hashPassword } from "@/server/auth/password";
 import { addMinutes, createSecureToken } from "@/server/auth/tokens";
+import { serverNow } from "@/lib/date-time";
 import {
   forgotPasswordSchema,
   registerSchema,
@@ -103,7 +104,7 @@ export async function registerUserAction(input: RegisterInput): Promise<AuthActi
 
   try {
     const passwordHash = await hashPassword(data.password);
-    const now = new Date();
+    const now = serverNow();
     const name = `${data.firstName} ${data.lastName}`.trim();
 
     const user = await prisma.user.create({
@@ -201,7 +202,7 @@ export async function requestPasswordResetAction(
       data: {
         identifier,
         token,
-        expires: addMinutes(new Date(), PASSWORD_RESET_EXPIRATION_MINUTES)
+        expires: addMinutes(serverNow(), PASSWORD_RESET_EXPIRATION_MINUTES)
       }
     }),
     prisma.auditLog.create({
@@ -236,7 +237,7 @@ export async function resetPasswordAction(input: ResetPasswordInput): Promise<Au
     }
   });
 
-  if (!verificationToken || verificationToken.expires < new Date()) {
+  if (!verificationToken || verificationToken.expires < serverNow()) {
     return {
       ok: false,
       message: "O link de recuperacao expirou ou e invalido."

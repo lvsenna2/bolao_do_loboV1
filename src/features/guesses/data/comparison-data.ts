@@ -1,5 +1,6 @@
 import type { MatchStatus, Prediction, Prisma } from "@prisma/client";
 
+import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import type { GuessDataResult } from "../types/guess-action-result";
 
@@ -183,7 +184,7 @@ export async function getGuessComparisonData(
       };
     }
 
-    const now = new Date();
+    const now = serverNow();
     const matches = await prisma.match.findMany({
       orderBy: {
         kickoff: "desc"

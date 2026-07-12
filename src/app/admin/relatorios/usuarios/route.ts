@@ -1,6 +1,7 @@
+import { createCsv, createCsvResponse } from "@/features/admin/data/csv";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
-import { createCsv, createCsvResponse } from "@/features/admin/data/csv";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +31,8 @@ export async function GET() {
       user.email,
       user.role,
       user.status,
-      user.createdAt.toISOString(),
-      user.lastLoginAt?.toISOString() ?? ""
+      formatDateTimeInSaoPaulo(user.createdAt, { seconds: true }),
+      user.lastLoginAt ? formatDateTimeInSaoPaulo(user.lastLoginAt, { seconds: true }) : ""
     ])
   );
 

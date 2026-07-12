@@ -1,6 +1,7 @@
+import { createCsv, createCsvResponse } from "@/features/admin/data/csv";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
-import { createCsv, createCsvResponse } from "@/features/admin/data/csv";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET() {
   const csv = createCsv(
     ["created_at", "user", "email", "entity", "entity_id", "action", "ip"],
     logs.map((log) => [
-      log.createdAt.toISOString(),
+      formatDateTimeInSaoPaulo(log.createdAt, { seconds: true }),
       log.user?.name ?? "Sistema",
       log.user?.email ?? "",
       log.entity,

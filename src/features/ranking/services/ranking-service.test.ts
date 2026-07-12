@@ -45,14 +45,8 @@ describe("ranking service helpers", () => {
   it("calculates a calendar month range", () => {
     const { end, start } = getMonthRange(new Date("2026-06-30T15:00:00.000Z"));
 
-    expect(start.getFullYear()).toBe(2026);
-    expect(start.getMonth()).toBe(5);
-    expect(start.getDate()).toBe(1);
-    expect(start.getHours()).toBe(0);
-    expect(end.getFullYear()).toBe(2026);
-    expect(end.getMonth()).toBe(6);
-    expect(end.getDate()).toBe(1);
-    expect(end.getHours()).toBe(0);
+    expect(start.toISOString()).toBe("2026-06-01T03:00:00.000Z");
+    expect(end.toISOString()).toBe("2026-07-01T03:00:00.000Z");
   });
 
   it("calculates average submit time before kickoff in seconds", () => {

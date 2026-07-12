@@ -1,5 +1,6 @@
 import type { MatchStatus, Prisma, RoundStatus } from "@prisma/client";
 
+import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -27,6 +28,7 @@ type GuessView = {
 export type RoundMatchView = {
   awayScore: number | null;
   awayTeam: TeamView;
+  canGuess: boolean;
   city: string | null;
   guess: GuessView | null;
   homeScore: number | null;
@@ -107,14 +109,7 @@ function emptyResult<T>(message: string, data: T): RoundDataResult<T> {
 }
 
 export function formatRoundDate(date: string | Date | null | undefined) {
-  if (!date) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(typeof date === "string" ? new Date(date) : date);
+  return formatDateTimeInSaoPaulo(date);
 }
 
 export function getRoundLabel(round: Pick<RoundView, "name" | "number">) {
@@ -168,6 +163,7 @@ export async function getRoundsPageData(
   };
 
   try {
+    const now = serverNow();
     const status = getParam(searchParams, "status") as RoundStatus | undefined;
     const championshipId = getParam(searchParams, "championship");
     const leagueId = getParam(searchParams, "league");
@@ -350,6 +346,10 @@ export async function getRoundsPageData(
         return {
           awayScore: match.awayScore,
           awayTeam: match.awayTeam,
+          canGuess:
+            round.status === "OPEN" &&
+            match.status === "SCHEDULED" &&
+            match.kickoff.getTime() > now.getTime(),
           city: match.city,
           guess: userGuess
             ? {
