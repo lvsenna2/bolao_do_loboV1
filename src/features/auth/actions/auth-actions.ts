@@ -68,6 +68,7 @@ export async function registerUserAction(input: RegisterInput): Promise<AuthActi
 
   const existingUser = await prisma.user.findFirst({
     where: {
+      deletedAt: null,
       OR: [
         {
           email: {

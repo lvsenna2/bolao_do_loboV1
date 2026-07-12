@@ -132,6 +132,15 @@ function revalidateAdminPaths() {
   revalidatePath("/minhas-ligas");
 }
 
+function createDeletedUserIdentity(userId: string) {
+  const compactId = userId.replaceAll("-", "");
+
+  return {
+    email: `deleted+${userId}@deleted.bolaodolobo.local`,
+    username: `deleted_${compactId.slice(0, 24)}`
+  };
+}
+
 type ImportableTeam = {
   apiId?: number | null;
   country: string;
@@ -488,8 +497,10 @@ export async function updateUserStatusAction(formData: FormData): Promise<AdminA
       id: parsedInput.data.userId
     },
     select: {
+      email: true,
       id: true,
-      status: true
+      status: true,
+      username: true
     }
   });
 
@@ -501,6 +512,8 @@ export async function updateUserStatusAction(formData: FormData): Promise<AdminA
   }
 
   const deletedAt = parsedInput.data.status === "DELETED" ? serverNow() : null;
+  const deletedIdentity =
+    parsedInput.data.status === "DELETED" ? createDeletedUserIdentity(currentUser.id) : undefined;
 
   await prisma.$transaction([
     prisma.user.update({
@@ -508,6 +521,7 @@ export async function updateUserStatusAction(formData: FormData): Promise<AdminA
         id: currentUser.id
       },
       data: {
+        ...(deletedIdentity ?? {}),
         status: parsedInput.data.status,
         deletedAt
       }
@@ -519,9 +533,16 @@ export async function updateUserStatusAction(formData: FormData): Promise<AdminA
         entity: "User",
         entityId: currentUser.id,
         oldValue: {
+          email: currentUser.email,
           status: currentUser.status
         },
         newValue: {
+          ...(deletedIdentity
+            ? {
+                email: deletedIdentity.email,
+                username: deletedIdentity.username
+              }
+            : {}),
           status: parsedInput.data.status
         }
       }
@@ -555,11 +576,31 @@ export async function softDeleteUserAction(formData: FormData): Promise<AdminAct
     };
   }
 
-  const user = await prisma.user.update({
+  const currentUser = await prisma.user.findUnique({
+    select: {
+      id: true,
+      email: true,
+      username: true
+    },
     where: {
       id: parsedInput.data.userId
+    }
+  });
+
+  if (!currentUser) {
+    return {
+      ok: false,
+      message: "Usuario nao encontrado."
+    };
+  }
+
+  const deletedIdentity = createDeletedUserIdentity(currentUser.id);
+  const user = await prisma.user.update({
+    where: {
+      id: currentUser.id
     },
     data: {
+      ...deletedIdentity,
       status: "DELETED",
       deletedAt: serverNow()
     },
@@ -570,7 +611,7 @@ export async function softDeleteUserAction(formData: FormData): Promise<AdminAct
     }
   });
 
-  await createAuditLog(admin.id, "admin.user.deleted", "User", user.id, undefined, user);
+  await createAuditLog(admin.id, "admin.user.deleted", "User", user.id, currentUser, user);
   revalidateAdminPaths();
 
   return {
