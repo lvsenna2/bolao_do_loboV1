@@ -18,6 +18,7 @@ import { AdminFilterForm } from "@/features/admin/components/admin-filter-form";
 import { AdminPagination } from "@/features/admin/components/admin-pagination";
 import { AdminSelect } from "@/features/admin/components/admin-select";
 import { AdminStatusBadge } from "@/features/admin/components/admin-status-badge";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import {
   AdminTable,
   AdminTableBody,
@@ -405,12 +406,14 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                                   type="number"
                                 />
                               </label>
-                              <button
+                              <AdminSubmitButton
                                 className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 sm:self-end"
-                                type="submit"
+                                pendingLabel={
+                                  match.homologatedAt ? "Retificando..." : "Homologando..."
+                                }
                               >
                                 {match.homologatedAt ? "Retificar" : "Homologar"}
-                              </button>
+                              </AdminSubmitButton>
                             </form>
                           </div>
                         ))

@@ -19,6 +19,7 @@ import {
 import { AdminAlert } from "@/features/admin/components/admin-alert";
 import { AdminSelect } from "@/features/admin/components/admin-select";
 import { AdminStatCard } from "@/features/admin/components/admin-stat-card";
+import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import {
   AdminTable,
   AdminTableBody,
@@ -146,12 +147,12 @@ export default async function AdminXpPage() {
                   <input name="active" type="hidden" value="false" />
                   <input defaultChecked name="active" type="checkbox" value="true" />
                   <input name="discountPercent" type="hidden" value="0" />
-                  <button
+                  <AdminSubmitButton
                     className="h-10 rounded-button bg-brand-gold px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-                    type="submit"
+                    pendingLabel="Criando..."
                   >
                     Criar
-                  </button>
+                  </AdminSubmitButton>
                 </div>
               </form>
               <div className="space-y-3">
@@ -231,12 +232,12 @@ export default async function AdminXpPage() {
                         />
                         Ativo
                       </label>
-                      <button
+                      <AdminSubmitButton
                         className="h-10 rounded-button bg-brand-gold px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-                        type="submit"
+                        pendingLabel="Salvando..."
                       >
                         Salvar
-                      </button>
+                      </AdminSubmitButton>
                     </div>
                   </form>
                 ))}
@@ -270,12 +271,12 @@ export default async function AdminXpPage() {
                   <input name="active" type="hidden" value="false" />
                   <input defaultChecked name="active" type="checkbox" value="true" />
                   <input name="description" type="hidden" value="" />
-                  <button
+                  <AdminSubmitButton
                     className="h-10 rounded-button bg-brand-gold px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-                    type="submit"
+                    pendingLabel="Criando..."
                   >
                     Criar
-                  </button>
+                  </AdminSubmitButton>
                 </div>
               </form>
               <AdminTable>
@@ -322,12 +323,12 @@ export default async function AdminXpPage() {
                             />
                             Ativa
                           </label>
-                          <button
+                          <AdminSubmitButton
                             className="h-10 rounded-button border border-app-border px-3 text-sm font-semibold transition hover:border-brand-gold hover:text-brand-gold"
-                            type="submit"
+                            pendingLabel="Salvando..."
                           >
                             Salvar
-                          </button>
+                          </AdminSubmitButton>
                         </form>
                       </AdminTd>
                     </tr>
@@ -375,12 +376,12 @@ export default async function AdminXpPage() {
                         />
                         Conceder XP nesta liga
                       </label>
-                      <button
+                      <AdminSubmitButton
                         className="h-9 rounded-button border border-app-border px-3 text-sm font-semibold transition hover:border-brand-gold hover:text-brand-gold"
-                        type="submit"
+                        pendingLabel="Salvando..."
                       >
                         Salvar
-                      </button>
+                      </AdminSubmitButton>
                     </div>
                   </form>
                 ))}
@@ -414,12 +415,12 @@ export default async function AdminXpPage() {
                 <p className="text-xs text-app-muted">
                   Atual: {toCurrency(paidLeagueMinimumEntryFee)}
                 </p>
-                <button
+                <AdminSubmitButton
                   className="h-10 w-full rounded-button bg-brand-gold px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-                  type="submit"
+                  pendingLabel="Salvando..."
                 >
                   Salvar configuracao
-                </button>
+                </AdminSubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -453,12 +454,12 @@ export default async function AdminXpPage() {
                   <span className="text-sm font-medium text-app-foreground">Motivo</span>
                   <input className={inputClass} maxLength={240} name="reason" required />
                 </label>
-                <button
+                <AdminSubmitButton
                   className="h-10 w-full rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                  type="submit"
+                  pendingLabel="Aplicando..."
                 >
                   Aplicar ajuste
-                </button>
+                </AdminSubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -478,12 +479,12 @@ export default async function AdminXpPage() {
                     </option>
                   ))}
                 </AdminSelect>
-                <button
+                <AdminSubmitButton
                   className="h-10 w-full rounded-button border border-app-border px-3 text-sm font-semibold transition hover:border-brand-gold hover:text-brand-gold"
-                  type="submit"
+                  pendingLabel="Recalculando..."
                 >
                   Recalcular
-                </button>
+                </AdminSubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -533,12 +534,12 @@ export default async function AdminXpPage() {
                   <input defaultChecked name="active" type="checkbox" value="true" />
                   Ativa
                 </label>
-                <button
+                <AdminSubmitButton
                   className="h-10 w-full rounded-button bg-brand-gold px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-                  type="submit"
+                  pendingLabel="Criando..."
                 >
                   Criar missao
-                </button>
+                </AdminSubmitButton>
               </form>
               {missions.map((mission) => (
                 <div
@@ -581,12 +582,12 @@ export default async function AdminXpPage() {
               <option value="EPIC">EPIC</option>
               <option value="LEGENDARY">LEGENDARY</option>
             </select>
-            <button
+            <AdminSubmitButton
               className="h-10 rounded-button bg-brand-gold px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-              type="submit"
+              pendingLabel="Criando..."
             >
               Criar
-            </button>
+            </AdminSubmitButton>
           </form>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {badges.map((badge) => (
