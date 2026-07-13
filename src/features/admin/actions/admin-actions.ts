@@ -1761,6 +1761,65 @@ export async function createRoundAction(formData: FormData): Promise<AdminAction
   };
 }
 
+async function propagateBaseRoundToOpenLeagueCopies(
+  baseRound: {
+    leagueId: string | null;
+    number: number;
+    season: {
+      championshipId: string;
+    };
+    seasonId: string;
+  },
+  data: Prisma.RoundUpdateManyMutationInput
+) {
+  if (baseRound.leagueId) {
+    return {
+      leaguesAffected: 0,
+      roundsAffected: 0
+    };
+  }
+
+  const leagues = await prisma.league.findMany({
+    select: {
+      id: true
+    },
+    where: {
+      championshipId: baseRound.season.championshipId,
+      deletedAt: null,
+      status: "OPEN"
+    }
+  });
+
+  for (const league of leagues) {
+    await syncChampionshipRoundsIntoLeague(league.id, baseRound.season.championshipId);
+  }
+
+  const leagueIds = leagues.map((league) => league.id);
+
+  if (leagueIds.length === 0) {
+    return {
+      leaguesAffected: 0,
+      roundsAffected: 0
+    };
+  }
+
+  const result = await prisma.round.updateMany({
+    data,
+    where: {
+      leagueId: {
+        in: leagueIds
+      },
+      number: baseRound.number,
+      seasonId: baseRound.seasonId
+    }
+  });
+
+  return {
+    leaguesAffected: leagueIds.length,
+    roundsAffected: result.count
+  };
+}
+
 export async function updateRoundStatusAction(formData: FormData): Promise<AdminActionResult> {
   const admin = await requireAdmin();
   const parsedInput = updateRoundStatusSchema.safeParse(formDataToObject(formData));
@@ -1776,6 +1835,14 @@ export async function updateRoundStatusAction(formData: FormData): Promise<Admin
   const currentRound = await prisma.round.findUnique({
     select: {
       id: true,
+      leagueId: true,
+      number: true,
+      season: {
+        select: {
+          championshipId: true
+        }
+      },
+      seasonId: true,
       status: true
     },
     where: {
@@ -1802,20 +1869,22 @@ export async function updateRoundStatusAction(formData: FormData): Promise<Admin
       id: currentRound.id
     }
   });
+  const propagation = await propagateBaseRoundToOpenLeagueCopies(currentRound, {
+    status: parsedInput.data.status
+  });
 
-  await createAuditLog(
-    admin.id,
-    "admin.round.status_updated",
-    "Round",
-    round.id,
-    currentRound,
-    round
-  );
+  await createAuditLog(admin.id, "admin.round.status_updated", "Round", round.id, currentRound, {
+    ...round,
+    propagation
+  });
   revalidateAdminPaths();
 
   return {
     ok: true,
-    message: "Status da rodada atualizado."
+    message:
+      propagation.roundsAffected > 0
+        ? `Status da rodada atualizado e propagado para ${propagation.roundsAffected} liga(s).`
+        : "Status da rodada atualizado."
   };
 }
 
@@ -1835,6 +1904,14 @@ export async function openRoundAction(formData: FormData): Promise<AdminActionRe
     select: {
       endsAt: true,
       id: true,
+      leagueId: true,
+      number: true,
+      season: {
+        select: {
+          championshipId: true
+        }
+      },
+      seasonId: true,
       startsAt: true,
       status: true
     },
@@ -1869,13 +1946,24 @@ export async function openRoundAction(formData: FormData): Promise<AdminActionRe
       id: currentRound.id
     }
   });
+  const propagation = await propagateBaseRoundToOpenLeagueCopies(currentRound, {
+    endsAt: round.endsAt,
+    startsAt: round.startsAt,
+    status: "OPEN"
+  });
 
-  await createAuditLog(admin.id, "admin.round.opened", "Round", round.id, currentRound, round);
+  await createAuditLog(admin.id, "admin.round.opened", "Round", round.id, currentRound, {
+    ...round,
+    propagation
+  });
   revalidateAdminPaths();
 
   return {
     ok: true,
-    message: "Rodada aberta para palpites."
+    message:
+      propagation.roundsAffected > 0
+        ? `Rodada aberta e propagada para ${propagation.roundsAffected} liga(s).`
+        : "Rodada aberta para palpites."
   };
 }
 
