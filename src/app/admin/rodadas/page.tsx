@@ -65,6 +65,9 @@ function getSeasonLabel(season: {
 }
 
 function getRoundOptionLabel(round: {
+  league?: {
+    name: string;
+  } | null;
   name: string | null;
   number: number;
   season: {
@@ -75,7 +78,9 @@ function getRoundOptionLabel(round: {
     year: number;
   };
 }) {
-  return `${round.name || `Rodada ${round.number}`} - ${round.season.championship.name} ${round.season.name || round.season.year}`;
+  const leagueLabel = round.league ? ` - ${round.league.name}` : "";
+
+  return `${round.name || `Rodada ${round.number}`} - ${round.season.championship.name} ${round.season.name || round.season.year}${leagueLabel}`;
 }
 
 function getTeamLabel(team: { country: string; name: string; shortName: string | null }) {
@@ -218,6 +223,15 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
       </div>
 
       <AdminFilterForm placeholder="Rodada, descricao ou campeonato" query={String(params.q ?? "")}>
+        <AdminSelect
+          defaultValue={String(params.roundScope ?? "league")}
+          label="Origem"
+          name="roundScope"
+        >
+          <option value="league">Rodadas das ligas</option>
+          <option value="base">Importadas/API</option>
+          <option value="all">Todas</option>
+        </AdminSelect>
         <AdminSelect
           defaultValue={String(params.championship ?? "")}
           label="Campeonato"

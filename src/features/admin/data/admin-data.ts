@@ -465,6 +465,8 @@ export async function getAdminRounds(searchParams: SearchParams) {
     const status = getParam(searchParams, "status") as RoundStatus | undefined;
     const championshipId = getParam(searchParams, "championship");
     const leagueId = getParam(searchParams, "league");
+    const scopeParam = getParam(searchParams, "roundScope");
+    const roundScope = scopeParam === "base" || scopeParam === "all" ? scopeParam : "league";
     const where: Prisma.RoundWhereInput = {
       ...(q
         ? {
@@ -495,7 +497,13 @@ export async function getAdminRounds(searchParams: SearchParams) {
           }
         : {}),
       ...(status ? { status } : {}),
-      ...(leagueId ? { leagueId } : {}),
+      ...(leagueId
+        ? { leagueId }
+        : roundScope === "base"
+          ? { leagueId: null }
+          : roundScope === "league"
+            ? { leagueId: { not: null } }
+            : {}),
       ...(championshipId
         ? {
             season: {
@@ -647,6 +655,9 @@ export async function getAdminRounds(searchParams: SearchParams) {
         },
         take: 200,
         where: {
+          leagueId: {
+            not: null
+          },
           season: {
             championship: {
               deletedAt: null
