@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { MatchStatus, Prisma, RoundStatus } from "@prisma/client";
 
 import {
   fallbackScoring,
@@ -12,7 +12,7 @@ import type { GuessDataResult } from "../types/guess-action-result";
 
 export { getPointsPreview, getScoringDefaults, type ScoringDefaults };
 
-type TeamView = {
+export type TeamView = {
   apiId: number | null;
   id: string;
   logo: string | null;
@@ -20,7 +20,7 @@ type TeamView = {
   shortName: string | null;
 };
 
-type GuessView = {
+export type GuessView = {
   awayPrediction: number | null;
   id: string;
   homePrediction: number | null;
@@ -40,45 +40,52 @@ type GuessView = {
   updatedAt: string;
 };
 
-export type AvailableMatchView = {
+export type GuessMatchView = {
+  awayScore: number | null;
   awayTeam: TeamView;
+  canEdit: boolean;
   championshipName: string;
   city: string | null;
+  elapsed: number | null;
   existingGuess: GuessView | null;
+  homeScore: number | null;
   homeTeam: TeamView;
   id: string;
-  jokerAvailable: boolean;
-  jokerLimit: number;
   kickoff: string;
-  leagueId: string | null;
-  leagueName: string | null;
+  leagueId: string;
+  leagueName: string;
   roundId: string;
   roundLabel: string;
   scoring: ScoringDefaults;
   stadium: string | null;
-  status: string;
-  usedJokersInRound: number;
+  status: MatchStatus;
+  statusLong: string | null;
 };
 
-export type RecentGuessView = {
-  awayTeam: TeamView;
+export type GuessRoundView = {
   championshipName: string;
-  canEdit: boolean;
-  guess: GuessView;
-  homeTeam: TeamView;
-  kickoff: string;
-  matchId: string;
-  roundLabel: string;
-  status: string;
+  endsAt: string;
+  id: string;
+  jokerLimit: number;
+  jokerMatchId: string | null;
+  jokerMatchName: string | null;
+  label: string;
+  leagueId: string;
+  leagueName: string;
+  matches: GuessMatchView[];
+  startsAt: string;
+  status: RoundStatus;
+  usedJokers: number;
 };
 
 export type GuessesPageData = {
-  availableMatches: AvailableMatchView[];
-  recentGuesses: RecentGuessView[];
+  rounds: GuessRoundView[];
   scoring: ScoringDefaults;
   stats: {
-    availableMatches: number;
+    blockedMatches: number;
+    pendingGuesses: number;
     submittedGuesses: number;
+    totalMatches: number;
     usedJokers: number;
   };
 };
@@ -112,32 +119,6 @@ const teamSelect = {
   name: true,
   shortName: true
 } satisfies Prisma.TeamSelect;
-
-const matchRoundSelect = {
-  id: true,
-  league: {
-    select: {
-      championshipId: true,
-      id: true,
-      name: true
-    }
-  },
-  name: true,
-  number: true,
-  season: {
-    select: {
-      championship: {
-        select: {
-          id: true,
-          name: true
-        }
-      },
-      name: true,
-      year: true
-    }
-  },
-  status: true
-} satisfies Prisma.RoundSelect;
 
 type GuessRecord = Prisma.GuessGetPayload<{ select: typeof guessSelect }>;
 
@@ -201,105 +182,113 @@ function getRoundLabel(round: {
   return `${roundName} - ${seasonName}`;
 }
 
-function getCanEditGuess(kickoff: Date, roundStatus: string, matchStatus: string) {
-  const now = serverNow();
+function canEditMatch(
+  kickoff: Date,
+  roundStartsAt: Date,
+  roundEndsAt: Date,
+  roundStatus: RoundStatus,
+  matchStatus: MatchStatus,
+  now: Date
+) {
+  return (
+    kickoff > now &&
+    roundStartsAt <= now &&
+    roundEndsAt >= now &&
+    roundStatus === "OPEN" &&
+    matchStatus === "SCHEDULED"
+  );
+}
 
-  return kickoff > now && roundStatus === "OPEN" && matchStatus === "SCHEDULED";
+function matchName(homeTeam: TeamView, awayTeam: TeamView) {
+  return `${homeTeam.name} x ${awayTeam.name}`;
 }
 
 export async function getGuessesPageData(
   userId: string
 ): Promise<GuessDataResult<GuessesPageData>> {
   const empty: GuessesPageData = {
-    availableMatches: [],
-    recentGuesses: [],
+    rounds: [],
     scoring: fallbackScoring,
     stats: {
-      availableMatches: 0,
+      blockedMatches: 0,
+      pendingGuesses: 0,
       submittedGuesses: 0,
+      totalMatches: 0,
       usedJokers: 0
     }
   };
 
   try {
     const now = serverNow();
-    const scoring = await getScoringDefaults();
-
-    const [matches, recentGuesses, submittedGuesses, usedJokers] = await prisma.$transaction([
-      prisma.match.findMany({
-        orderBy: {
-          kickoff: "asc"
-        },
+    const [scoring, roundRecords] = await Promise.all([
+      getScoringDefaults(),
+      prisma.round.findMany({
+        orderBy: [{ startsAt: "desc" }, { number: "desc" }],
         select: {
-          awayTeam: {
-            select: teamSelect
-          },
-          city: true,
-          homeTeam: {
-            select: teamSelect
-          },
+          endsAt: true,
           id: true,
-          kickoff: true,
-          round: {
-            select: matchRoundSelect
-          },
-          roundId: true,
-          stadium: true,
-          status: true
-        },
-        take: 30,
-        where: {
-          deletedAt: null,
-          kickoff: {
-            gt: now
-          },
-          round: {
-            endsAt: {
-              gte: now
-            },
-            league: {
-              members: {
-                some: {
-                  status: "ACTIVE",
-                  userId
-                }
-              }
-            },
-            startsAt: {
-              lte: now
-            },
-            status: "OPEN"
-          },
-          status: "SCHEDULED"
-        }
-      }),
-      prisma.guess.findMany({
-        orderBy: {
-          updatedAt: "desc"
-        },
-        select: {
-          ...guessSelect,
-          match: {
+          league: {
             select: {
+              championshipId: true,
+              id: true,
+              name: true
+            }
+          },
+          matches: {
+            orderBy: {
+              kickoff: "asc"
+            },
+            select: {
+              awayScore: true,
               awayTeam: {
                 select: teamSelect
               },
+              city: true,
+              elapsed: true,
+              guesses: {
+                orderBy: {
+                  updatedAt: "desc"
+                },
+                select: guessSelect,
+                where: {
+                  deletedAt: null,
+                  userId
+                }
+              },
+              homeScore: true,
               homeTeam: {
                 select: teamSelect
               },
               id: true,
               kickoff: true,
-              round: {
-                select: matchRoundSelect
+              stadium: true,
+              status: true,
+              statusLong: true
+            },
+            where: {
+              deletedAt: null
+            }
+          },
+          name: true,
+          number: true,
+          season: {
+            select: {
+              championship: {
+                select: {
+                  id: true,
+                  name: true
+                }
               },
-              status: true
+              name: true,
+              year: true
             }
-          }
+          },
+          startsAt: true,
+          status: true
         },
-        take: 20,
         where: {
-          deletedAt: null,
           league: {
+            deletedAt: null,
             members: {
               some: {
                 status: "ACTIVE",
@@ -307,167 +296,118 @@ export async function getGuessesPageData(
               }
             }
           },
-          userId
-        }
-      }),
-      prisma.guess.count({
-        where: {
-          deletedAt: null,
-          league: {
-            members: {
-              some: {
-                status: "ACTIVE",
-                userId
-              }
+          leagueId: {
+            not: null
+          },
+          endsAt: {
+            gte: now
+          },
+          matches: {
+            some: {
+              deletedAt: null
             }
           },
-          userId
-        }
-      }),
-      prisma.guess.count({
-        where: {
-          deletedAt: null,
-          joker: true,
-          league: {
-            members: {
-              some: {
-                status: "ACTIVE",
-                userId
-              }
-            }
+          startsAt: {
+            lte: now
           },
-          userId
+          status: {
+            in: ["OPEN", "LIVE"]
+          }
         }
       })
     ]);
 
-    const consistentMatches = matches.filter(
-      (match) => match.round.league?.championshipId === match.round.season.championship.id
-    );
-    const consistentRecentGuesses = recentGuesses.filter(
-      (guess) =>
-        guess.match.round.league?.championshipId === guess.match.round.season.championship.id
-    );
-    const matchIds = consistentMatches.map((match) => match.id);
-    const leagueIds = Array.from(
-      new Set(
-        consistentMatches
-          .map((match) => match.round.league?.id)
-          .filter((id): id is string => Boolean(id))
+    const rounds = roundRecords
+      .filter(
+        (round) =>
+          round.league && round.league.championshipId === round.season.championship.id
       )
-    );
-    const existingGuesses =
-      matchIds.length > 0 && leagueIds.length > 0
-        ? await prisma.guess.findMany({
-            select: {
-              ...guessSelect,
-              matchId: true
-            },
-            where: {
-              deletedAt: null,
-              leagueId: {
-                in: leagueIds
-              },
-              matchId: {
-                in: matchIds
-              },
-              userId
-            }
-          })
-        : [];
-    const guessesByMatchAndLeague = new Map(
-      existingGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
-    );
-    const roundIds = Array.from(new Set(consistentMatches.map((match) => match.roundId)));
-    const roundJokers =
-      roundIds.length > 0 && leagueIds.length > 0
-        ? await prisma.guess.findMany({
-            select: {
-              leagueId: true,
-              match: {
-                select: {
-                  roundId: true
-                }
-              }
-            },
-            where: {
-              deletedAt: null,
-              joker: true,
-              leagueId: {
-                in: leagueIds
-              },
-              match: {
-                roundId: {
-                  in: roundIds
-                }
-              },
-              userId
-            }
-          })
-        : [];
+      .map((round): GuessRoundView => {
+        const league = round.league;
 
-    const jokersByRound = roundJokers.reduce<Record<string, number>>((accumulator, guess) => {
-      const key = `${guess.match.roundId}:${guess.leagueId}`;
+        if (!league) {
+          throw new Error("Rodada sem liga.");
+        }
 
-      accumulator[key] = (accumulator[key] ?? 0) + 1;
+        const roundLabel = getRoundLabel(round);
+        const matches = round.matches.map((match): GuessMatchView => {
+          const guessRecord = match.guesses.find((guess) => guess.leagueId === league.id) ?? null;
 
-      return accumulator;
-    }, {});
+          return {
+            awayScore: match.awayScore,
+            awayTeam: match.awayTeam,
+            canEdit: canEditMatch(
+              match.kickoff,
+              round.startsAt,
+              round.endsAt,
+              round.status,
+              match.status,
+              now
+            ),
+            championshipName: round.season.championship.name,
+            city: match.city,
+            elapsed: match.elapsed,
+            existingGuess: guessRecord ? mapGuess(guessRecord) : null,
+            homeScore: match.homeScore,
+            homeTeam: match.homeTeam,
+            id: match.id,
+            kickoff: match.kickoff.toISOString(),
+            leagueId: league.id,
+            leagueName: league.name,
+            roundId: round.id,
+            roundLabel,
+            scoring,
+            stadium: match.stadium,
+            status: match.status,
+            statusLong: match.statusLong
+          };
+        });
+        const jokerMatches = matches.filter((match) => match.existingGuess?.joker);
+        const jokerMatch = jokerMatches[0] ?? null;
 
-    const availableMatches = consistentMatches.map((match) => {
-      const leagueId = match.round.league?.id ?? null;
-      const existingGuessRecord = leagueId
-        ? guessesByMatchAndLeague.get(`${match.id}:${leagueId}`)
-        : undefined;
-      const existingGuess = existingGuessRecord ? mapGuess(existingGuessRecord) : null;
-      const usedJokersInRound = leagueId ? (jokersByRound[`${match.roundId}:${leagueId}`] ?? 0) : 0;
+        return {
+          championshipName: round.season.championship.name,
+          endsAt: round.endsAt.toISOString(),
+          id: round.id,
+          jokerLimit: scoring.jokerLimitPerRound,
+          jokerMatchId: jokerMatch?.id ?? null,
+          jokerMatchName: jokerMatch
+            ? matchName(jokerMatch.homeTeam, jokerMatch.awayTeam)
+            : null,
+          label: roundLabel,
+          leagueId: league.id,
+          leagueName: league.name,
+          matches,
+          startsAt: round.startsAt.toISOString(),
+          status: round.status,
+          usedJokers: jokerMatches.length
+        };
+      })
+      .sort((left, right) => {
+        const leftOpen = left.status === "OPEN" || left.status === "LIVE" ? 1 : 0;
+        const rightOpen = right.status === "OPEN" || right.status === "LIVE" ? 1 : 0;
 
-      return {
-        awayTeam: match.awayTeam,
-        championshipName: match.round.season.championship.name,
-        city: match.city,
-        existingGuess,
-        homeTeam: match.homeTeam,
-        id: match.id,
-        jokerAvailable:
-          Boolean(existingGuess?.joker) || usedJokersInRound < scoring.jokerLimitPerRound,
-        jokerLimit: scoring.jokerLimitPerRound,
-        kickoff: match.kickoff.toISOString(),
-        leagueId,
-        leagueName: match.round.league?.name ?? null,
-        roundId: match.roundId,
-        roundLabel: getRoundLabel(match.round),
-        scoring,
-        stadium: match.stadium,
-        status: match.status,
-        usedJokersInRound
-      };
-    });
+        return rightOpen - leftOpen || right.startsAt.localeCompare(left.startsAt);
+      });
+    const allMatches = rounds.flatMap((round) => round.matches);
+    const isComplete = (match: GuessMatchView) =>
+      Boolean(
+        match.existingGuess &&
+          match.existingGuess.homePrediction !== null &&
+          match.existingGuess.awayPrediction !== null
+      );
 
     return {
       ok: true,
       data: {
-        availableMatches,
-        recentGuesses: consistentRecentGuesses.map((guess) => ({
-          awayTeam: guess.match.awayTeam,
-          canEdit: getCanEditGuess(
-            guess.match.kickoff,
-            guess.match.round.status,
-            guess.match.status
-          ),
-          championshipName: guess.match.round.season.championship.name,
-          guess: mapGuess(guess),
-          homeTeam: guess.match.homeTeam,
-          kickoff: guess.match.kickoff.toISOString(),
-          matchId: guess.match.id,
-          roundLabel: getRoundLabel(guess.match.round),
-          status: guess.match.status
-        })),
+        rounds,
         scoring,
         stats: {
-          availableMatches: availableMatches.length,
-          submittedGuesses,
-          usedJokers
+          blockedMatches: allMatches.filter((match) => !match.canEdit).length,
+          pendingGuesses: allMatches.filter((match) => match.canEdit && !isComplete(match)).length,
+          submittedGuesses: allMatches.filter(isComplete).length,
+          totalMatches: allMatches.length,
+          usedJokers: allMatches.filter((match) => match.existingGuess?.joker).length
         }
       }
     };

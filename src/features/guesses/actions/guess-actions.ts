@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/server/auth/session";
@@ -108,7 +109,22 @@ async function createGuessAuditLog(
 
 export async function upsertGuessAction(
   input: UpsertGuessInput
-): Promise<GuessActionResult<{ pointsPreview: number }>> {
+): Promise<
+  GuessActionResult<{
+    guess: {
+      awayPrediction: number | null;
+      homePrediction: number | null;
+      id: string;
+      joker: boolean;
+      leagueId: string | null;
+      prediction: "HOME" | "DRAW" | "AWAY";
+      score: null;
+      submittedAt: string;
+      updatedAt: string;
+    };
+    pointsPreview: number;
+  }>
+> {
   const sessionUser = await requireUser();
   const parsedInput = upsertGuessSchema.safeParse(input);
 
@@ -168,6 +184,7 @@ export async function upsertGuessAction(
         message: "Esta partida nao esta vinculada a uma liga."
       };
     }
+    const leagueId = match.round.leagueId;
 
     const membership = await prisma.leagueMember.findUnique({
       select: {
@@ -176,7 +193,7 @@ export async function upsertGuessAction(
       },
       where: {
         leagueId_userId: {
-          leagueId: match.round.leagueId,
+          leagueId,
           userId: sessionUser.id
         }
       }
@@ -191,31 +208,14 @@ export async function upsertGuessAction(
 
     const scoring = await getScoringDefaults();
 
-    if (data.joker) {
-      const jokersInRound = await prisma.guess.count({
-        where: {
-          deletedAt: null,
-          joker: true,
-          match: {
-            roundId: match.roundId
-          },
-          leagueId: match.round.leagueId,
-          matchId: {
-            not: data.matchId
-          },
-          userId: sessionUser.id
+    if (data.joker && scoring.jokerLimitPerRound < 1) {
+      return {
+        ok: false,
+        message: "O coringa esta desativado para esta rodada.",
+        fieldErrors: {
+          joker: ["O coringa esta desativado para esta rodada."]
         }
-      });
-
-      if (jokersInRound >= scoring.jokerLimitPerRound) {
-        return {
-          ok: false,
-          message: "Voce ja utilizou o curinga desta rodada.",
-          fieldErrors: {
-            joker: ["Voce ja utilizou o curinga desta rodada."]
-          }
-        };
-      }
+      };
     }
 
     const currentGuess = await prisma.guess.findUnique({
@@ -230,40 +230,133 @@ export async function upsertGuessAction(
       },
       where: {
         userId_leagueId_matchId: {
-          leagueId: match.round.leagueId,
+          leagueId,
           matchId: data.matchId,
           userId: sessionUser.id
         }
       }
     });
+    const previousJoker = data.joker
+      ? await prisma.guess.findFirst({
+          include: {
+            match: {
+              select: {
+                deletedAt: true,
+                kickoff: true,
+                round: {
+                  select: {
+                    endsAt: true,
+                    league: {
+                      select: {
+                        championshipId: true
+                      }
+                    },
+                    leagueId: true,
+                    season: {
+                      select: {
+                        championshipId: true
+                      }
+                    },
+                    startsAt: true,
+                    status: true
+                  }
+                },
+                status: true
+              }
+            }
+          },
+          where: {
+            deletedAt: null,
+            joker: true,
+            leagueId,
+            match: {
+              roundId: match.roundId
+            },
+            matchId: {
+              not: data.matchId
+            },
+            userId: sessionUser.id
+          }
+        })
+      : null;
 
-    const guess = await prisma.guess.upsert({
-      create: {
-        awayPrediction: data.awayPrediction,
-        homePrediction: data.homePrediction,
-        joker: data.joker,
-        leagueId: match.round.leagueId,
-        matchId: data.matchId,
-        prediction: data.prediction,
-        userId: sessionUser.id
-      },
-      update: {
-        awayPrediction: data.awayPrediction,
-        deletedAt: null,
-        homePrediction: data.homePrediction,
-        joker: data.joker,
-        leagueId: match.round.leagueId,
-        prediction: data.prediction,
-        submittedAt: currentGuess?.deletedAt ? serverNow() : undefined
-      },
-      where: {
-        userId_leagueId_matchId: {
-          leagueId: match.round.leagueId,
-          matchId: data.matchId,
-          userId: sessionUser.id
+    if (previousJoker && validateEditableMatch(previousJoker.match)) {
+      return {
+        ok: false,
+        message: "O coringa atual ja esta bloqueado e nao pode ser transferido.",
+        fieldErrors: {
+          joker: ["O coringa atual ja esta bloqueado e nao pode ser transferido."]
         }
+      };
+    }
+
+    const guess = await prisma.$transaction(
+      async (transaction) => {
+        if (data.joker) {
+          await transaction.guess.updateMany({
+            data: {
+              joker: false
+            },
+            where: {
+              deletedAt: null,
+              joker: true,
+              leagueId,
+              match: {
+                roundId: match.roundId
+              },
+              matchId: {
+                not: data.matchId
+              },
+              userId: sessionUser.id
+            }
+          });
+        }
+
+        return transaction.guess.upsert({
+          create: {
+            awayPrediction: data.awayPrediction,
+            homePrediction: data.homePrediction,
+            joker: data.joker,
+            leagueId,
+            matchId: data.matchId,
+            prediction: data.prediction,
+            userId: sessionUser.id
+          },
+          update: {
+            awayPrediction: data.awayPrediction,
+            deletedAt: null,
+            homePrediction: data.homePrediction,
+            joker: data.joker,
+            leagueId,
+            prediction: data.prediction,
+            submittedAt: currentGuess?.deletedAt ? serverNow() : undefined
+          },
+          where: {
+            userId_leagueId_matchId: {
+              leagueId,
+              matchId: data.matchId,
+              userId: sessionUser.id
+            }
+          }
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable
       }
-    });
+    );
+
+    if (previousJoker) {
+      await createGuessAuditLog(
+        sessionUser.id,
+        "guess.joker.transferred",
+        previousJoker.id,
+        { joker: true },
+        {
+          joker: false,
+          transferredToMatchId: data.matchId
+        }
+      );
+    }
 
     await createGuessAuditLog(
       sessionUser.id,
@@ -274,7 +367,7 @@ export async function upsertGuessAction(
         awayPrediction: data.awayPrediction,
         homePrediction: data.homePrediction,
         joker: data.joker,
-        leagueId: match.round.leagueId,
+        leagueId,
         matchId: data.matchId,
         prediction: data.prediction
       }
@@ -288,6 +381,17 @@ export async function upsertGuessAction(
       message:
         currentGuess?.deletedAt || !currentGuess ? "Palpite enviado." : "Palpite atualizado.",
       data: {
+        guess: {
+          awayPrediction: guess.awayPrediction,
+          homePrediction: guess.homePrediction,
+          id: guess.id,
+          joker: guess.joker,
+          leagueId: guess.leagueId,
+          prediction: guess.prediction,
+          score: null,
+          submittedAt: guess.submittedAt.toISOString(),
+          updatedAt: guess.updatedAt.toISOString()
+        },
         pointsPreview: getPointsPreview(scoring, data.joker)
       }
     };
