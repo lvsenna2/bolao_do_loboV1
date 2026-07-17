@@ -130,7 +130,7 @@ export function XpNotificationToast() {
   return (
     <div
       aria-live="polite"
-      className="xp-toast fixed right-4 top-20 z-50 w-[min(calc(100vw-2rem),360px)] rounded-card border border-brand-gold/40 bg-[#06175c]/95 p-4 text-white shadow-soft backdrop-blur"
+      className="xp-toast fixed right-4 top-20 z-50 w-[min(calc(100vw-2rem),360px)] rounded-card border border-brand-gold/40 bg-black/95 p-4 text-white shadow-soft backdrop-blur"
       role="status"
     >
       <div className="flex gap-3">
@@ -149,7 +149,7 @@ export function XpNotificationToast() {
               <X aria-hidden className="h-4 w-4" />
             </button>
           </div>
-          <p className="mt-1 text-sm text-blue-100">{notification.message}</p>
+          <p className="mt-1 text-sm text-amber-50/80">{notification.message}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {notification.xpReceived !== null ? (
               <span className="rounded-full bg-brand-gold px-2 py-1 text-xs font-bold text-slate-950">

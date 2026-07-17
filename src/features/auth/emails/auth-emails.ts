@@ -48,25 +48,25 @@ function createEmailLayout(title: string, content: string, appUrl: string) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(title)}</title>
   </head>
-  <body style="margin:0;background:#061342;color:#f8fafc;font-family:Arial,Helvetica,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#061342;padding:32px 12px;">
+  <body style="margin:0;background:#050505;color:#faf7ee;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#050505;padding:32px 12px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;border:1px solid rgba(255,193,7,.35);border-radius:18px;background:#0b1c5f;overflow:hidden;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;border:1px solid rgba(242,185,28,.35);border-radius:18px;background:#11110f;overflow:hidden;">
             <tr>
               <td style="padding:28px 28px 18px;">
                 <img src="${escapeHtml(logoUrl)}" width="96" height="96" alt="Bolao do Lobo" style="display:block;width:96px;height:96px;border-radius:999px;border:2px solid rgba(245,158,11,.8);margin:0 0 16px;object-fit:cover;" />
-                <p style="margin:0 0 8px;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;">Bolao do Lobo</p>
+                <p style="margin:0 0 8px;color:#f2b91c;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;">Bolao do Lobo</p>
                 <h1 style="margin:0;color:#ffffff;font-size:28px;line-height:1.15;">${escapeHtml(title)}</h1>
               </td>
             </tr>
             <tr>
-              <td style="padding:0 28px 28px;color:#dbeafe;font-size:15px;line-height:1.6;">
+              <td style="padding:0 28px 28px;color:#e7dfca;font-size:15px;line-height:1.6;">
                 ${content}
               </td>
             </tr>
           </table>
-          <p style="margin:18px 0 0;color:#93a4c7;font-size:12px;">Este e-mail foi enviado automaticamente pelo Bolao do Lobo.</p>
+          <p style="margin:18px 0 0;color:#aaa18d;font-size:12px;">Este e-mail foi enviado automaticamente pelo Bolao do Lobo.</p>
         </td>
       </tr>
     </table>
@@ -77,7 +77,7 @@ function createEmailLayout(title: string, content: string, appUrl: string) {
 function createButton(label: string, href: string) {
   return `<p style="margin:24px 0;"><a href="${escapeHtml(
     href
-  )}" style="display:inline-block;border-radius:12px;background:#f59e0b;color:#061342;font-weight:700;text-decoration:none;padding:13px 18px;">${escapeHtml(
+  )}" style="display:inline-block;border-radius:12px;background:#f2b91c;color:#090909;font-weight:700;text-decoration:none;padding:13px 18px;">${escapeHtml(
     label
   )}</a></p>`;
 }
@@ -91,15 +91,15 @@ export function buildGuessReminderEmail({ appUrl, leagues, userName }: GuessRemi
       (league) => `<tr>
         <td style="padding:12px 0;border-bottom:1px solid rgba(219,234,254,.14);">
           <strong style="display:block;color:#ffffff;font-size:15px;">${escapeHtml(league.name)}</strong>
-          <span style="display:block;color:#b6c4e2;font-size:13px;">${escapeHtml(league.championshipName)}</span>
-          <span style="display:block;margin-top:4px;color:#f59e0b;font-size:13px;font-weight:700;">${league.pendingMatches} ${getPlural(
+          <span style="display:block;color:#c9c0aa;font-size:13px;">${escapeHtml(league.championshipName)}</span>
+          <span style="display:block;margin-top:4px;color:#f2b91c;font-size:13px;font-weight:700;">${league.pendingMatches} ${getPlural(
             league.pendingMatches,
             "partida sem palpite",
             "partidas sem palpite"
           )}</span>
           ${
             league.nextKickoff
-              ? `<span style="display:block;margin-top:4px;color:#b6c4e2;font-size:12px;">Proxima partida: ${escapeHtml(league.nextKickoff)}</span>`
+              ? `<span style="display:block;margin-top:4px;color:#c9c0aa;font-size:12px;">Proxima partida: ${escapeHtml(league.nextKickoff)}</span>`
               : ""
           }
         </td>
@@ -175,8 +175,8 @@ export function buildPasswordResetEmail({
     <p style="margin:0 0 14px;">Recebemos uma solicitacao para redefinir a senha da sua conta.</p>
     <p style="margin:0;">O link abaixo expira em ${expiresInMinutes} minutos.</p>
     ${createButton("Redefinir senha", resetUrl)}
-    <p style="margin:0 0 12px;color:#b6c4e2;">Se voce nao solicitou isso, ignore este e-mail.</p>
-    <p style="margin:0;color:#b6c4e2;">App: ${escapeHtml(appUrl)}</p>`,
+    <p style="margin:0 0 12px;color:#c9c0aa;">Se voce nao solicitou isso, ignore este e-mail.</p>
+    <p style="margin:0;color:#c9c0aa;">App: ${escapeHtml(appUrl)}</p>`,
     appUrl
   );
 

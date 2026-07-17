@@ -58,9 +58,7 @@ function getDefaultValues(
   leagueId: string
 ): UpsertGuessInput {
   const hasSavedScore = Boolean(
-    existingGuess &&
-      existingGuess.homePrediction !== null &&
-      existingGuess.awayPrediction !== null
+    existingGuess && existingGuess.homePrediction !== null && existingGuess.awayPrediction !== null
   );
   const homePrediction = existingGuess?.homePrediction ?? emptyScore();
   const awayPrediction = existingGuess?.awayPrediction ?? emptyScore();
@@ -375,7 +373,10 @@ export function GuessForm({
         >
           <Star
             aria-hidden
-            className={cn("mt-0.5 h-5 w-5 shrink-0", joker ? "fill-brand-gold text-brand-gold" : "text-brand-gold")}
+            className={cn(
+              "mt-0.5 h-5 w-5 shrink-0",
+              joker ? "fill-brand-gold text-brand-gold" : "text-brand-gold"
+            )}
           />
           <span className="min-w-0 text-sm">
             <span className="block font-semibold text-app-foreground">
@@ -408,7 +409,7 @@ export function GuessForm({
           </LoadingButton>
           {existingGuess ? (
             <LoadingButton
-              className="h-11 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground hover:border-brand-blue hover:text-brand-blue disabled:pointer-events-none"
+              className="h-11 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground hover:border-brand-gold hover:text-brand-gold disabled:pointer-events-none"
               disabled={isPending}
               icon={<Trash2 aria-hidden className="h-4 w-4" />}
               isLoading={isDeleting}
@@ -426,7 +427,7 @@ export function GuessForm({
         footer={
           <>
             <button
-              className="h-11 rounded-button border border-app-border px-4 text-sm font-semibold text-app-foreground hover:border-brand-blue"
+              className="h-11 rounded-button border border-app-border px-4 text-sm font-semibold text-app-foreground hover:border-brand-gold"
               onClick={() => setJokerDialogOpen(false)}
               type="button"
             >
@@ -451,13 +452,13 @@ export function GuessForm({
       >
         {selectingDifferentJoker ? (
           <p>
-            O Coringa esta em <strong className="text-app-foreground">{roundJokerMatchName}</strong>.
-            Deseja transferi-lo para <strong className="text-app-foreground">{matchName}</strong>?
+            O Coringa esta em <strong className="text-app-foreground">{roundJokerMatchName}</strong>
+            . Deseja transferi-lo para <strong className="text-app-foreground">{matchName}</strong>?
           </p>
         ) : (
           <p>
             Voce possui apenas um Coringa nesta rodada. Ao confirmar, a pontuacao obtida em
-            <strong className="text-app-foreground"> {matchName}</strong> sera multiplicada por {" "}
+            <strong className="text-app-foreground"> {matchName}</strong> sera multiplicada por{" "}
             {scoring.jokerMultiplier}.
           </p>
         )}

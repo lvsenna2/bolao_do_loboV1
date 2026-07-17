@@ -18,7 +18,8 @@ const QR_SIZE = 21 + (QR_VERSION - 1) * 4;
 const QR_TOTAL_CODEWORDS = 346;
 const QR_ECC_CODEWORDS_PER_BLOCK = 26;
 const QR_NUM_ERROR_CORRECTION_BLOCKS = 5;
-const QR_DATA_CODEWORDS = QR_TOTAL_CODEWORDS - QR_ECC_CODEWORDS_PER_BLOCK * QR_NUM_ERROR_CORRECTION_BLOCKS;
+const QR_DATA_CODEWORDS =
+  QR_TOTAL_CODEWORDS - QR_ECC_CODEWORDS_PER_BLOCK * QR_NUM_ERROR_CORRECTION_BLOCKS;
 
 function normalizeAscii(value: string) {
   return value
@@ -179,10 +180,10 @@ function reedSolomonRemainder(data: number[], divisor: number[]) {
 
 function interleaveBlocks(dataCodewords: number[]) {
   const divisor = reedSolomonDivisor(QR_ECC_CODEWORDS_PER_BLOCK);
-  const shortBlockCount = QR_NUM_ERROR_CORRECTION_BLOCKS - (QR_TOTAL_CODEWORDS % QR_NUM_ERROR_CORRECTION_BLOCKS);
+  const shortBlockCount =
+    QR_NUM_ERROR_CORRECTION_BLOCKS - (QR_TOTAL_CODEWORDS % QR_NUM_ERROR_CORRECTION_BLOCKS);
   const shortBlockDataLength =
-    Math.floor(QR_TOTAL_CODEWORDS / QR_NUM_ERROR_CORRECTION_BLOCKS) -
-    QR_ECC_CODEWORDS_PER_BLOCK;
+    Math.floor(QR_TOTAL_CODEWORDS / QR_NUM_ERROR_CORRECTION_BLOCKS) - QR_ECC_CODEWORDS_PER_BLOCK;
   const blocks: number[][] = [];
   let offset = 0;
 
@@ -234,7 +235,11 @@ function setFunctionModule(
   matrix.isFunction[y][x] = true;
 }
 
-function drawFinderPattern(matrix: ReturnType<typeof createEmptyMatrix>, centerX: number, centerY: number) {
+function drawFinderPattern(
+  matrix: ReturnType<typeof createEmptyMatrix>,
+  centerX: number,
+  centerY: number
+) {
   for (let y = -4; y <= 4; y += 1) {
     for (let x = -4; x <= 4; x += 1) {
       const targetX = centerX + x;
@@ -275,8 +280,7 @@ function drawFunctionPatterns(matrix: ReturnType<typeof createEmptyMatrix>) {
   const positions = [6, 28, 50];
   positions.forEach((x) => {
     positions.forEach((y) => {
-      const overlapsFinder =
-        (x === 6 && y === 6) || (x === 6 && y === 50) || (x === 50 && y === 6);
+      const overlapsFinder = (x === 6 && y === 6) || (x === 6 && y === 50) || (x === 50 && y === 6);
 
       if (!overlapsFinder) {
         drawAlignmentPattern(matrix, x, y);
@@ -355,9 +359,9 @@ function maskApplies(mask: number, x: number, y: number) {
     case 5:
       return ((product % 2) + (product % 3)) % 2 === 0;
     case 6:
-      return (((product % 2) + (product % 3)) % 2) === 0;
+      return ((product % 2) + (product % 3)) % 2 === 0;
     default:
-      return ((((x + y) % 2) + (product % 3)) % 2) === 0;
+      return (((x + y) % 2) + (product % 3)) % 2 === 0;
   }
 }
 
@@ -380,7 +384,8 @@ function drawCodewords(matrix: ReturnType<typeof createEmptyMatrix>, codewords: 
         }
 
         const codeword = codewords[Math.floor(bitIndex / 8)];
-        matrix.modules[y][x] = codeword === undefined ? false : getBit(codeword, 7 - (bitIndex % 8));
+        matrix.modules[y][x] =
+          codeword === undefined ? false : getBit(codeword, 7 - (bitIndex % 8));
         bitIndex += 1;
       }
     }
@@ -432,7 +437,7 @@ export function createQrSvg(value: string) {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges">`,
     `<rect width="${size}" height="${size}" fill="#fff"/>`,
-    `<g fill="#071044">${cells.join("")}</g>`,
+    `<g fill="#090909">${cells.join("")}</g>`,
     "</svg>"
   ].join("");
 }

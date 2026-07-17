@@ -26,7 +26,7 @@ export function EmptyState({
         className
       )}
     >
-      <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-app-elevated text-brand-blue">
+      <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-app-elevated text-brand-gold">
         <Icon aria-hidden className="h-6 w-6" />
       </span>
       <h2 className="text-base font-semibold text-app-foreground">{title}</h2>

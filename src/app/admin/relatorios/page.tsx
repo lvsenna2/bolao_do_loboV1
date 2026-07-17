@@ -37,7 +37,7 @@ export default function AdminReportsPage() {
         {reports.map((report) => (
           <Card key={report.href}>
             <CardHeader>
-              <span className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-button bg-brand-blue/10 text-brand-blue">
+              <span className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-button bg-brand-gold/10 text-brand-gold">
                 <FileText aria-hidden className="h-5 w-5" />
               </span>
               <CardTitle>{report.title}</CardTitle>

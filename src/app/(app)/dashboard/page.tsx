@@ -476,7 +476,7 @@ export default async function UserHomePage() {
                   </div>
                   <div className="flex items-center justify-between rounded-control bg-app-background p-3">
                     <span className="flex items-center gap-2 text-sm text-app-muted">
-                      <Users aria-hidden className="h-4 w-4 text-brand-blue" />
+                      <Users aria-hidden className="h-4 w-4 text-brand-gold" />
                       Ligas
                     </span>
                     <strong className="text-app-foreground">{stats.leagues}</strong>

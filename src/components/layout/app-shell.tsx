@@ -26,7 +26,7 @@ export function AppShell({
       className={cn(
         "min-h-screen text-app-foreground",
         mode === "user"
-          ? "bg-[#00145a] bg-[radial-gradient(circle_at_top_left,rgba(29,78,216,0.75),transparent_34%),linear-gradient(180deg,#0638d6_0%,#001b78_42%,#000b35_100%)] text-white"
+          ? "bg-[#050505] bg-[radial-gradient(circle_at_top_left,rgba(242,185,28,0.16),transparent_34%),linear-gradient(180deg,#17130a_0%,#090909_42%,#020202_100%)] text-white"
           : "bg-app-background"
       )}
       data-shell-mode={mode}

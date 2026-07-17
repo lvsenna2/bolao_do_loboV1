@@ -210,7 +210,7 @@ export function CreateLeagueForm({ admin = false, championships }: CreateLeagueF
 
       <div className="flex items-end">
         <LoadingButton
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
           disabled={isPending || championships.length === 0}
           icon={<Plus aria-hidden className="h-4 w-4" />}
           isLoading={isPending}

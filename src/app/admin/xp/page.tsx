@@ -453,7 +453,7 @@ export default async function AdminXpPage() {
                   <input className={inputClass} maxLength={240} name="reason" required />
                 </label>
                 <AdminSubmitButton
-                  className="h-10 w-full rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  className="h-10 w-full rounded-button bg-brand-gold px-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
                   pendingLabel="Aplicando..."
                 >
                   Aplicar ajuste

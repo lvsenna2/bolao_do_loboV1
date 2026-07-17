@@ -92,7 +92,8 @@ function TeamMark({ align = "left", apiId, logo, name, shortName }: TeamMarkProp
 }
 
 function guessScore(guess: GuessView | null) {
-  if (guess?.homePrediction === null || guess?.awayPrediction === null || !guess) return "Sem palpite";
+  if (guess?.homePrediction === null || guess?.awayPrediction === null || !guess)
+    return "Sem palpite";
 
   return `${guess.homePrediction} x ${guess.awayPrediction}`;
 }
@@ -244,7 +245,9 @@ export function GuessMatchCard({
           {match.stadium || match.city ? (
             <p className="flex items-center gap-2 sm:col-span-2">
               <MapPin aria-hidden className="h-4 w-4 shrink-0 text-brand-gold" />
-              <span className="truncate">{[match.stadium, match.city].filter(Boolean).join(" - ")}</span>
+              <span className="truncate">
+                {[match.stadium, match.city].filter(Boolean).join(" - ")}
+              </span>
             </p>
           ) : null}
         </div>
@@ -317,7 +320,7 @@ export function GuessMatchCard({
         ) : null}
 
         <Link
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-app-border px-4 text-sm font-semibold text-app-muted hover:border-brand-blue hover:text-brand-blue"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-app-border px-4 text-sm font-semibold text-app-muted hover:border-brand-gold hover:text-brand-gold"
           href={`/partidas/${match.id}`}
         >
           <ChartNoAxesCombined aria-hidden className="h-4 w-4" />

@@ -46,8 +46,7 @@ export function ManualFootballSyncForm({
   const router = useRouter();
   const lockRef = useRef(false);
   const initialCompetition = competitions[0]?.key ?? "brasileirao-serie-a";
-  const [competitionKey, setCompetitionKey] =
-    useState<FootballCompetitionKey>(initialCompetition);
+  const [competitionKey, setCompetitionKey] = useState<FootballCompetitionKey>(initialCompetition);
   const [selectedMatchId, setSelectedMatchId] = useState(
     detailMatches.find((match) => match.competitionKey === initialCompetition)?.id ?? ""
   );
@@ -177,9 +176,7 @@ export function ManualFootballSyncForm({
           <select
             className="h-11 w-full rounded-control border border-app-border bg-app-background px-3 text-sm font-semibold text-app-foreground outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20"
             disabled={disabled || isBusy}
-            onChange={(event) =>
-              changeCompetition(event.target.value as FootballCompetitionKey)
-            }
+            onChange={(event) => changeCompetition(event.target.value as FootballCompetitionKey)}
             value={competitionKey}
           >
             {competitions.map((competition) => (
@@ -202,7 +199,7 @@ export function ManualFootballSyncForm({
         </LoadingButton>
 
         <LoadingButton
-          className="h-11 rounded-button border border-brand-blue bg-brand-blue/10 px-5 text-sm font-bold text-brand-blue hover:bg-brand-blue hover:text-white"
+          className="h-11 rounded-button border border-brand-gold bg-brand-gold/10 px-5 text-sm font-bold text-brand-gold hover:bg-brand-gold hover:text-slate-950"
           disabled={disabled || isRunning || isSyncingDetails || competitions.length === 0}
           icon={<Radio aria-hidden className="h-4 w-4" />}
           isLoading={isUpdatingScores}
@@ -230,7 +227,7 @@ export function ManualFootballSyncForm({
             ) : null}
             {matchesForCompetition.map((match) => (
               <option key={match.id} value={match.id}>
-                {match.homeTeamName} x {match.awayTeamName} | {match.roundLabel} | {" "}
+                {match.homeTeamName} x {match.awayTeamName} | {match.roundLabel} |{" "}
                 {formatDateTimeInSaoPaulo(match.kickoff)} | {match.detailStatus}
               </option>
             ))}
@@ -238,7 +235,7 @@ export function ManualFootballSyncForm({
         </label>
 
         <LoadingButton
-          className="h-11 rounded-button bg-brand-blue px-5 text-sm font-semibold text-white hover:bg-blue-700"
+          className="h-11 rounded-button bg-brand-gold px-5 text-sm font-semibold text-slate-950 hover:bg-amber-300"
           disabled={disabled || isRunning || isUpdatingScores || !selectedMatchId}
           icon={<Database aria-hidden className="h-4 w-4" />}
           isLoading={isSyncingDetails}
@@ -252,12 +249,15 @@ export function ManualFootballSyncForm({
 
       <p className="text-xs leading-5 text-app-muted">
         Cada execucao detalhada processa somente a partida selecionada. Historico e estadio podem
-        ser atualizados imediatamente; escalacoes, eventos e estatisticas dependem da cobertura e
-        do momento da partida.
+        ser atualizados imediatamente; escalacoes, eventos e estatisticas dependem da cobertura e do
+        momento da partida.
       </p>
 
       {progress ? (
-        <div className="rounded-control border border-app-border bg-app-background p-4" aria-live="polite">
+        <div
+          className="rounded-control border border-app-border bg-app-background p-4"
+          aria-live="polite"
+        >
           <div className="flex items-center gap-2 text-sm font-semibold text-app-foreground">
             <Database aria-hidden className="h-4 w-4 text-brand-gold" />
             Ultimo processamento

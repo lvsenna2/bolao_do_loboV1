@@ -76,7 +76,7 @@ export default async function AdminChampionshipsPage({ searchParams }: Champions
               ))}
             </AdminSelect>
             <input className={inputClass} name="logo" placeholder="URL do escudo" type="url" />
-            <input className={inputClass} name="primaryColor" placeholder="#2563EB" />
+            <input className={inputClass} name="primaryColor" placeholder="#F2B91C" />
             <input className={inputClass} name="provider" placeholder="API externa" />
             <input className={inputClass} name="apiId" placeholder="ID na API" type="number" />
             <textarea
@@ -85,7 +85,7 @@ export default async function AdminChampionshipsPage({ searchParams }: Champions
               placeholder="Descricao"
             />
             <AdminSubmitButton
-              className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 lg:self-end"
+              className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 lg:self-end"
               pendingLabel="Salvando..."
             >
               Cadastrar
@@ -126,7 +126,7 @@ export default async function AdminChampionshipsPage({ searchParams }: Champions
                     <div className="flex items-center gap-3">
                       <span
                         className="h-4 w-4 rounded-full border border-app-border"
-                        style={{ backgroundColor: championship.primaryColor ?? "#2563EB" }}
+                        style={{ backgroundColor: championship.primaryColor ?? "#F2B91C" }}
                       />
                       <div>
                         <p className="font-semibold">{championship.name}</p>
@@ -159,7 +159,7 @@ export default async function AdminChampionshipsPage({ searchParams }: Champions
                           ))}
                         </AdminSelect>
                         <AdminSubmitButton
-                          className="h-10 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                          className="h-10 rounded-button bg-brand-gold px-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
                           pendingLabel="Salvando..."
                         >
                           Salvar

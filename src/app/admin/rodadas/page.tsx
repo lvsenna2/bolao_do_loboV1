@@ -150,7 +150,7 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
               </AdminSelect>
               <textarea className={textareaClass} name="description" placeholder="Descricao" />
               <AdminSubmitButton
-                className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:opacity-60"
                 disabled={seasons.length === 0}
                 pendingLabel="Salvando..."
               >
@@ -211,7 +211,7 @@ export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageP
                 ))}
               </AdminSelect>
               <AdminSubmitButton
-                className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:opacity-60"
                 disabled={!canCreateMatch}
                 pendingLabel="Salvando..."
               >

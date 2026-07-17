@@ -61,7 +61,7 @@ export const createChampionshipSchema = z.object({
   description: z.string().max(500).optional().or(z.literal("")),
   primaryColor: z
     .string()
-    .regex(/^#[0-9A-Fa-f]{6}$/, "Use uma cor hexadecimal, como #2563EB.")
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Use uma cor hexadecimal, como #F2B91C.")
     .optional()
     .or(z.literal("")),
   provider: z.string().max(40).optional().or(z.literal("")),

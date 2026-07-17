@@ -41,7 +41,7 @@ export function PixPaymentCard({
   }
 
   return (
-    <section className="overflow-hidden rounded-card border border-brand-gold/35 bg-[#051353] text-white shadow-[0_24px_60px_-32px_rgba(0,0,0,0.75)]">
+    <section className="overflow-hidden rounded-card border border-brand-gold/35 bg-[#11100d] text-white shadow-[0_24px_60px_-32px_rgba(0,0,0,0.75)]">
       <div className="relative p-5">
         <div className="absolute right-5 top-5 h-16 w-16 rounded-full border border-brand-gold/25 bg-brand-gold/10" />
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center">
@@ -51,14 +51,14 @@ export function PixPaymentCard({
               Aguardando pagamento
             </span>
             <h3 className="mt-4 text-xl font-bold text-white">{leagueName}</h3>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100">
+            <p className="mt-2 max-w-xl text-sm leading-6 text-amber-50/80">
               Entrada privada reservada. Assim que o pagamento for aprovado pelo administrador, a
               liga libera rodadas, ranking e palpites para sua conta.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="rounded-control border border-white/10 bg-white/[0.08] p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100/70">
                   Valor final
                 </p>
                 <p className="mt-1 text-lg font-bold text-brand-gold">
@@ -66,7 +66,7 @@ export function PixPaymentCard({
                 </p>
               </div>
               <div className="rounded-control border border-white/10 bg-white/[0.08] p-3 sm:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100/70">
                   Chave Pix
                 </p>
                 <p className="mt-1 break-all text-sm font-semibold text-white">{pixKey}</p>
@@ -76,13 +76,13 @@ export function PixPaymentCard({
             {discountPercent > 0 ? (
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-control border border-brand-gold/25 bg-brand-gold/10 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100/70">
                     Valor original
                   </p>
                   <p className="mt-1 text-sm font-semibold text-white">{originalAmountLabel}</p>
                 </div>
                 <div className="rounded-control border border-brand-gold/25 bg-brand-gold/10 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100/70">
                     Desconto {levelName ? `- ${levelName}` : ""}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-brand-gold">
@@ -90,7 +90,7 @@ export function PixPaymentCard({
                   </p>
                 </div>
                 <div className="rounded-control border border-brand-gold/25 bg-brand-gold/10 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-200">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100/70">
                     Minimo protegido
                   </p>
                   <p className="mt-1 text-sm font-semibold text-white">{minimumAmountLabel}</p>
@@ -110,15 +110,15 @@ export function PixPaymentCard({
         </div>
       </div>
 
-      <div className="border-t border-white/10 bg-[#020a2d] p-5">
+      <div className="border-t border-brand-gold/15 bg-black p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <label className="flex-1">
-            <span className="flex items-center gap-2 text-sm font-semibold text-blue-100">
+            <span className="flex items-center gap-2 text-sm font-semibold text-amber-50/80">
               <QrCode aria-hidden className="h-4 w-4 text-brand-gold" />
               Pix copia e cola
             </span>
             <textarea
-              className="mt-2 min-h-24 w-full resize-none rounded-control border border-white/15 bg-white/10 px-3 py-2 text-xs text-white outline-none ring-brand-gold/30 placeholder:text-blue-200 focus:border-brand-gold focus:ring-2"
+              className="mt-2 min-h-24 w-full resize-none rounded-control border border-brand-gold/20 bg-white/5 px-3 py-2 text-xs text-white outline-none ring-brand-gold/30 placeholder:text-amber-100/60 focus:border-brand-gold focus:ring-2"
               readOnly
               value={pixCode}
             />
@@ -137,7 +137,7 @@ export function PixPaymentCard({
           </button>
         </div>
 
-        <p className="mt-3 flex items-center gap-2 text-xs text-blue-200">
+        <p className="mt-3 flex items-center gap-2 text-xs text-amber-100/70">
           <ShieldCheck aria-hidden className="h-4 w-4 text-brand-gold" />
           Identificador: {transactionId}
         </p>

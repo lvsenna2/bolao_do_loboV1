@@ -92,7 +92,7 @@ function MatchRow({
           </span>
         ) : null}
         {match.guess?.score ? (
-          <span className="inline-flex h-6 items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-2 text-xs font-semibold text-blue-700 dark:text-blue-300">
+          <span className="inline-flex h-6 items-center rounded-full border border-brand-gold/30 bg-brand-gold/10 px-2 text-xs font-semibold text-brand-gold">
             {match.guess.score.totalPoints} pts
           </span>
         ) : null}

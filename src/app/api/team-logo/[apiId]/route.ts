@@ -30,12 +30,12 @@ function fallbackSvg(label: string) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="${initials}">
   <defs>
     <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-      <stop stop-color="#0B2F8F"/>
-      <stop offset="1" stop-color="#071340"/>
+      <stop stop-color="#242017"/>
+      <stop offset="1" stop-color="#090909"/>
     </linearGradient>
   </defs>
   <rect width="96" height="96" rx="48" fill="url(#g)"/>
-  <circle cx="48" cy="48" r="42" fill="none" stroke="#FBBF24" stroke-width="4"/>
+  <circle cx="48" cy="48" r="42" fill="none" stroke="#F2B91C" stroke-width="4"/>
   <text x="48" y="56" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#FFFFFF">${initials}</text>
 </svg>`;
 }

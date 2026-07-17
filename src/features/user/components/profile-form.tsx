@@ -238,7 +238,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
       </label>
       <div className="md:col-span-2">
         <LoadingButton
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
           disabled={isPending}
           icon={<Save aria-hidden className="h-4 w-4" />}
           isLoading={isPending}

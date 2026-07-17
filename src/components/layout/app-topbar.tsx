@@ -26,7 +26,7 @@ export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: 
       className={cn(
         "sticky top-0 z-30 border-b backdrop-blur",
         userMode
-          ? "border-white/10 bg-[#00145a]/88 text-white"
+          ? "border-brand-gold/20 bg-black/90 text-white"
           : "border-app-border bg-app-background/90"
       )}
     >
@@ -49,7 +49,7 @@ export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: 
               "hidden h-10 w-10 items-center justify-center rounded-button border transition sm:inline-flex",
               userMode
                 ? "border-white/15 bg-white/8 text-white/75 hover:border-brand-gold hover:text-brand-gold"
-                : "border-app-border bg-app-surface text-app-muted hover:border-brand-blue hover:text-brand-blue"
+                : "border-app-border bg-app-surface text-app-muted hover:border-brand-gold hover:text-brand-gold"
             )}
             type="button"
           >
@@ -61,7 +61,7 @@ export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: 
               "relative inline-flex h-10 w-10 items-center justify-center rounded-button border transition",
               userMode
                 ? "border-white/15 bg-white/8 text-white/75 hover:border-brand-gold hover:text-brand-gold"
-                : "border-app-border bg-app-surface text-app-muted hover:border-brand-blue hover:text-brand-blue"
+                : "border-app-border bg-app-surface text-app-muted hover:border-brand-gold hover:text-brand-gold"
             )}
             href={"/notificacoes" as Route}
           >

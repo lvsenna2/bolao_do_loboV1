@@ -35,7 +35,7 @@ export function AdminFilterForm({
       </label>
       {children}
       <FormLoadingButton
-        className="inline-flex h-10 items-center justify-center rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+        className="inline-flex h-10 items-center justify-center rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
         pendingLabel="Carregando..."
         type="submit"
       >

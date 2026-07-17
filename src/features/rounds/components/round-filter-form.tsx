@@ -69,7 +69,7 @@ export function RoundFilterForm({ championships, leagues, searchParams }: RoundF
         </select>
       </label>
       <FormLoadingButton
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-blue hover:text-brand-blue"
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
         pendingLabel="Carregando..."
         type="submit"
       >

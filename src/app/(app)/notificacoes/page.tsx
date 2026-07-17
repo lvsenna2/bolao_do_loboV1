@@ -94,7 +94,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
         <form action={markAllNotificationsReadAction}>
           <input name="filter" type="hidden" value={filter} />
           <FormLoadingButton
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-button bg-brand-blue px-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-button bg-brand-gold px-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:opacity-60"
             disabled={filterUnread === 0}
             pendingLabel="Processando..."
           >
@@ -123,7 +123,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
                 <Link
                   className={cn(
                     buttonVariants({ size: "sm", variant: "secondary" }),
-                    filter === item.value ? "border-brand-blue text-brand-blue" : ""
+                    filter === item.value ? "border-brand-gold text-brand-gold" : ""
                   )}
                   href={item.href as Route}
                   key={item.value}
@@ -176,7 +176,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
                       <form action={markNotificationReadAction}>
                         <input name="notificationId" type="hidden" value={notification.id} />
                         <FormLoadingButton
-                          className="h-9 rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-blue hover:text-brand-blue"
+                          className="h-9 rounded-button border border-app-border px-3 text-sm font-semibold text-app-foreground transition hover:border-brand-gold hover:text-brand-gold"
                           pendingLabel="Salvando..."
                         >
                           Marcar como lida

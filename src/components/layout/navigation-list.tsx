@@ -49,7 +49,7 @@ export function NavigationList({
             className={cn(
               "inline-flex h-10 items-center gap-3 rounded-button px-3 text-sm font-medium transition",
               active
-                ? "bg-brand-blue text-white shadow-sm"
+                ? "bg-brand-gold text-slate-950 shadow-sm"
                 : "text-app-muted hover:bg-app-elevated hover:text-app-foreground",
               compact ? "h-12 flex-col justify-center gap-1 px-1 text-[10px] leading-none" : ""
             )}

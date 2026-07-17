@@ -85,7 +85,7 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
               <input className={inputClass} name="logo" placeholder="URL do escudo" type="url" />
               <input className={inputClass} name="apiId" placeholder="ID na API" type="number" />
               <AdminSubmitButton
-                className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
                 pendingLabel="Salvando..."
               >
                 Cadastrar time
@@ -110,7 +110,7 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
                 required
               />
               <AdminSubmitButton
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
                 pendingLabel="Importando..."
               >
                 <UploadCloud aria-hidden className="h-4 w-4" />
@@ -195,7 +195,7 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
                 type="number"
               />
               <AdminSubmitButton
-                className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-3"
+                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-3"
                 disabled={!result.data.apiConfigured}
                 pendingLabel="Importando..."
               >

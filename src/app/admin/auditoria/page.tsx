@@ -99,7 +99,7 @@ export default async function AdminAuditPage({ searchParams }: AuditPageProps) {
                   <AdminTd>{log.action}</AdminTd>
                   <AdminTd>
                     <details className="max-w-xs">
-                      <summary className="cursor-pointer text-brand-blue">Valores</summary>
+                      <summary className="cursor-pointer text-brand-gold">Valores</summary>
                       <pre className="mt-2 max-h-32 overflow-auto rounded-control bg-app-elevated p-2 text-xs text-app-muted">
                         {stringifyValue({
                           newValue: log.newValue,

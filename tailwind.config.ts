@@ -27,11 +27,11 @@ const config: Config = {
           border: "rgb(var(--color-border) / <alpha-value>)"
         },
         brand: {
-          blue: "#2563EB",
+          blue: "#F2B91C",
           green: "#16A34A",
-          gold: "#F59E0B",
+          gold: "#F2B91C",
           red: "#DC2626",
-          midnight: "#0F172A"
+          midnight: "#090909"
         }
       },
       fontFamily: {

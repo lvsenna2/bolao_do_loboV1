@@ -13,7 +13,7 @@ export function AdminStatCard({ description, icon: Icon, label, value }: AdminSt
   return (
     <Card>
       <CardContent className="flex items-start gap-4 p-5">
-        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-button bg-brand-blue/10 text-brand-blue">
+        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-button bg-brand-gold/10 text-brand-gold">
           <Icon aria-hidden className="h-5 w-5" />
         </span>
         <div className="min-w-0">

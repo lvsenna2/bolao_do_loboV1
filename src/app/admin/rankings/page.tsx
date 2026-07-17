@@ -84,7 +84,7 @@ export default async function AdminRankingsPage({ searchParams }: AdminRankingsP
             <form action={recalculateLeagueRankingFormAction}>
               <input name="leagueId" type="hidden" value={selectedLeagueId} />
               <AdminSubmitButton
-                className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                className="inline-flex h-10 items-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:opacity-60"
                 disabled={!selectedLeagueId}
                 pendingLabel="Recalculando..."
               >

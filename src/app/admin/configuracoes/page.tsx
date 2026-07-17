@@ -76,7 +76,7 @@ export default async function AdminSettingsPage() {
             </label>
             <div className="md:col-span-2">
               <AdminSubmitButton
-                className="h-10 rounded-button bg-brand-blue px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
                 pendingLabel="Salvando..."
               >
                 Salvar configuracoes

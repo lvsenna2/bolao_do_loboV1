@@ -20,7 +20,7 @@ function StatusPill({ status }: { status?: string | null }) {
     value === "SUCCESS"
       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
       : value === "RUNNING"
-        ? "border-blue-400/30 bg-blue-400/10 text-blue-100"
+        ? "border-brand-gold/30 bg-brand-gold/10 text-brand-gold"
         : value === "IDLE"
           ? "border-app-border bg-app-background text-app-muted"
           : "border-red-500/30 bg-red-500/10 text-red-200";
@@ -78,7 +78,7 @@ export default async function AdminFootballSyncPage() {
                 {automation?.trackedMatches ?? 0}
               </p>
             </div>
-            <Activity aria-hidden className="h-7 w-7 text-brand-blue" />
+            <Activity aria-hidden className="h-7 w-7 text-brand-gold" />
           </CardContent>
         </Card>
         <Card>
@@ -153,8 +153,8 @@ export default async function AdminFootballSyncPage() {
             />
             <p className="mt-2 max-w-2xl text-xs text-app-muted">
               O catalogo atualiza times, rodadas, partidas e tabela sem alterar a abertura manual
-              das rodadas da liga. O botao de placares consulta jogos ao vivo, recentes ou ainda
-              nao homologados.
+              das rodadas da liga. O botao de placares consulta jogos ao vivo, recentes ou ainda nao
+              homologados.
             </p>
           </div>
 

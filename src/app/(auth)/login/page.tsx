@@ -30,7 +30,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             Criar conta
           </Link>
           <Link
-            className="font-medium text-app-foreground hover:text-brand-blue"
+            className="font-medium text-app-foreground hover:text-brand-gold"
             href="/forgot-password"
           >
             Esqueci minha senha
