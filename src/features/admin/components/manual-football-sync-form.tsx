@@ -2,14 +2,16 @@
 
 import { CheckCircle2, Database, Radio, RefreshCw, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
 
 import { LoadingButton } from "@/components/ui/loading-button";
 import {
   runManualFootballSyncAction,
+  syncFootballMatchDetailsAction,
   type ManualFootballSyncProgress,
   updateCompetitionScoresAction
 } from "@/features/admin/actions/admin-actions";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import type { FootballCompetitionKey } from "@/server/football-api/competitions";
 
 type CompetitionOption = {
@@ -18,89 +20,83 @@ type CompetitionOption = {
   season: number;
 };
 
+type DetailMatchOption = {
+  apiId: number;
+  awayTeamName: string;
+  competitionKey: FootballCompetitionKey;
+  detailStatus: string;
+  homeTeamName: string;
+  id: string;
+  kickoff: string;
+  roundLabel: string;
+  status: string;
+};
+
 type ManualFootballSyncFormProps = {
   competitions: CompetitionOption[];
+  detailMatches: DetailMatchOption[];
   disabled: boolean;
 };
 
-const MAX_BATCHES_PER_RUN = 50;
-
 export function ManualFootballSyncForm({
   competitions,
+  detailMatches,
   disabled
 }: ManualFootballSyncFormProps) {
   const router = useRouter();
   const lockRef = useRef(false);
-  const [competitionKey, setCompetitionKey] = useState<FootballCompetitionKey>(
-    competitions[0]?.key ?? "brasileirao-serie-a"
+  const initialCompetition = competitions[0]?.key ?? "brasileirao-serie-a";
+  const [competitionKey, setCompetitionKey] =
+    useState<FootballCompetitionKey>(initialCompetition);
+  const [selectedMatchId, setSelectedMatchId] = useState(
+    detailMatches.find((match) => match.competitionKey === initialCompetition)?.id ?? ""
   );
   const [isRunning, setIsRunning] = useState(false);
+  const [isSyncingDetails, setIsSyncingDetails] = useState(false);
   const [isUpdatingScores, setIsUpdatingScores] = useState(false);
-  const [batch, setBatch] = useState(0);
-  const [initialWork, setInitialWork] = useState(0);
   const [progress, setProgress] = useState<ManualFootballSyncProgress | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const matchesForCompetition = useMemo(
+    () => detailMatches.filter((match) => match.competitionKey === competitionKey),
+    [competitionKey, detailMatches]
+  );
+  const isBusy = isRunning || isSyncingDetails || isUpdatingScores;
 
-  const completed = progress
-    ? Math.max(0, initialWork - progress.remainingCandidates)
-    : 0;
-  const percentage = progress?.complete
-    ? 100
-    : initialWork > 0
-      ? Math.min(100, Math.round((completed / initialWork) * 100))
-      : 0;
+  function changeCompetition(key: FootballCompetitionKey) {
+    setCompetitionKey(key);
+    setSelectedMatchId(detailMatches.find((match) => match.competitionKey === key)?.id ?? "");
+    setProgress(null);
+    setMessage(null);
+    setError(null);
+  }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleCatalogSync(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (disabled || isRunning || isUpdatingScores || lockRef.current) return;
+    if (disabled || isBusy || lockRef.current) return;
 
     lockRef.current = true;
     setIsRunning(true);
-    setBatch(0);
-    setInitialWork(0);
     setProgress(null);
     setMessage(null);
     setError(null);
 
-    let includeCatalog = true;
-    let workTotal = 0;
-
     try {
-      for (let currentBatch = 1; currentBatch <= MAX_BATCHES_PER_RUN; currentBatch += 1) {
-        setBatch(currentBatch);
-        const result = await runManualFootballSyncAction({
-          competitionKey,
-          includeCatalog
-        });
+      const result = await runManualFootballSyncAction({
+        competitionKey,
+        includeCatalog: true
+      });
 
-        if (!result.ok || !result.data) {
-          setError(result.message);
-          return;
-        }
-
-        const current = result.data;
-        workTotal = Math.max(
-          workTotal,
-          current.remainingCandidates + current.fixturesProcessed
-        );
-        setInitialWork(workTotal);
-        setProgress(current);
-        setMessage(result.message);
-        includeCatalog = false;
-
-        if (current.complete) {
-          setMessage(`Sincronizacao completa. ${result.message}`);
-          return;
-        }
+      if (!result.ok || !result.data) {
+        setError(result.message);
+        return;
       }
 
-      setMessage(
-        "O limite seguro desta execucao foi atingido. Clique novamente para continuar os detalhes restantes."
-      );
+      setProgress(result.data);
+      setMessage(result.message);
     } catch {
       setError(
-        "A sincronizacao foi interrompida pela conexao ou pelo limite do servidor. O progresso salvo foi mantido; tente continuar novamente."
+        "A atualizacao do catalogo foi interrompida. Os dados ja salvos foram mantidos; tente novamente."
       );
     } finally {
       lockRef.current = false;
@@ -109,11 +105,42 @@ export function ManualFootballSyncForm({
     }
   }
 
+  async function handleMatchDetails() {
+    if (disabled || isBusy || lockRef.current || !selectedMatchId) return;
+
+    lockRef.current = true;
+    setIsSyncingDetails(true);
+    setProgress(null);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const result = await syncFootballMatchDetailsAction({ matchId: selectedMatchId });
+
+      if (!result.ok || !result.data) {
+        setError(result.message);
+        return;
+      }
+
+      setProgress(result.data);
+      setMessage(result.message);
+    } catch {
+      setError(
+        "Os detalhes da partida foram interrompidos. O progresso salvo foi mantido; tente novamente."
+      );
+    } finally {
+      lockRef.current = false;
+      setIsSyncingDetails(false);
+      router.refresh();
+    }
+  }
+
   async function handleScoreUpdate() {
-    if (disabled || isRunning || isUpdatingScores || lockRef.current) return;
+    if (disabled || isBusy || lockRef.current) return;
 
     lockRef.current = true;
     setIsUpdatingScores(true);
+    setProgress(null);
     setMessage(null);
     setError(null);
 
@@ -138,10 +165,10 @@ export function ManualFootballSyncForm({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <form
         className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end"
-        onSubmit={handleSubmit}
+        onSubmit={handleCatalogSync}
       >
         <label className="space-y-2">
           <span className="block text-sm font-semibold text-app-foreground">
@@ -149,8 +176,10 @@ export function ManualFootballSyncForm({
           </span>
           <select
             className="h-11 w-full rounded-control border border-app-border bg-app-background px-3 text-sm font-semibold text-app-foreground outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20"
-            disabled={disabled || isRunning || isUpdatingScores}
-            onChange={(event) => setCompetitionKey(event.target.value as FootballCompetitionKey)}
+            disabled={disabled || isBusy}
+            onChange={(event) =>
+              changeCompetition(event.target.value as FootballCompetitionKey)
+            }
             value={competitionKey}
           >
             {competitions.map((competition) => (
@@ -163,18 +192,18 @@ export function ManualFootballSyncForm({
 
         <LoadingButton
           className="h-11 rounded-button bg-brand-gold px-5 text-sm font-bold text-slate-950 shadow-soft hover:bg-amber-400"
-          disabled={disabled || isUpdatingScores || competitions.length === 0}
+          disabled={disabled || isSyncingDetails || isUpdatingScores || competitions.length === 0}
           icon={<RefreshCw aria-hidden className="h-4 w-4" />}
           isLoading={isRunning}
-          loadingLabel={batch > 0 ? `Processando lote ${batch}...` : "Preparando..."}
+          loadingLabel="Atualizando catalogo..."
           type="submit"
         >
-          Sincronizar campeonato
+          Atualizar catalogo
         </LoadingButton>
 
         <LoadingButton
           className="h-11 rounded-button border border-brand-blue bg-brand-blue/10 px-5 text-sm font-bold text-brand-blue hover:bg-brand-blue hover:text-white"
-          disabled={disabled || isRunning || competitions.length === 0}
+          disabled={disabled || isRunning || isSyncingDetails || competitions.length === 0}
           icon={<Radio aria-hidden className="h-4 w-4" />}
           isLoading={isUpdatingScores}
           loadingLabel="Atualizando placares..."
@@ -185,38 +214,60 @@ export function ManualFootballSyncForm({
         </LoadingButton>
       </form>
 
-      {isRunning || progress ? (
-        <div className="rounded-control border border-app-border bg-app-background p-4" aria-live="polite">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-            <span className="flex items-center gap-2 font-semibold text-app-foreground">
-              <Database aria-hidden className="h-4 w-4 text-brand-gold" />
-              {isRunning ? `Lote ${batch} em andamento` : "Ultimo processamento"}
-            </span>
-            <span className="text-app-muted">
-              {progress?.remainingCandidates ?? 0} partida(s) aguardando detalhes
-            </span>
-          </div>
-          <div
-            aria-label={`${percentage}% da sincronizacao detalhada concluida`}
-            aria-valuemax={100}
-            aria-valuemin={0}
-            aria-valuenow={percentage}
-            className="mt-3 h-2 overflow-hidden rounded-full bg-app-surface"
-            role="progressbar"
+      <div className="grid gap-3 border-t border-app-border pt-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <label className="space-y-2">
+          <span className="block text-sm font-semibold text-app-foreground">
+            Partida para sincronizar detalhes
+          </span>
+          <select
+            className="h-11 w-full rounded-control border border-app-border bg-app-background px-3 text-sm text-app-foreground outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20"
+            disabled={disabled || isBusy || matchesForCompetition.length === 0}
+            onChange={(event) => setSelectedMatchId(event.target.value)}
+            value={selectedMatchId}
           >
-            <div
-              className="h-full rounded-full bg-brand-gold transition-[width] duration-500 motion-reduce:transition-none"
-              style={{ width: `${percentage}%` }}
-            />
+            {matchesForCompetition.length === 0 ? (
+              <option value="">Nenhuma partida proxima encontrada</option>
+            ) : null}
+            {matchesForCompetition.map((match) => (
+              <option key={match.id} value={match.id}>
+                {match.homeTeamName} x {match.awayTeamName} | {match.roundLabel} | {" "}
+                {formatDateTimeInSaoPaulo(match.kickoff)} | {match.detailStatus}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <LoadingButton
+          className="h-11 rounded-button bg-brand-blue px-5 text-sm font-semibold text-white hover:bg-blue-700"
+          disabled={disabled || isRunning || isUpdatingScores || !selectedMatchId}
+          icon={<Database aria-hidden className="h-4 w-4" />}
+          isLoading={isSyncingDetails}
+          loadingLabel="Sincronizando partida..."
+          onClick={handleMatchDetails}
+          type="button"
+        >
+          Sincronizar esta partida
+        </LoadingButton>
+      </div>
+
+      <p className="text-xs leading-5 text-app-muted">
+        Cada execucao detalhada processa somente a partida selecionada. Historico e estadio podem
+        ser atualizados imediatamente; escalacoes, eventos e estatisticas dependem da cobertura e
+        do momento da partida.
+      </p>
+
+      {progress ? (
+        <div className="rounded-control border border-app-border bg-app-background p-4" aria-live="polite">
+          <div className="flex items-center gap-2 text-sm font-semibold text-app-foreground">
+            <Database aria-hidden className="h-4 w-4 text-brand-gold" />
+            Ultimo processamento
           </div>
-          {progress ? (
-            <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-app-muted sm:grid-cols-4">
-              <span>{progress.trackedMatches} jogos encontrados</span>
-              <span>{progress.fixturesProcessed} processados no lote</span>
-              <span>{progress.fixturesUpdated} registros atualizados</span>
-              <span>{progress.callsUsed} chamadas neste lote</span>
-            </div>
-          ) : null}
+          <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-app-muted sm:grid-cols-4">
+            <span>{progress.trackedMatches} jogo(s) localizado(s)</span>
+            <span>{progress.fixturesProcessed} partida(s) processada(s)</span>
+            <span>{progress.fixturesUpdated} registro(s) atualizado(s)</span>
+            <span>{progress.callsUsed} chamada(s) externa(s)</span>
+          </div>
         </div>
       ) : null}
 

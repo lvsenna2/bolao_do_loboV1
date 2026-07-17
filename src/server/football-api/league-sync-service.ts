@@ -1,6 +1,9 @@
+import { Prisma, type RoundStatus } from "@prisma/client";
+
 import { prisma } from "@/server/db";
 
 import type { FootballCompetitionConfig } from "./competitions";
+import { mergeFootballRoundState } from "./round-sync";
 
 export type LeagueRoundSyncSummary = {
   matchesCreated: number;
@@ -23,6 +26,35 @@ function chunkValues<T>(values: T[], size: number) {
   return chunks;
 }
 
+const roundStatuses = new Set<RoundStatus>([
+  "SCHEDULED",
+  "OPEN",
+  "LIVE",
+  "FINISHED",
+  "CLOSED",
+  "ARCHIVED"
+]);
+
+function parseAuditDate(value: unknown) {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function readAuditedRoundState(value: Prisma.JsonValue | null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const status = record.status;
+
+  if (typeof status !== "string" || !roundStatuses.has(status as RoundStatus)) return null;
+
+  return {
+    endsAt: parseAuditDate(record.endsAt),
+    startsAt: parseAuditDate(record.startsAt),
+    status: status as RoundStatus
+  };
+}
+
 export async function syncChampionshipRoundsIntoLeague(
   leagueId: string,
   championshipId: string
@@ -41,22 +73,87 @@ export async function syncChampionshipRoundsIntoLeague(
       season: { championshipId }
     }
   });
+  const existingLeagueRounds = await prisma.round.findMany({
+    select: {
+      endsAt: true,
+      id: true,
+      number: true,
+      seasonId: true,
+      startsAt: true,
+      status: true
+    },
+    where: {
+      leagueId,
+      season: { championshipId }
+    }
+  });
+  const existingRoundByKey = new Map(
+    existingLeagueRounds.map((round) => [`${round.seasonId}:${round.number}`, round])
+  );
+  const auditedRows = await prisma.auditLog.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true, entityId: true, newValue: true },
+    where: {
+      action: { in: ["admin.round.opened", "admin.round.status_updated"] },
+      entity: "Round",
+      entityId: {
+        in: [
+          ...sourceRounds.map((round) => round.id),
+          ...existingLeagueRounds.map((round) => round.id)
+        ]
+      }
+    }
+  });
+  const auditedByRoundId = new Map<
+    string,
+    { createdAt: Date; state: ReturnType<typeof readAuditedRoundState> }
+  >();
+  for (const audit of auditedRows) {
+    if (!audit.entityId || auditedByRoundId.has(audit.entityId)) continue;
+    auditedByRoundId.set(audit.entityId, {
+      createdAt: audit.createdAt,
+      state: readAuditedRoundState(audit.newValue)
+    });
+  }
 
   for (const sourceRound of sourceRounds) {
+    const existingRound = existingRoundByKey.get(
+      `${sourceRound.seasonId}:${sourceRound.number}`
+    );
+    const sourceAudit = auditedByRoundId.get(sourceRound.id);
+    const leagueAudit = existingRound ? auditedByRoundId.get(existingRound.id) : null;
+    const auditedState =
+      sourceAudit && leagueAudit
+        ? sourceAudit.createdAt > leagueAudit.createdAt
+          ? sourceAudit.state
+          : leagueAudit.state
+        : (leagueAudit?.state ?? sourceAudit?.state ?? null);
+    const sourceState =
+      auditedState && sourceRound.status === "SCHEDULED"
+        ? {
+            endsAt: auditedState.endsAt ?? sourceRound.endsAt,
+            startsAt: auditedState.startsAt ?? sourceRound.startsAt,
+            status: auditedState.status
+          }
+        : {
+            endsAt: sourceRound.endsAt,
+            startsAt: sourceRound.startsAt,
+            status: sourceRound.status
+          };
     const roundData = {
       description: sourceRound.description,
-      endsAt: sourceRound.endsAt,
+      endsAt: sourceState.endsAt,
       name: sourceRound.name,
-      startsAt: sourceRound.startsAt,
-      status: sourceRound.status
+      startsAt: sourceState.startsAt,
+      status: sourceState.status
     };
-    const existingRound = await prisma.round.findFirst({
-      select: { id: true },
-      where: { leagueId, number: sourceRound.number, seasonId: sourceRound.seasonId }
-    });
     const targetRound = existingRound
       ? await prisma.round.update({
-          data: roundData,
+          data: {
+            description: roundData.description,
+            name: roundData.name,
+            ...mergeFootballRoundState(existingRound, sourceState)
+          },
           select: { id: true },
           where: { id: existingRound.id }
         })

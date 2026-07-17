@@ -66,6 +66,7 @@ export type FootballAutomationOptions = {
   fixtureLimit?: number;
   historyBudget?: number;
   includeCatalog?: boolean;
+  matchId?: string;
 };
 
 type Candidate = Awaited<ReturnType<typeof loadCandidates>>[number];
@@ -224,7 +225,8 @@ export async function isFootballAutomationRunning(now = serverNow()) {
 
 async function loadCandidates(
   configs = footballCompetitionConfigs,
-  scanLimit = MAX_CANDIDATES
+  scanLimit = MAX_CANDIDATES,
+  matchId?: string
 ) {
   const now = serverNow();
   return prisma.match.findMany({
@@ -272,6 +274,7 @@ async function loadCandidates(
         not: null
       },
       deletedAt: null,
+      ...(matchId ? { id: matchId } : {}),
       round: {
         leagueId: null,
         season: {
@@ -284,25 +287,29 @@ async function loadCandidates(
           }))
         }
       },
-      OR: [
-        {
-          status: {
-            in: ["LIVE", "HALFTIME", "SUSPENDED"]
-          }
-        },
-        {
-          kickoff: {
-            gte: new Date(now.getTime() - 12 * 60 * 60_000),
-            lte: new Date(now.getTime() + 48 * 60 * 60_000)
-          }
-        },
-        {
-          fullySyncedAt: null,
-          status: {
-            in: ["FINISHED", "CANCELLED"]
-          }
-        }
-      ]
+      ...(matchId
+        ? {}
+        : {
+            OR: [
+              {
+                status: {
+                  in: ["LIVE", "HALFTIME", "SUSPENDED"]
+                }
+              },
+              {
+                kickoff: {
+                  gte: new Date(now.getTime() - 12 * 60 * 60_000),
+                  lte: new Date(now.getTime() + 48 * 60 * 60_000)
+                }
+              },
+              {
+                fullySyncedAt: null,
+                status: {
+                  in: ["FINISHED", "CANCELLED"]
+                }
+              }
+            ]
+          })
     }
   });
 }
@@ -321,9 +328,10 @@ function decisionNeedsWork(decision: FixtureSyncDecision) {
 function decisionForCandidate(
   candidate: Candidate,
   remaining: number | null,
-  now: Date
+  now: Date,
+  forceSelectedDetails = false
 ): FixtureSyncDecision {
-  return shouldSyncFixture(
+  const decision = shouldSyncFixture(
     {
       coverage: parseCoverage(candidate.round.season.coverage),
       eventsSyncedAt: candidate.eventsSyncedAt,
@@ -342,6 +350,19 @@ function decisionForCandidate(
     },
     now
   );
+
+  if (!forceSelectedDetails) return decision;
+
+  const historyExpired =
+    !candidate.historySyncedAt ||
+    now.getTime() - candidate.historySyncedAt.getTime() >= 12 * 60 * 60_000;
+
+  return {
+    ...decision,
+    fixture: true,
+    history: candidate.status !== "CANCELLED" && historyExpired,
+    reason: "Sincronizacao manual de uma partida."
+  };
 }
 
 async function syncHistory(
@@ -627,7 +648,7 @@ export async function runFootballAutomation(
     ? getFootballCompetitionConfig(options.competitionKey)
     : null;
   const activeConfigs = selectedConfig ? [selectedConfig] : footballCompetitionConfigs;
-  const candidateScanLimit = selectedConfig ? 1_000 : MAX_CANDIDATES;
+  const candidateScanLimit = options.matchId ? 1 : selectedConfig ? 1_000 : MAX_CANDIDATES;
 
   if (options.competitionKey && !selectedConfig) {
     return {
@@ -663,7 +684,7 @@ export async function runFootballAutomation(
       await syncManualCatalogs(summary, activeConfigs);
     }
 
-    const candidates = await loadCandidates(activeConfigs, candidateScanLimit);
+    const candidates = await loadCandidates(activeConfigs, candidateScanLimit, options.matchId);
     const now = serverNow();
     summary.trackedMatches = candidates.length;
     summary.liveMatches = candidates.filter((candidate) =>
@@ -682,17 +703,18 @@ export async function runFootballAutomation(
     const decisions = new Map(
       candidates.map((candidate) => [
         candidate.apiId as number,
-        decisionForCandidate(candidate, usage.dailyRemaining, now)
+        decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId))
       ])
     );
     const fixtures = new Map<number, ExternalFootballFixture>();
+    const fixtureLimit = Math.max(0, Math.min(options.fixtureLimit ?? MAX_CANDIDATES, 20));
     const liveCandidates = candidates.filter(
       (candidate) =>
         ["LIVE", "HALFTIME"].includes(candidate.status) &&
         decisions.get(candidate.apiId as number)?.fixture
     );
 
-    if (liveCandidates.length > 0) {
+    if (fixtureLimit > 0 && liveCandidates.length > 0) {
       const liveResult = await fetchApiFootballLiveFixtures(
         activeConfigs.map((config) => config.leagueId)
       );
@@ -701,7 +723,6 @@ export async function runFootballAutomation(
       else summary.errors.push(liveResult.message);
     }
 
-    const fixtureLimit = Math.max(1, Math.min(options.fixtureLimit ?? MAX_CANDIDATES, 20));
     const dueCandidates = candidates
       .filter((candidate) => {
         const decision = decisions.get(candidate.apiId as number);
@@ -743,7 +764,12 @@ export async function runFootballAutomation(
       try {
         const applied = await applyFootballFixture(config, fixture);
         if (applied.matchIds.length === 0) continue;
-        const decision = decisionForCandidate(candidate, usage.dailyRemaining, now);
+        const decision = decisionForCandidate(
+          candidate,
+          usage.dailyRemaining,
+          now,
+          Boolean(options.matchId)
+        );
         const historyAllowed = decision.history && historyBudget > 0;
         if (historyAllowed) historyBudget -= 1;
         await syncDetails({
@@ -780,7 +806,11 @@ export async function runFootballAutomation(
       await maybeSyncOneCatalog(summary, usage.dailyRemaining);
     }
 
-    const remainingCandidates = await loadCandidates(activeConfigs, candidateScanLimit);
+    const remainingCandidates = await loadCandidates(
+      activeConfigs,
+      candidateScanLimit,
+      options.matchId
+    );
     const remainingNow = serverNow();
     summary.remainingCandidates = remainingCandidates.filter((candidate) =>
       decisionNeedsWork(decisionForCandidate(candidate, usage.dailyRemaining, remainingNow))

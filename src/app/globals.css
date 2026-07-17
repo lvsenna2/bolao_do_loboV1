@@ -36,9 +36,53 @@ body {
   margin: 0;
   background: rgb(var(--color-background));
   color: rgb(var(--color-foreground));
-  font-family: var(--font-inter), Inter, Arial, sans-serif;
+  font-family: var(--font-geist), Arial, sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+h1[class],
+h2[class],
+h3[class] {
+  font-weight: 600;
+}
+
+button[class],
+a[class*="rounded-button"],
+nav a[class] {
+  font-weight: 500;
+}
+
+label[class],
+label span[class] {
+  font-weight: 400;
+}
+
+.font-bold {
+  font-weight: 600;
+}
+
+.font-black {
+  font-weight: 500;
+}
+
+.text-app-muted {
+  font-weight: 400;
+}
+
+.tabular-nums,
+input[type="number"] {
+  font-weight: 500;
 }
 
 a {

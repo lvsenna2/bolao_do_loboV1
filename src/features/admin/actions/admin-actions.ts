@@ -35,11 +35,15 @@ import {
   runFootballAutomation
 } from "@/server/football-api/automation-service";
 import {
+  footballCompetitionConfigs,
   getFootballCompetitionConfig,
   getFootballManualSyncCooldownHours,
   type FootballCompetitionKey
 } from "@/server/football-api/competitions";
-import { syncChampionshipRoundsIntoLeague } from "@/server/football-api/league-sync-service";
+import {
+  syncApiFootballCompetitionIntoLeagues,
+  syncChampionshipRoundsIntoLeague
+} from "@/server/football-api/league-sync-service";
 import {
   syncFootballCompetitionScores,
   type ScoreSyncCounter
@@ -465,8 +469,8 @@ export async function runManualFootballSyncAction(
   const catalogUpdated = Boolean(input.includeCatalog && (!nextCatalogAt || nextCatalogAt <= now));
   const result = await runFootballAutomation(FOOTBALL_MANUAL_TRIGGER, {
     competitionKey: config.key,
-    fixtureLimit: 4,
-    historyBudget: 2,
+    fixtureLimit: 0,
+    historyBudget: 0,
     includeCatalog: catalogUpdated
   });
 
@@ -477,6 +481,10 @@ export async function runManualFootballSyncAction(
     };
   }
 
+  const leagueSync = catalogUpdated
+    ? null
+    : await syncApiFootballCompetitionIntoLeagues(config);
+
   await createAuditLog(
     admin.id,
     "admin.football.sync.manual",
@@ -486,6 +494,7 @@ export async function runManualFootballSyncAction(
     {
       competitionKey: config.key,
       includeCatalog: catalogUpdated,
+      leagueSync,
       ...result.summary
     }
   );
@@ -503,13 +512,124 @@ export async function runManualFootballSyncAction(
     : input.includeCatalog && nextCatalogAt
       ? `Catalogo preservado pelo intervalo de ${cooldownHours} horas; nova importacao completa apos ${formatDateTimeInSaoPaulo(nextCatalogAt)}.`
       : "";
+  const leagueMessage = leagueSync
+    ? `${leagueSync.roundsUpdated} rodada(s) das ligas reconciliada(s) com os dados locais.`
+    : "";
 
   return {
     ok: true,
-    message: `${catalogMessage} ${result.message}`.trim(),
+    message: `${catalogMessage} ${leagueMessage} ${result.message}`.trim(),
     data: {
       callsUsed: result.summary.callsUsed,
       catalogUpdated,
+      complete: result.summary.remainingCandidates === 0,
+      fixturesProcessed: result.summary.candidatesProcessed,
+      fixturesUpdated: result.summary.fixturesUpdated,
+      remainingCandidates: result.summary.remainingCandidates,
+      trackedMatches: result.summary.trackedMatches
+    }
+  };
+}
+
+export async function syncFootballMatchDetailsAction(input: {
+  matchId: string;
+}): Promise<AdminActionResult<ManualFootballSyncProgress>> {
+  const admin = await requireAdmin();
+
+  if (!isFootballApiConfigured()) {
+    return {
+      ok: false,
+      message: "Configure API_FOOTBALL_KEY antes de sincronizar a partida."
+    };
+  }
+
+  const match = await prisma.match.findUnique({
+    select: {
+      apiId: true,
+      id: true,
+      round: {
+        select: {
+          leagueId: true,
+          season: {
+            select: {
+              championship: {
+                select: { apiId: true, provider: true }
+              },
+              year: true
+            }
+          }
+        }
+      }
+    },
+    where: { id: input.matchId }
+  });
+
+  if (
+    !match?.apiId ||
+    match.round.leagueId ||
+    match.round.season.championship.provider !== "api-football"
+  ) {
+    return {
+      ok: false,
+      message: "Selecione uma partida valida importada da API-Football."
+    };
+  }
+
+  const config = footballCompetitionConfigs.find(
+    (item) =>
+      item.leagueId === match.round.season.championship.apiId &&
+      item.season === match.round.season.year
+  );
+
+  if (!config) {
+    return {
+      ok: false,
+      message: "A partida nao pertence a um campeonato configurado."
+    };
+  }
+
+  const result = await runFootballAutomation(FOOTBALL_MANUAL_TRIGGER, {
+    competitionKey: config.key,
+    fixtureLimit: 1,
+    historyBudget: 1,
+    includeCatalog: false,
+    matchId: match.id
+  });
+
+  if (result.locked) {
+    return {
+      ok: false,
+      message: result.message
+    };
+  }
+
+  await createAuditLog(
+    admin.id,
+    "admin.football.match_details.synced",
+    "Match",
+    match.id,
+    undefined,
+    {
+      apiId: match.apiId,
+      competitionKey: config.key,
+      ...result.summary
+    }
+  );
+  revalidateAdminPaths();
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: `A partida foi processada com avisos: ${result.message}`
+    };
+  }
+
+  return {
+    ok: true,
+    message: `Detalhes da partida processados. ${result.message}`,
+    data: {
+      callsUsed: result.summary.callsUsed,
+      catalogUpdated: false,
       complete: result.summary.remainingCandidates === 0,
       fixturesProcessed: result.summary.candidatesProcessed,
       fixturesUpdated: result.summary.fixturesUpdated,

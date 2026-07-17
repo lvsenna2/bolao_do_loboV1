@@ -1422,6 +1422,7 @@ export async function getAdminFootballSyncStatus() {
         standings: 0
       }
     })),
+    detailMatches: [],
     manual: {
       canRun: false,
       cooldownHours: getFootballManualSyncCooldownHours(),
@@ -1440,7 +1441,15 @@ export async function getAdminFootballSyncStatus() {
   try {
     const automationRunning = await isFootballAutomationRunning();
     const competitionKeys = footballCompetitionConfigs.map((competition) => competition.key);
-    const [logs, championships, automation, recentRuns, usage, latestManualRun] =
+    const [
+      logs,
+      championships,
+      automation,
+      recentRuns,
+      usage,
+      latestManualRun,
+      detailMatchesByCompetition
+    ] =
       await Promise.all([
         prisma.footballSyncLog.findMany({
           orderBy: {
@@ -1493,7 +1502,48 @@ export async function getAdminFootballSyncStatus() {
             trigger: FOOTBALL_MANUAL_TRIGGER,
             OR: [{ status: "SUCCESS" }, { callsUsed: { gt: 0 } }]
           }
-        })
+        }),
+        Promise.all(
+          footballCompetitionConfigs.map((competition) =>
+            prisma.match.findMany({
+              orderBy: { kickoff: "desc" },
+              select: {
+                apiId: true,
+                awayTeam: { select: { name: true } },
+                eventsSyncedAt: true,
+                fullySyncedAt: true,
+                historySyncedAt: true,
+                homeTeam: { select: { name: true } },
+                id: true,
+                kickoff: true,
+                lineupsSyncedAt: true,
+                playersSyncedAt: true,
+                round: { select: { name: true, number: true } },
+                statisticsSyncedAt: true,
+                status: true
+              },
+              take: 120,
+              where: {
+                apiId: { not: null },
+                deletedAt: null,
+                kickoff: {
+                  gte: new Date(serverNow().getTime() - 30 * 86_400_000),
+                  lte: new Date(serverNow().getTime() + 45 * 86_400_000)
+                },
+                round: {
+                  leagueId: null,
+                  season: {
+                    championship: {
+                      apiId: competition.leagueId,
+                      provider: "api-football"
+                    },
+                    year: competition.season
+                  }
+                }
+              }
+            })
+          )
+        )
       ]);
 
     const competitions = await Promise.all(
@@ -1540,6 +1590,31 @@ export async function getAdminFootballSyncStatus() {
       ? new Date(latestManualRun.startedAt.getTime() + cooldownHours * 60 * 60_000)
       : null;
     const now = serverNow();
+    const detailMatches = detailMatchesByCompetition.flatMap((matches, index) => {
+      const competition = footballCompetitionConfigs[index];
+
+      return matches.map((match) => ({
+        apiId: match.apiId as number,
+        awayTeamName: match.awayTeam.name,
+        competitionKey: competition.key,
+        detailStatus: match.fullySyncedAt
+          ? "Completo"
+          : [
+                match.historySyncedAt,
+                match.lineupsSyncedAt,
+                match.eventsSyncedAt,
+                match.statisticsSyncedAt,
+                match.playersSyncedAt
+              ].some(Boolean)
+            ? "Parcial"
+            : "Pendente",
+        homeTeamName: match.homeTeam.name,
+        id: match.id,
+        kickoff: match.kickoff.toISOString(),
+        roundLabel: match.round.name || `Rodada ${match.round.number}`,
+        status: match.status
+      }));
+    });
 
     return {
       ok: true as const,
@@ -1548,6 +1623,7 @@ export async function getAdminFootballSyncStatus() {
         automation,
         cacheHours: getFootballSyncCacheHours(),
         competitions,
+        detailMatches,
         manual: {
           canRun:
             isFootballApiConfigured() &&

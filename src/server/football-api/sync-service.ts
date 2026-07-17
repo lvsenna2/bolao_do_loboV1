@@ -16,6 +16,7 @@ import {
   type ExternalFootballTeam
 } from "./client";
 import { getFootballSyncCacheHours, type FootballCompetitionConfig } from "./competitions";
+import { mergeFootballRoundState } from "./round-sync";
 import { mapApiFootballStatus } from "./status";
 
 type SyncCounter = {
@@ -434,9 +435,12 @@ async function upsertFixtures(
 
   const existingRounds = await prisma.round.findMany({
     select: {
+      endsAt: true,
       id: true,
       name: true,
-      number: true
+      number: true,
+      startsAt: true,
+      status: true
     },
     where: {
       leagueId: null,
@@ -476,9 +480,12 @@ async function upsertFixtures(
         status: "SCHEDULED"
       },
       select: {
+        endsAt: true,
         id: true,
         name: true,
-        number: true
+        number: true,
+        startsAt: true,
+        status: true
       }
     });
     roundsByName.set(roundName, round);
@@ -584,21 +591,32 @@ async function upsertFixtures(
   }
 
   summary.matchesImported += fixturesResult.data.length;
+  const roundsById = new Map(Array.from(roundsByName.values()).map((round) => [round.id, round]));
 
   for (const roundBatch of chunkValues(Array.from(roundBounds.entries()), 20)) {
     await Promise.all(
-      roundBatch.map(([roundId, bounds]) =>
-        prisma.round.update({
+      roundBatch.map(([roundId, bounds]) => {
+        const currentRound = roundsById.get(roundId);
+        const incomingState = {
+          endsAt: bounds.end,
+          startsAt: bounds.start,
+          status: getRoundStatus(bounds.statuses)
+        };
+        const nextState = currentRound
+          ? mergeFootballRoundState(currentRound, incomingState)
+          : incomingState;
+
+        return prisma.round.update({
           data: {
-            endsAt: bounds.end,
-            startsAt: bounds.start,
-            status: getRoundStatus(bounds.statuses)
+            endsAt: nextState.endsAt,
+            startsAt: nextState.startsAt,
+            status: nextState.status
           },
           where: {
             id: roundId
           }
-        })
-      )
+        });
+      })
     );
   }
   summary.roundsImported += roundBounds.size;

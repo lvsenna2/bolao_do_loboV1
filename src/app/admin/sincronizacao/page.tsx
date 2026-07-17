@@ -114,9 +114,8 @@ export default async function AdminFootballSyncPage() {
             <div>
               <CardTitle>Atualizacao manual</CardTitle>
               <CardDescription>
-                Escolha um campeonato. Catalogo, partidas e dados detalhados serao processados em
-                lotes seguros, com intervalo de {manual.cooldownHours} horas para repetir o catalogo.
-                A atualizacao de placares pode ser usada sempre que necessario.
+                Atualize o catalogo a cada {manual.cooldownHours} horas, os placares quando
+                necessario e os dados avancados individualmente por partida.
               </CardDescription>
             </div>
             <StatusPill status={automation?.status} />
@@ -149,13 +148,13 @@ export default async function AdminFootballSyncPage() {
                 name: competition.name,
                 season: competition.season
               }))}
+              detailMatches={result.data.detailMatches}
               disabled={!apiConfigured || automation?.status === "RUNNING"}
             />
             <p className="mt-2 max-w-2xl text-xs text-app-muted">
-              A tela continua os lotes automaticamente e salva cada etapa no banco. Escalacoes,
-              eventos, estatisticas, jogadores, estadio e historico sao buscados quando a API
-              oferece cobertura e a partida esta na janela adequada. O botao de placares consulta
-              apenas jogos ao vivo, recentes ou ainda nao homologados.
+              O catalogo atualiza times, rodadas, partidas e tabela sem alterar a abertura manual
+              das rodadas da liga. O botao de placares consulta jogos ao vivo, recentes ou ainda
+              nao homologados.
             </p>
           </div>
 

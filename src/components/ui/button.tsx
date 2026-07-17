@@ -4,7 +4,7 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 export const buttonVariants = cva(
-  "inline-flex h-10 items-center justify-center gap-2 rounded-button px-4 text-sm font-semibold transition disabled:pointer-events-none disabled:opacity-60",
+  "inline-flex h-10 items-center justify-center gap-2 rounded-button px-4 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-60",
   {
     variants: {
       variant: {
