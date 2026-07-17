@@ -179,6 +179,49 @@ async function releaseLock(ownerToken: string) {
   });
 }
 
+export async function isFootballAutomationRunning(now = serverNow()) {
+  const lock = await prisma.footballSyncLock.findUnique({
+    select: {
+      lockedUntil: true
+    },
+    where: {
+      key: AUTOMATION_KEY
+    }
+  });
+
+  if (lock && lock.lockedUntil > now) {
+    return true;
+  }
+
+  const interruptedMessage =
+    "A execucao anterior foi interrompida antes de finalizar. Inicie novamente para continuar.";
+  await prisma.$transaction([
+    prisma.footballSyncState.updateMany({
+      data: {
+        lastError: interruptedMessage,
+        lastFinishedAt: now,
+        status: "FAILED"
+      },
+      where: {
+        key: AUTOMATION_KEY,
+        status: "RUNNING"
+      }
+    }),
+    prisma.footballAutomationLog.updateMany({
+      data: {
+        error: interruptedMessage,
+        finishedAt: now,
+        status: "FAILED"
+      },
+      where: {
+        status: "RUNNING"
+      }
+    })
+  ]);
+
+  return false;
+}
+
 async function loadCandidates(
   configs = footballCompetitionConfigs,
   scanLimit = MAX_CANDIDATES

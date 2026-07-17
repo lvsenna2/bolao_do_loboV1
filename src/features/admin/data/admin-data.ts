@@ -10,7 +10,10 @@ import type {
 
 import { getSaoPauloDayRangeUtc, serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
-import { FOOTBALL_MANUAL_TRIGGER } from "@/server/football-api/automation-service";
+import {
+  FOOTBALL_MANUAL_TRIGGER,
+  isFootballAutomationRunning
+} from "@/server/football-api/automation-service";
 import { isFootballApiConfigured } from "@/server/football-api/client";
 import {
   footballCompetitionConfigs,
@@ -1435,6 +1438,7 @@ export async function getAdminFootballSyncStatus() {
   };
 
   try {
+    const automationRunning = await isFootballAutomationRunning();
     const competitionKeys = footballCompetitionConfigs.map((competition) => competition.key);
     const [logs, championships, automation, recentRuns, usage, latestManualRun] =
       await Promise.all([
@@ -1547,7 +1551,7 @@ export async function getAdminFootballSyncStatus() {
         manual: {
           canRun:
             isFootballApiConfigured() &&
-            automation?.status !== "RUNNING" &&
+            !automationRunning &&
             (!nextAvailableAt || nextAvailableAt <= now),
           cooldownHours,
           lastRun: latestManualRun,

@@ -31,6 +31,7 @@ import { isEmailDeliveryConfigured } from "@/server/email/resend";
 import { fetchApiFootballTeams, isFootballApiConfigured } from "@/server/football-api/client";
 import {
   FOOTBALL_MANUAL_TRIGGER,
+  isFootballAutomationRunning,
   runFootballAutomation
 } from "@/server/football-api/automation-service";
 import {
@@ -538,12 +539,7 @@ export async function updateCompetitionScoresAction(input: {
     };
   }
 
-  const automation = await prisma.footballSyncState.findUnique({
-    select: { status: true },
-    where: { key: "api-football-automatic" }
-  });
-
-  if (automation?.status === "RUNNING") {
+  if (await isFootballAutomationRunning()) {
     return {
       ok: false,
       message: "Aguarde a sincronizacao completa em andamento antes de atualizar os placares."
