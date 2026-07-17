@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   footballCompetitionConfigs,
+  getFootballCompetitionConfig,
   getFootballManualSyncCooldownHours
 } from "./competitions";
 
@@ -48,6 +49,11 @@ describe("footballCompetitionConfigs", () => {
 
   it("usa intervalo manual de 12 horas por padrao", () => {
     expect(getFootballManualSyncCooldownHours()).toBe(12);
+  });
+
+  it("resolve somente campeonatos permitidos na sincronizacao manual", () => {
+    expect(getFootballCompetitionConfig("libertadores")?.leagueId).toBe(13);
+    expect(getFootballCompetitionConfig("campeonato-invalido")).toBeNull();
   });
 
   it("limita o intervalo manual configuravel entre 1 e 72 horas", () => {

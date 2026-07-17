@@ -17,7 +17,12 @@ import {
   fetchApiFootballTeamStatistics,
   fetchApiFootballVenue
 } from "./client";
-import { footballCompetitionConfigs, type FootballCompetitionConfig } from "./competitions";
+import {
+  footballCompetitionConfigs,
+  getFootballCompetitionConfig,
+  type FootballCompetitionConfig,
+  type FootballCompetitionKey
+} from "./competitions";
 import {
   markFixturesFullySynced,
   saveFixtureEvents,
@@ -43,15 +48,24 @@ const LOCK_TTL_MS = 2 * 60_000;
 const NEXT_RUN_MS = 60_000;
 const MAX_CANDIDATES = 100;
 
-type AutomationSummary = {
+export type AutomationSummary = {
   callsUsed: number;
+  candidatesProcessed: number;
   catalogsSynced: number;
   errors: string[];
   fixturesUpdated: number;
   liveMatches: number;
   pendingFinalDetails: number;
   pendingLineups: number;
+  remainingCandidates: number;
   trackedMatches: number;
+};
+
+export type FootballAutomationOptions = {
+  competitionKey?: FootballCompetitionKey;
+  fixtureLimit?: number;
+  historyBudget?: number;
+  includeCatalog?: boolean;
 };
 
 type Candidate = Awaited<ReturnType<typeof loadCandidates>>[number];
@@ -73,12 +87,14 @@ export type FootballAutomationResult =
 function emptySummary(): AutomationSummary {
   return {
     callsUsed: 0,
+    candidatesProcessed: 0,
     catalogsSynced: 0,
     errors: [],
     fixturesUpdated: 0,
     liveMatches: 0,
     pendingFinalDetails: 0,
     pendingLineups: 0,
+    remainingCandidates: 0,
     trackedMatches: 0
   };
 }
@@ -163,7 +179,10 @@ async function releaseLock(ownerToken: string) {
   });
 }
 
-async function loadCandidates() {
+async function loadCandidates(
+  configs = footballCompetitionConfigs,
+  scanLimit = MAX_CANDIDATES
+) {
   const now = serverNow();
   return prisma.match.findMany({
     orderBy: {
@@ -204,7 +223,7 @@ async function loadCandidates() {
       statisticsSyncedAt: true,
       status: true
     },
-    take: MAX_CANDIDATES,
+    take: scanLimit,
     where: {
       apiId: {
         not: null
@@ -213,12 +232,13 @@ async function loadCandidates() {
       round: {
         leagueId: null,
         season: {
-          championship: {
-            apiId: {
-              in: footballCompetitionConfigs.map((config) => config.leagueId)
+          OR: configs.map((config) => ({
+            championship: {
+              apiId: config.leagueId,
+              provider: "api-football"
             },
-            provider: "api-football"
-          }
+            year: config.season
+          }))
         }
       },
       OR: [
@@ -242,6 +262,17 @@ async function loadCandidates() {
       ]
     }
   });
+}
+
+function decisionNeedsWork(decision: FixtureSyncDecision) {
+  return Boolean(
+    decision.fixture ||
+      decision.events ||
+      decision.history ||
+      decision.lineups ||
+      decision.players ||
+      decision.statistics
+  );
 }
 
 function decisionForCandidate(
@@ -486,9 +517,12 @@ async function maybeSyncOneCatalog(summary: AutomationSummary, dailyRemaining: n
   await syncApiFootballCompetitionIntoLeagues(stale);
 }
 
-async function syncManualCatalogs(summary: AutomationSummary) {
-  for (const config of footballCompetitionConfigs) {
-    const result = await syncFootballCompetition(config);
+async function syncManualCatalogs(
+  summary: AutomationSummary,
+  configs: FootballCompetitionConfig[]
+) {
+  for (const config of configs) {
+    const result = await syncFootballCompetition(config, { force: true });
     summary.callsUsed += result.summary.callsUsed;
 
     if (!result.ok) {
@@ -541,8 +575,26 @@ async function updateState(
   });
 }
 
-export async function runFootballAutomation(trigger = "cron"): Promise<FootballAutomationResult> {
+export async function runFootballAutomation(
+  trigger = "cron",
+  options: FootballAutomationOptions = {}
+): Promise<FootballAutomationResult> {
   const startedAt = serverNow();
+  const selectedConfig = options.competitionKey
+    ? getFootballCompetitionConfig(options.competitionKey)
+    : null;
+  const activeConfigs = selectedConfig ? [selectedConfig] : footballCompetitionConfigs;
+  const candidateScanLimit = selectedConfig ? 1_000 : MAX_CANDIDATES;
+
+  if (options.competitionKey && !selectedConfig) {
+    return {
+      message: "Campeonato invalido para sincronizacao.",
+      ok: false,
+      runId: randomUUID(),
+      summary: emptySummary()
+    };
+  }
+
   const ownerToken = randomUUID();
   const locked = await acquireLock(ownerToken, startedAt);
 
@@ -564,11 +616,11 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
   try {
     const usage = await getFootballApiUsageSnapshot();
 
-    if (trigger === FOOTBALL_MANUAL_TRIGGER) {
-      await syncManualCatalogs(summary);
+    if (trigger === FOOTBALL_MANUAL_TRIGGER && options.includeCatalog !== false) {
+      await syncManualCatalogs(summary, activeConfigs);
     }
 
-    const candidates = await loadCandidates();
+    const candidates = await loadCandidates(activeConfigs, candidateScanLimit);
     const now = serverNow();
     summary.trackedMatches = candidates.length;
     summary.liveMatches = candidates.filter((candidate) =>
@@ -599,23 +651,17 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
 
     if (liveCandidates.length > 0) {
       const liveResult = await fetchApiFootballLiveFixtures(
-        footballCompetitionConfigs.map((config) => config.leagueId)
+        activeConfigs.map((config) => config.leagueId)
       );
       summary.callsUsed += liveResult.callsUsed;
       if (liveResult.ok) liveResult.data.forEach((fixture) => fixtures.set(fixture.apiId, fixture));
       else summary.errors.push(liveResult.message);
     }
 
-    const dueIds = candidates
+    const fixtureLimit = Math.max(1, Math.min(options.fixtureLimit ?? MAX_CANDIDATES, 20));
+    const dueCandidates = candidates
       .filter((candidate) => {
         const decision = decisions.get(candidate.apiId as number);
-        const needsDetails = Boolean(
-          decision?.events ||
-            decision?.history ||
-            decision?.lineups ||
-            decision?.players ||
-            decision?.statistics
-        );
         const missedLive =
           ["LIVE", "HALFTIME"].includes(candidate.status) &&
           !fixtures.has(candidate.apiId as number) &&
@@ -623,10 +669,13 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
             now.getTime() - candidate.liveSyncedAt.getTime() >= 5 * 60_000);
         return (
           (decision?.fixture && !["LIVE", "HALFTIME"].includes(candidate.status)) ||
-          needsDetails ||
+          (decision ? decisionNeedsWork(decision) : false) ||
           missedLive
         );
-      })
+      });
+    const dueIds = dueCandidates
+      .filter((candidate) => !fixtures.has(candidate.apiId as number))
+      .slice(0, fixtureLimit)
       .map((candidate) => candidate.apiId as number);
 
     for (const fixtureIds of chunk(dueIds, 20)) {
@@ -636,7 +685,10 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
       else summary.errors.push(result.message);
     }
 
-    let historyBudget = usage.dailyRemaining === null || usage.dailyRemaining > 35 ? 1 : 0;
+    let historyBudget =
+      usage.dailyRemaining === null || usage.dailyRemaining > 35
+        ? Math.max(0, Math.min(options.historyBudget ?? 1, fixtureLimit))
+        : 0;
     const standingsConfigs = new Map<string, FootballCompetitionConfig>();
 
     for (const fixture of fixtures.values()) {
@@ -661,6 +713,7 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
           summary
         });
         summary.fixturesUpdated += applied.matchIds.length;
+        summary.candidatesProcessed += 1;
         if (["FT", "AET", "PEN", "AWD", "WO"].includes(fixture.statusShort)) {
           standingsConfigs.set(config.key, config);
         }
@@ -684,8 +737,15 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
       await maybeSyncOneCatalog(summary, usage.dailyRemaining);
     }
 
+    const remainingCandidates = await loadCandidates(activeConfigs, candidateScanLimit);
+    const remainingNow = serverNow();
+    summary.remainingCandidates = remainingCandidates.filter((candidate) =>
+      decisionNeedsWork(decisionForCandidate(candidate, usage.dailyRemaining, remainingNow))
+    ).length;
+
     const finishedAt = serverNow();
-    const message = `${summary.catalogsSynced} campeonato(s) verificado(s); ${summary.fixturesUpdated} registro(s) de partida atualizado(s); ${summary.liveMatches} jogo(s) ao vivo; ${summary.callsUsed} chamada(s) externa(s).`;
+    const scopeLabel = selectedConfig ? `${selectedConfig.name}: ` : "";
+    const message = `${scopeLabel}${summary.catalogsSynced} campeonato(s) verificado(s); ${summary.fixturesUpdated} registro(s) de partida atualizado(s); ${summary.liveMatches} jogo(s) ao vivo; ${summary.remainingCandidates} partida(s) ainda aguardando detalhes; ${summary.callsUsed} chamada(s) externa(s).`;
     const status = summary.errors.length > 0 ? "FAILED" : "SUCCESS";
     await prisma.footballAutomationLog.update({
       data: {

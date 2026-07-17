@@ -114,8 +114,9 @@ export default async function AdminFootballSyncPage() {
             <div>
               <CardTitle>Atualizacao manual</CardTitle>
               <CardDescription>
-                Executa uma atualizacao completa e fica bloqueada por {manual.cooldownHours} horas
-                para evitar consumo desnecessario.
+                Escolha um campeonato. Catalogo, partidas e dados detalhados serao processados em
+                lotes seguros, com intervalo de {manual.cooldownHours} horas para repetir o catalogo.
+                A atualizacao de placares pode ser usada sempre que necessario.
               </CardDescription>
             </div>
             <StatusPill status={automation?.status} />
@@ -128,14 +129,8 @@ export default async function AdminFootballSyncPage() {
               <p className="font-semibold">{formatDate(manual.lastRun?.finishedAt)}</p>
             </div>
             <div>
-              <p className="text-app-muted">Proxima liberacao</p>
-              <p className="font-semibold">
-                {manual.canRun
-                  ? "Disponivel agora"
-                  : automation?.status === "RUNNING"
-                    ? "Sincronizacao em andamento"
-                    : formatDate(manual.nextAvailableAt)}
-              </p>
+              <p className="text-app-muted">Processamento</p>
+              <p className="font-semibold">Lotes automaticos por campeonato</p>
             </div>
             <div>
               <p className="text-app-muted">Escalacoes pendentes</p>
@@ -148,10 +143,19 @@ export default async function AdminFootballSyncPage() {
           </div>
 
           <div className="mt-5 border-t border-app-border pt-5">
-            <ManualFootballSyncForm disabled={!manual.canRun} />
+            <ManualFootballSyncForm
+              competitions={competitions.map((competition) => ({
+                key: competition.key,
+                name: competition.name,
+                season: competition.season
+              }))}
+              disabled={!apiConfigured || automation?.status === "RUNNING"}
+            />
             <p className="mt-2 max-w-2xl text-xs text-app-muted">
-              O processo atualiza as cinco competicoes configuradas, replica rodadas e partidas
-              para as ligas e busca placares e detalhes que estiverem vencidos.
+              A tela continua os lotes automaticamente e salva cada etapa no banco. Escalacoes,
+              eventos, estatisticas, jogadores, estadio e historico sao buscados quando a API
+              oferece cobertura e a partida esta na janela adequada. O botao de placares consulta
+              apenas jogos ao vivo, recentes ou ainda nao homologados.
             </p>
           </div>
 

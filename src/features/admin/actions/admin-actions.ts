@@ -33,8 +33,16 @@ import {
   FOOTBALL_MANUAL_TRIGGER,
   runFootballAutomation
 } from "@/server/football-api/automation-service";
-import { getFootballManualSyncCooldownHours } from "@/server/football-api/competitions";
+import {
+  getFootballCompetitionConfig,
+  getFootballManualSyncCooldownHours,
+  type FootballCompetitionKey
+} from "@/server/football-api/competitions";
 import { syncChampionshipRoundsIntoLeague } from "@/server/football-api/league-sync-service";
+import {
+  syncFootballCompetitionScores,
+  type ScoreSyncCounter
+} from "@/server/football-api/sync-service";
 import {
   bulkImportTeamsSchema,
   createAchievementBadgeSchema,
@@ -403,13 +411,33 @@ async function importTeamsIntoDatabase(
   return summary;
 }
 
+export type ManualFootballSyncStepInput = {
+  competitionKey: FootballCompetitionKey;
+  includeCatalog: boolean;
+};
+
+export type ManualFootballSyncProgress = {
+  callsUsed: number;
+  catalogUpdated: boolean;
+  complete: boolean;
+  fixturesProcessed: number;
+  fixturesUpdated: number;
+  remainingCandidates: number;
+  trackedMatches: number;
+};
+
 export async function runManualFootballSyncAction(
-  previousState: AdminActionResult | null,
-  formData: FormData
-): Promise<AdminActionResult> {
-  void previousState;
-  void formData;
+  input: ManualFootballSyncStepInput
+): Promise<AdminActionResult<ManualFootballSyncProgress>> {
   const admin = await requireAdmin();
+  const config = getFootballCompetitionConfig(input.competitionKey);
+
+  if (!config) {
+    return {
+      ok: false,
+      message: "Selecione um campeonato valido para sincronizar."
+    };
+  }
 
   if (!isFootballApiConfigured()) {
     return {
@@ -420,27 +448,26 @@ export async function runManualFootballSyncAction(
 
   const now = serverNow();
   const cooldownHours = getFootballManualSyncCooldownHours();
-  const latestManualRun = await prisma.footballAutomationLog.findFirst({
+  const latestCatalogSync = await prisma.footballSyncLog.findFirst({
     orderBy: {
-      startedAt: "desc"
+      finishedAt: "desc"
     },
     where: {
-      trigger: FOOTBALL_MANUAL_TRIGGER,
-      OR: [{ status: "SUCCESS" }, { callsUsed: { gt: 0 } }]
+      competitionKey: config.key,
+      season: config.season,
+      status: "SUCCESS"
     }
   });
-  const nextAllowedAt = latestManualRun
-    ? new Date(latestManualRun.startedAt.getTime() + cooldownHours * 60 * 60_000)
+  const nextCatalogAt = latestCatalogSync?.finishedAt
+    ? new Date(latestCatalogSync.finishedAt.getTime() + cooldownHours * 60 * 60_000)
     : null;
-
-  if (nextAllowedAt && nextAllowedAt > now) {
-    return {
-      ok: false,
-      message: `A proxima sincronizacao manual estara disponivel em ${formatDateTimeInSaoPaulo(nextAllowedAt)}.`
-    };
-  }
-
-  const result = await runFootballAutomation(FOOTBALL_MANUAL_TRIGGER);
+  const catalogUpdated = Boolean(input.includeCatalog && (!nextCatalogAt || nextCatalogAt <= now));
+  const result = await runFootballAutomation(FOOTBALL_MANUAL_TRIGGER, {
+    competitionKey: config.key,
+    fixtureLimit: 4,
+    historyBudget: 2,
+    includeCatalog: catalogUpdated
+  });
 
   if (result.locked) {
     return {
@@ -455,7 +482,11 @@ export async function runManualFootballSyncAction(
     "FootballAutomation",
     result.runId,
     undefined,
-    result.summary
+    {
+      competitionKey: config.key,
+      includeCatalog: catalogUpdated,
+      ...result.summary
+    }
   );
   revalidateAdminPaths();
 
@@ -466,9 +497,82 @@ export async function runManualFootballSyncAction(
     };
   }
 
+  const catalogMessage = catalogUpdated
+    ? "Catalogo atualizado."
+    : input.includeCatalog && nextCatalogAt
+      ? `Catalogo preservado pelo intervalo de ${cooldownHours} horas; nova importacao completa apos ${formatDateTimeInSaoPaulo(nextCatalogAt)}.`
+      : "";
+
   return {
     ok: true,
-    message: `Sincronizacao concluida. ${result.message}`
+    message: `${catalogMessage} ${result.message}`.trim(),
+    data: {
+      callsUsed: result.summary.callsUsed,
+      catalogUpdated,
+      complete: result.summary.remainingCandidates === 0,
+      fixturesProcessed: result.summary.candidatesProcessed,
+      fixturesUpdated: result.summary.fixturesUpdated,
+      remainingCandidates: result.summary.remainingCandidates,
+      trackedMatches: result.summary.trackedMatches
+    }
+  };
+}
+
+export async function updateCompetitionScoresAction(input: {
+  competitionKey: FootballCompetitionKey;
+}): Promise<AdminActionResult<ScoreSyncCounter>> {
+  const admin = await requireAdmin();
+  const config = getFootballCompetitionConfig(input.competitionKey);
+
+  if (!config) {
+    return {
+      ok: false,
+      message: "Selecione um campeonato valido para atualizar os placares."
+    };
+  }
+
+  if (!isFootballApiConfigured()) {
+    return {
+      ok: false,
+      message: "Configure API_FOOTBALL_KEY antes de atualizar os placares."
+    };
+  }
+
+  const automation = await prisma.footballSyncState.findUnique({
+    select: { status: true },
+    where: { key: "api-football-automatic" }
+  });
+
+  if (automation?.status === "RUNNING") {
+    return {
+      ok: false,
+      message: "Aguarde a sincronizacao completa em andamento antes de atualizar os placares."
+    };
+  }
+
+  const result = await syncFootballCompetitionScores(config);
+
+  await createAuditLog(
+    admin.id,
+    "admin.football.scores.updated",
+    "Championship",
+    config.key,
+    undefined,
+    result.summary
+  );
+  revalidateAdminPaths();
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: `Nao foi possivel atualizar os placares. ${result.message}`
+    };
+  }
+
+  return {
+    ok: true,
+    data: result.summary,
+    message: result.message
   };
 }
 
