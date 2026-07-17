@@ -17,7 +17,7 @@ function getTone(value: string) {
     return "success" as const;
   }
 
-  if (["POSTPONED", "HALFTIME"].includes(value)) {
+  if (["POSTPONED", "SUSPENDED", "HALFTIME"].includes(value)) {
     return "warning" as const;
   }
 

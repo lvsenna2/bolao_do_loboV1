@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import type { Route } from "next";
 import { CalendarClock, ClipboardCheck, MapPin, Trophy } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -95,6 +96,12 @@ function MatchRow({
             {match.guess.score.totalPoints} pts
           </span>
         ) : null}
+        <Link
+          className={cn(buttonVariants({ size: "sm", variant: "secondary" }))}
+          href={`/partidas/${match.id}` as Route}
+        >
+          Detalhes
+        </Link>
         {canGuess ? (
           <Link className={cn(buttonVariants({ size: "sm", variant: "accent" }))} href="/palpites">
             Palpitar

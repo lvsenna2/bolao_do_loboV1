@@ -13,3 +13,7 @@ Esses documentos definem integralmente os requisitos funcionais e não funcionai
 Nenhuma implementação deve contrariar esses documentos.
 
 Em caso de conflito, o SDD tem prioridade.
+
+## Operacao
+
+- [Automacao da API-Football](docs/API_FOOTBALL_AUTOMATION.md)

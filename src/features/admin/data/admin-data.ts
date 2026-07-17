@@ -14,6 +14,7 @@ import {
   footballCompetitionConfigs,
   getFootballSyncCacheHours
 } from "@/server/football-api/competitions";
+import { getFootballApiUsageSnapshot } from "@/server/football-api/request";
 import type { AdminDataResult } from "../types";
 import { getSaoPauloDayRangeUtc } from "@/lib/date-time";
 
@@ -1404,27 +1405,30 @@ export async function getAdminSettings() {
 export async function getAdminFootballSyncStatus() {
   const empty = {
     apiConfigured: isFootballApiConfigured(),
+    automation: null,
     cacheHours: getFootballSyncCacheHours(),
     competitions: footballCompetitionConfigs.map((competition) => ({
       ...competition,
       lastAttempt: null,
-      lastScoreAttempt: null,
-      lastScoreSuccess: null,
       lastSuccess: null,
       local: {
         matches: 0,
         rounds: 0,
         standings: 0
       }
-    }))
+    })),
+    recentRuns: [],
+    usage: {
+      callsToday: 0,
+      dailyLimit: null,
+      dailyRemaining: null,
+      recentErrors: []
+    }
   };
 
   try {
     const competitionKeys = footballCompetitionConfigs.map((competition) => competition.key);
-    const scoreCompetitionKeys = footballCompetitionConfigs.map(
-      (competition) => `${competition.key}:scores`
-    );
-    const [logs, championships] = await prisma.$transaction([
+    const [logs, championships, automation, recentRuns, usage] = await Promise.all([
       prisma.footballSyncLog.findMany({
         orderBy: {
           createdAt: "desc"
@@ -1432,7 +1436,7 @@ export async function getAdminFootballSyncStatus() {
         take: 100,
         where: {
           competitionKey: {
-            in: [...competitionKeys, ...scoreCompetitionKeys]
+            in: competitionKeys
           }
         }
       }),
@@ -1455,7 +1459,19 @@ export async function getAdminFootballSyncStatus() {
           },
           provider: "api-football"
         }
-      })
+      }),
+      prisma.footballSyncState.findUnique({
+        where: {
+          key: "api-football-automatic"
+        }
+      }),
+      prisma.footballAutomationLog.findMany({
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 10
+      }),
+      getFootballApiUsageSnapshot()
     ]);
 
     const competitions = await Promise.all(
@@ -1468,18 +1484,6 @@ export async function getAdminFootballSyncStatus() {
           logs.find(
             (log) =>
               log.competitionKey === competition.key &&
-              log.season === competition.season &&
-              log.status === "SUCCESS"
-          ) ?? null;
-        const scoreCompetitionKey = `${competition.key}:scores`;
-        const lastScoreAttempt =
-          logs.find(
-            (log) => log.competitionKey === scoreCompetitionKey && log.season === competition.season
-          ) ?? null;
-        const lastScoreSuccess =
-          logs.find(
-            (log) =>
-              log.competitionKey === scoreCompetitionKey &&
               log.season === competition.season &&
               log.status === "SUCCESS"
           ) ?? null;
@@ -1500,8 +1504,6 @@ export async function getAdminFootballSyncStatus() {
         return {
           ...competition,
           lastAttempt,
-          lastScoreAttempt,
-          lastScoreSuccess,
           lastSuccess,
           local: {
             matches,
@@ -1516,8 +1518,11 @@ export async function getAdminFootballSyncStatus() {
       ok: true as const,
       data: {
         apiConfigured: isFootballApiConfigured(),
+        automation,
         cacheHours: getFootballSyncCacheHours(),
-        competitions
+        competitions,
+        recentRuns,
+        usage
       }
     };
   } catch {

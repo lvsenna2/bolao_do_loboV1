@@ -15,6 +15,7 @@ import {
   type ExternalFootballTeam
 } from "./client";
 import { getFootballSyncCacheHours, type FootballCompetitionConfig } from "./competitions";
+import { mapApiFootballStatus } from "./status";
 
 type SyncCounter = {
   callsUsed: number;
@@ -76,6 +77,8 @@ const matchScoreSyncSelect = Prisma.validator<Prisma.MatchSelect>()({
   homeScore: true,
   homologatedAt: true,
   id: true,
+  kickoff: true,
+  lastSyncedAt: true,
   status: true
 });
 
@@ -113,30 +116,6 @@ function addCalls(summary: SyncCounter, callsUsed: number) {
 
 function toChampionshipStatus(): "ACTIVE" {
   return "ACTIVE";
-}
-
-function mapMatchStatus(statusShort: string): MatchStatus {
-  if (["1H", "2H", "ET", "BT", "P", "INT", "LIVE"].includes(statusShort)) {
-    return "LIVE";
-  }
-
-  if (statusShort === "HT") {
-    return "HALFTIME";
-  }
-
-  if (["FT", "AET", "PEN", "AWD", "WO"].includes(statusShort)) {
-    return "FINISHED";
-  }
-
-  if (["PST", "SUSP"].includes(statusShort)) {
-    return "POSTPONED";
-  }
-
-  if (["CANC", "ABD"].includes(statusShort)) {
-    return "CANCELLED";
-  }
-
-  return "SCHEDULED";
 }
 
 function getRoundStatus(statuses: MatchStatus[]): RoundStatus {
@@ -236,7 +215,7 @@ async function logScoreSync(
   });
 }
 
-async function upsertTeam(team: ExternalFootballTeam) {
+export async function upsertFootballTeam(team: ExternalFootballTeam) {
   const existingByApiId = await prisma.team.findUnique({
     select: {
       id: true
@@ -314,7 +293,8 @@ async function upsertTeam(team: ExternalFootballTeam) {
 
 async function upsertCompetition(config: FootballCompetitionConfig, summary: SyncCounter) {
   const leagueResult = await fetchApiFootballLeagues({
-    id: config.leagueId
+    id: config.leagueId,
+    season: config.season
   });
   addCalls(summary, leagueResult.callsUsed);
 
@@ -333,6 +313,8 @@ async function upsertCompetition(config: FootballCompetitionConfig, summary: Syn
       apiId: config.leagueId,
       country: config.countryOrContinent,
       description: `${league.name} importado da API-Football.`,
+      coverage: league.coverage ?? undefined,
+      coverageSyncedAt: league.coverage ? serverNow() : undefined,
       logo: league.logo,
       name: league.name || config.name,
       provider: PROVIDER,
@@ -341,6 +323,8 @@ async function upsertCompetition(config: FootballCompetitionConfig, summary: Syn
     update: {
       country: config.countryOrContinent,
       description: `${league.name} importado da API-Football.`,
+      coverage: league.coverage ?? undefined,
+      coverageSyncedAt: league.coverage ? serverNow() : undefined,
       logo: league.logo,
       name: league.name || config.name,
       status: toChampionshipStatus()
@@ -357,11 +341,15 @@ async function upsertCompetition(config: FootballCompetitionConfig, summary: Syn
     create: {
       championshipId: championship.id,
       name: String(config.season),
+      coverage: league.coverage ?? undefined,
+      coverageSyncedAt: league.coverage ? serverNow() : undefined,
       status: "ACTIVE",
       year: config.season
     },
     update: {
       name: String(config.season),
+      coverage: league.coverage ?? undefined,
+      coverageSyncedAt: league.coverage ? serverNow() : undefined,
       status: "ACTIVE"
     },
     where: {
@@ -390,7 +378,7 @@ async function upsertTeams(config: FootballCompetitionConfig, summary: SyncCount
   }
 
   for (const team of teamsResult.teams) {
-    await upsertTeam(team);
+    await upsertFootballTeam(team);
     summary.teamsImported += 1;
   }
 }
@@ -487,11 +475,11 @@ async function upsertFixtures(
 
   for (const fixture of fixturesResult.data) {
     const [homeTeam, awayTeam] = await Promise.all([
-      upsertTeam(fixture.homeTeam),
-      upsertTeam(fixture.awayTeam)
+      upsertFootballTeam(fixture.homeTeam),
+      upsertFootballTeam(fixture.awayTeam)
     ]);
     const round = await upsertRound(seasonId, fixture.round, fixture.kickoff, orderMap);
-    const status = mapMatchStatus(fixture.statusShort);
+    const status = mapApiFootballStatus(fixture.statusShort);
     const existingMatch = await prisma.match.findUnique({
       select: {
         id: true
@@ -503,17 +491,30 @@ async function upsertFixtures(
 
     const matchData: Prisma.MatchUncheckedCreateInput = {
       apiId: fixture.apiId,
+      apiStatus: fixture.statusShort,
       awayScore: fixture.awayScore,
       awayTeamId: awayTeam.id,
       city: fixture.city,
       country: fixture.country,
       homeScore: fixture.homeScore,
       homeTeamId: homeTeam.id,
+      halftimeAway: fixture.halftime.away,
+      halftimeHome: fixture.halftime.home,
       kickoff: fixture.kickoff,
+      elapsed: fixture.elapsed,
+      extraTime: fixture.extra,
+      extraTimeAway: fixture.extraTime.away,
+      extraTimeHome: fixture.extraTime.home,
+      lastSyncedAt: serverNow(),
+      penaltyAway: fixture.penalty.away,
+      penaltyHome: fixture.penalty.home,
       referee: fixture.referee,
       roundId: round.id,
       stadium: fixture.stadium,
-      status
+      status,
+      statusLong: fixture.statusLong,
+      secondHalfAway: fixture.secondHalf.away,
+      secondHalfHome: fixture.secondHalf.home
     };
 
     if (existingMatch) {
@@ -575,7 +576,7 @@ async function upsertStandings(
   }
 
   for (const row of standingsResult.data) {
-    const team = await upsertTeam(row.team);
+    const team = await upsertFootballTeam(row.team);
 
     await prisma.competitionStanding.upsert({
       create: {
@@ -622,6 +623,32 @@ async function upsertStandings(
   }
 }
 
+export async function syncFootballCompetitionStandings(config: FootballCompetitionConfig) {
+  const summary = emptySummary();
+  const season = await prisma.season.findFirst({
+    select: {
+      id: true
+    },
+    where: {
+      championship: {
+        apiId: config.leagueId,
+        provider: PROVIDER
+      },
+      year: config.season
+    }
+  });
+
+  if (!season) {
+    return { callsUsed: 0, rows: 0 };
+  }
+
+  await upsertStandings(config, season.id, summary);
+  return {
+    callsUsed: summary.callsUsed,
+    rows: summary.standingsImported
+  };
+}
+
 async function findTeamIdsForFixtureTeam(team: ExternalFootballTeam, fallbackId: string) {
   const matches = await prisma.team.findMany({
     select: {
@@ -653,8 +680,8 @@ async function findMatchesForFixture(
   fixture: ExternalFootballFixture
 ) {
   const [homeTeam, awayTeam] = await Promise.all([
-    upsertTeam(fixture.homeTeam),
-    upsertTeam(fixture.awayTeam)
+    upsertFootballTeam(fixture.homeTeam),
+    upsertFootballTeam(fixture.awayTeam)
   ]);
   const [homeTeamIds, awayTeamIds] = await Promise.all([
     findTeamIdsForFixtureTeam(fixture.homeTeam, homeTeam.id),
@@ -728,7 +755,25 @@ async function updateMatchFromFixture(
   const shouldHomologate = status === "FINISHED" && hasScore;
   const needsHomologation = shouldHomologate && (!match.homologatedAt || scoreChanged);
   const updateData: Prisma.MatchUpdateInput = {
-    status
+    apiStatus: fixture.statusShort,
+    city: fixture.city,
+    elapsed: fixture.elapsed,
+    extraTime: fixture.extra,
+    extraTimeAway: fixture.extraTime.away,
+    extraTimeHome: fixture.extraTime.home,
+    halftimeAway: fixture.halftime.away,
+    halftimeHome: fixture.halftime.home,
+    kickoff: fixture.kickoff,
+    lastSyncedAt: serverNow(),
+    penaltyAway: fixture.penalty.away,
+    penaltyHome: fixture.penalty.home,
+    referee: fixture.referee,
+    secondHalfAway: fixture.secondHalf.away,
+    secondHalfHome: fixture.secondHalf.home,
+    stadium: fixture.stadium,
+    status,
+    statusLong: fixture.statusLong,
+    ...(status === "LIVE" || status === "HALFTIME" ? { liveSyncedAt: serverNow() } : {})
   };
 
   if (hasScore) {
@@ -740,14 +785,14 @@ async function updateMatchFromFixture(
     updateData.homologatedAt = serverNow();
   }
 
-  if (scoreChanged || statusChanged || needsHomologation) {
-    await prisma.match.update({
-      data: updateData,
-      where: {
-        id: match.id
-      }
-    });
+  await prisma.match.update({
+    data: updateData,
+    where: {
+      id: match.id
+    }
+  });
 
+  if (scoreChanged || statusChanged || needsHomologation) {
     summary.matchesUpdated += 1;
 
     if (status === "LIVE" || status === "HALFTIME") {
@@ -759,7 +804,7 @@ async function updateMatchFromFixture(
     }
   }
 
-  if (!shouldHomologate || match._count.guesses === 0) {
+  if (!needsHomologation || match._count.guesses === 0) {
     return;
   }
 
@@ -770,6 +815,25 @@ async function updateMatchFromFixture(
   summary.processedGuesses += scoringSummary.processedGuesses;
   summary.rankingRows += rankingSummary.leagueRows;
   summary.xpEvents += xpSummary.resultHitEvents + xpSummary.exactScoreEvents;
+}
+
+export async function applyFootballFixture(
+  config: FootballCompetitionConfig,
+  fixture: ExternalFootballFixture
+) {
+  const summary = emptyScoreSummary();
+  const matches = await findMatchesForFixture(config, fixture);
+  const status = mapApiFootballStatus(fixture.statusShort);
+
+  for (const match of matches) {
+    await updateMatchFromFixture(match, fixture, status, summary);
+  }
+
+  return {
+    matchIds: matches.map((match) => match.id),
+    status,
+    summary
+  };
 }
 
 export async function syncFootballCompetitionScores(
@@ -787,19 +851,20 @@ export async function syncFootballCompetitionScores(
     }
 
     for (const fixture of fixturesResult.data) {
-      const matches = await findMatchesForFixture(config, fixture);
+      const applied = await applyFootballFixture(config, fixture);
 
-      if (matches.length === 0) {
+      if (applied.matchIds.length === 0) {
         summary.unmatchedFixtures += 1;
         continue;
       }
 
       summary.matchedFixtures += 1;
-      const status = mapMatchStatus(fixture.statusShort);
-
-      for (const match of matches) {
-        await updateMatchFromFixture(match, fixture, status, summary);
-      }
+      summary.liveMatchesUpdated += applied.summary.liveMatchesUpdated;
+      summary.matchesHomologated += applied.summary.matchesHomologated;
+      summary.matchesUpdated += applied.summary.matchesUpdated;
+      summary.processedGuesses += applied.summary.processedGuesses;
+      summary.rankingRows += applied.summary.rankingRows;
+      summary.xpEvents += applied.summary.xpEvents;
     }
 
     const message = `${config.name}: ${summary.matchesUpdated} partida(s) atualizada(s), ${summary.matchesHomologated} finalizada(s), ${summary.processedGuesses} palpite(s) processado(s). ${summary.unmatchedFixtures} jogo(s) da API sem partida local correspondente.`;

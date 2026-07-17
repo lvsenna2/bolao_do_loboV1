@@ -77,7 +77,13 @@ enum MatchStatus {
   HALFTIME
   FINISHED
   POSTPONED
+  SUSPENDED
   CANCELLED
+}
+
+enum LineupPlayerRole {
+  STARTER
+  SUBSTITUTE
 }
 
 enum Prediction {
@@ -289,6 +295,8 @@ model Championship {
   status       ChampionshipStatus @default(ACTIVE)
   description  String?
   primaryColor String?            @map("primary_color") @db.VarChar(20)
+  coverage     Json?
+  coverageSyncedAt DateTime?      @map("coverage_synced_at")
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
   deletedAt    DateTime?          @map("deleted_at")
@@ -310,6 +318,8 @@ model Season {
   status         SeasonStatus @default(SCHEDULED)
   startsAt       DateTime?    @map("starts_at")
   endsAt         DateTime?    @map("ends_at")
+  coverage       Json?
+  coverageSyncedAt DateTime?  @map("coverage_synced_at")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
@@ -363,6 +373,10 @@ model Team {
   homeMatches Match[]               @relation("HomeTeam")
   awayMatches Match[]               @relation("AwayTeam")
   standings   CompetitionStanding[]
+  lineups     MatchLineup[]
+  matchEvents MatchEvent[]
+  matchStatistics MatchStatistic[]
+  playerStatistics MatchPlayerStatistic[]
 
   @@unique([apiId])
   @@index([name])
@@ -385,7 +399,28 @@ model Match {
   referee       String?     @db.VarChar(120)
   broadcast     String?     @db.VarChar(120)
   status        MatchStatus @default(SCHEDULED)
+  apiStatus     String?     @map("api_status") @db.VarChar(20)
+  statusLong    String?     @map("status_long") @db.VarChar(80)
+  elapsed       Int?
+  extraTime     Int?        @map("extra_time")
+  halftimeHome  Int?        @map("halftime_home")
+  halftimeAway  Int?        @map("halftime_away")
+  secondHalfHome Int?       @map("second_half_home")
+  secondHalfAway Int?       @map("second_half_away")
+  extraTimeHome Int?        @map("extra_time_home")
+  extraTimeAway Int?        @map("extra_time_away")
+  penaltyHome   Int?        @map("penalty_home")
+  penaltyAway   Int?        @map("penalty_away")
+  footballVenueId String?   @map("football_venue_id") @db.Uuid
   homologatedAt DateTime?   @map("homologated_at")
+  lastSyncedAt  DateTime?   @map("last_synced_at")
+  liveSyncedAt  DateTime?   @map("live_synced_at")
+  lineupsSyncedAt DateTime? @map("lineups_synced_at")
+  eventsSyncedAt DateTime?  @map("events_synced_at")
+  statisticsSyncedAt DateTime? @map("statistics_synced_at")
+  playersSyncedAt DateTime? @map("players_synced_at")
+  historySyncedAt DateTime? @map("history_synced_at")
+  fullySyncedAt DateTime?   @map("fully_synced_at")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
   deletedAt     DateTime?   @map("deleted_at")
@@ -393,16 +428,183 @@ model Match {
   round    Round     @relation(fields: [roundId], references: [id], onDelete: Restrict)
   homeTeam Team      @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
   awayTeam Team      @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  footballVenue FootballVenue? @relation(fields: [footballVenueId], references: [id], onDelete: SetNull)
   guesses  Guess[]
   scores   Score[]
   xpEvents XpEvent[]
+  lineups MatchLineup[]
+  events MatchEvent[]
+  statistics MatchStatistic[]
+  playerStatistics MatchPlayerStatistic[]
+  insight MatchInsight?
 
   @@index([roundId])
   @@index([homeTeamId])
   @@index([awayTeamId])
   @@index([kickoff])
   @@index([status])
+  @@index([apiStatus])
+  @@index([lastSyncedAt])
+  @@index([fullySyncedAt])
+  @@index([footballVenueId])
   @@map("matches")
+}
+
+model FootballVenue {
+  id         String   @id @default(uuid()) @db.Uuid
+  externalId Int      @unique @map("external_id")
+  name       String   @db.VarChar(160)
+  address    String?  @db.VarChar(200)
+  city       String?  @db.VarChar(100)
+  country    String?  @db.VarChar(80)
+  capacity   Int?
+  surface    String?  @db.VarChar(80)
+  imageUrl   String?  @map("image_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  matches Match[]
+
+  @@index([city])
+  @@map("football_venues")
+}
+
+model FootballPlayer {
+  id         String   @id @default(uuid()) @db.Uuid
+  externalId Int      @unique @map("external_id")
+  name       String   @db.VarChar(140)
+  firstName  String?  @map("first_name") @db.VarChar(100)
+  lastName   String?  @map("last_name") @db.VarChar(100)
+  position   String?  @db.VarChar(40)
+  photoUrl   String?  @map("photo_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  lineupEntries MatchLineupPlayer[]
+  events        MatchEvent[] @relation("MatchEventPlayer")
+  assistedEvents MatchEvent[] @relation("MatchEventAssist")
+  matchStatistics MatchPlayerStatistic[]
+
+  @@index([name])
+  @@map("football_players")
+}
+
+model MatchLineup {
+  id              String   @id @default(uuid()) @db.Uuid
+  matchId         String   @map("match_id") @db.Uuid
+  teamId          String   @map("team_id") @db.Uuid
+  formation       String?  @db.VarChar(30)
+  coachExternalId Int?     @map("coach_external_id")
+  coachName       String?  @map("coach_name") @db.VarChar(140)
+  coachPhotoUrl   String?  @map("coach_photo_url")
+  complete        Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  match   Match               @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team    Team                @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  players MatchLineupPlayer[]
+
+  @@unique([matchId, teamId])
+  @@index([teamId])
+  @@map("match_lineups")
+}
+
+model MatchLineupPlayer {
+  id          String           @id @default(uuid()) @db.Uuid
+  lineupId    String           @map("lineup_id") @db.Uuid
+  playerId    String           @map("player_id") @db.Uuid
+  role        LineupPlayerRole
+  shirtNumber Int?             @map("shirt_number")
+  position    String?          @db.VarChar(20)
+  grid        String?          @db.VarChar(20)
+  sortOrder   Int              @default(0) @map("sort_order")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  lineup MatchLineup   @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+  player FootballPlayer @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([lineupId, playerId])
+  @@index([playerId])
+  @@map("match_lineup_players")
+}
+
+model MatchEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  matchId        String   @map("match_id") @db.Uuid
+  externalKey    String   @unique @map("external_key") @db.VarChar(180)
+  elapsed        Int
+  extra          Int?
+  teamId         String?  @map("team_id") @db.Uuid
+  playerId       String?  @map("player_id") @db.Uuid
+  assistPlayerId String?  @map("assist_player_id") @db.Uuid
+  type           String   @db.VarChar(60)
+  detail         String?  @db.VarChar(120)
+  comments       String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  match        Match           @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team         Team?           @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  player       FootballPlayer? @relation("MatchEventPlayer", fields: [playerId], references: [id], onDelete: SetNull)
+  assistPlayer FootballPlayer? @relation("MatchEventAssist", fields: [assistPlayerId], references: [id], onDelete: SetNull)
+
+  @@index([matchId, elapsed])
+  @@index([teamId])
+  @@map("match_events")
+}
+
+model MatchStatistic {
+  id        String   @id @default(uuid()) @db.Uuid
+  matchId   String   @map("match_id") @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  period    String   @default("FULL_TIME") @db.VarChar(20)
+  type      String   @db.VarChar(100)
+  value     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@unique([matchId, teamId, period, type])
+  @@index([teamId])
+  @@map("match_statistics")
+}
+
+model MatchPlayerStatistic {
+  id         String   @id @default(uuid()) @db.Uuid
+  matchId    String   @map("match_id") @db.Uuid
+  teamId     String   @map("team_id") @db.Uuid
+  playerId   String   @map("player_id") @db.Uuid
+  statistics Json
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  match  Match          @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team   Team           @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  player FootballPlayer @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([matchId, teamId, playerId])
+  @@index([playerId])
+  @@map("match_player_statistics")
+}
+
+model MatchInsight {
+  id              String   @id @default(uuid()) @db.Uuid
+  matchId         String   @unique @map("match_id") @db.Uuid
+  homeRecent      Json?    @map("home_recent")
+  awayRecent      Json?    @map("away_recent")
+  homeSeasonStats Json?    @map("home_season_stats")
+  awaySeasonStats Json?    @map("away_season_stats")
+  headToHead      Json?    @map("head_to_head")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@map("match_insights")
 }
 
 model Guess {
@@ -754,6 +956,76 @@ model FootballSyncLog {
   @@index([status])
   @@index([finishedAt])
   @@map("football_sync_logs")
+}
+
+model FootballApiRequestLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  endpoint        String   @db.VarChar(100)
+  params          Json?
+  statusCode      Int?     @map("status_code")
+  ok              Boolean
+  durationMs      Int      @map("duration_ms")
+  dailyLimit      Int?     @map("daily_limit")
+  dailyRemaining  Int?     @map("daily_remaining")
+  minuteLimit     Int?     @map("minute_limit")
+  minuteRemaining Int?     @map("minute_remaining")
+  error           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([endpoint, createdAt])
+  @@index([ok, createdAt])
+  @@map("football_api_request_logs")
+}
+
+model FootballSyncState {
+  key                     String    @id @db.VarChar(80)
+  status                  String    @default("IDLE") @db.VarChar(20)
+  lastStartedAt           DateTime? @map("last_started_at")
+  lastFinishedAt          DateTime? @map("last_finished_at")
+  lastSuccessAt           DateTime? @map("last_success_at")
+  nextRunAt               DateTime? @map("next_run_at")
+  lastError               String?   @map("last_error")
+  callsUsed               Int       @default(0) @map("calls_used")
+  dailyRemaining          Int?      @map("daily_remaining")
+  trackedMatches          Int       @default(0) @map("tracked_matches")
+  liveMatches             Int       @default(0) @map("live_matches")
+  pendingLineups          Int       @default(0) @map("pending_lineups")
+  pendingFinalDetails     Int       @default(0) @map("pending_final_details")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  @@map("football_sync_states")
+}
+
+model FootballSyncLock {
+  key         String   @id @db.VarChar(80)
+  ownerToken  String   @map("owner_token") @db.VarChar(80)
+  lockedUntil DateTime @map("locked_until")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([lockedUntil])
+  @@map("football_sync_locks")
+}
+
+model FootballAutomationLog {
+  id                  String    @id @default(uuid()) @db.Uuid
+  runId               String    @unique @map("run_id") @db.VarChar(80)
+  trigger             String    @db.VarChar(30)
+  status              String    @db.VarChar(20)
+  callsUsed           Int       @default(0) @map("calls_used")
+  trackedMatches      Int       @default(0) @map("tracked_matches")
+  liveMatches         Int       @default(0) @map("live_matches")
+  pendingLineups      Int       @default(0) @map("pending_lineups")
+  pendingFinalDetails Int       @default(0) @map("pending_final_details")
+  message             String?
+  error               String?
+  startedAt           DateTime  @default(now()) @map("started_at")
+  finishedAt          DateTime? @map("finished_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("football_automation_logs")
 }
 
 model CompetitionStanding {

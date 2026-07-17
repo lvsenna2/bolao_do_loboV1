@@ -98,7 +98,7 @@ export default async function UserHomePage() {
 
   const remainingRoundMatches =
     currentRound?.matches.filter((match) =>
-      ["SCHEDULED", "LIVE", "HALFTIME", "POSTPONED"].includes(match.status)
+      ["SCHEDULED", "LIVE", "HALFTIME", "POSTPONED", "SUSPENDED"].includes(match.status)
     ).length ?? 0;
   const leader = leagueRanking[0];
 

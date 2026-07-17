@@ -136,6 +136,7 @@ export function getMatchStatusLabel(status: MatchStatus) {
     HALFTIME: "Intervalo",
     LIVE: "Ao vivo",
     POSTPONED: "Adiada",
+    SUSPENDED: "Interrompida",
     SCHEDULED: "Agendada"
   } satisfies Record<MatchStatus, string>;
 
