@@ -1468,7 +1468,11 @@ export async function getAdminFootballSyncStatus() {
               include: {
                 _count: {
                   select: {
-                    rounds: true,
+                    rounds: {
+                      where: {
+                        leagueId: null
+                      }
+                    },
                     standings: true
                   }
                 }
@@ -1566,7 +1570,9 @@ export async function getAdminFootballSyncStatus() {
         const matches = season
           ? await prisma.match.count({
               where: {
+                deletedAt: null,
                 round: {
+                  leagueId: null,
                   seasonId: season.id
                 }
               }
