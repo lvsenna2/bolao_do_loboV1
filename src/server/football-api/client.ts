@@ -546,9 +546,14 @@ export function fetchApiFootballTeamFixtures(
 }
 
 export function fetchApiFootballHeadToHead(homeTeamId: number, awayTeamId: number, last = 5) {
-  return fetchFixtures(
+  return apiFootballRequest<ApiFixtureItem[]>(
+    "fixtures/headtohead",
     new URLSearchParams({ h2h: `${homeTeamId}-${awayTeamId}`, last: String(last) }),
-    "LOW"
+    { priority: "LOW" }
+  ).then((result) =>
+    mapRequestData(result, (items) =>
+      items.map(normalizeFixture).filter((fixture) => fixture !== null)
+    )
   );
 }
 

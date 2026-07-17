@@ -16,6 +16,7 @@ vi.mock("@/server/db", () => ({
 }));
 
 import { apiFootballRequest } from "./request";
+import { fetchApiFootballHeadToHead } from "./client";
 
 describe("apiFootballRequest", () => {
   beforeEach(() => {
@@ -77,5 +78,22 @@ describe("apiFootballRequest", () => {
     expect(firstResult.ok).toBe(true);
     expect(secondResult.ok).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("consulta confrontos diretos no endpoint headtohead", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: [], response: [] }), {
+        headers: { "content-type": "application/json" },
+        status: 200
+      })
+    );
+
+    const result = await fetchApiFootballHeadToHead(127, 121);
+
+    expect(result.ok).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/fixtures/headtohead?h2h=127-121&last=5"),
+      expect.any(Object)
+    );
   });
 });
