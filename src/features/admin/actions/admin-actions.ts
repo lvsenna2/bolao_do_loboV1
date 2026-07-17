@@ -28,7 +28,12 @@ import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import { isEmailDeliveryConfigured } from "@/server/email/resend";
-import { fetchApiFootballTeams } from "@/server/football-api/client";
+import { fetchApiFootballTeams, isFootballApiConfigured } from "@/server/football-api/client";
+import {
+  FOOTBALL_MANUAL_TRIGGER,
+  runFootballAutomation
+} from "@/server/football-api/automation-service";
+import { getFootballManualSyncCooldownHours } from "@/server/football-api/competitions";
 import { syncChampionshipRoundsIntoLeague } from "@/server/football-api/league-sync-service";
 import {
   bulkImportTeamsSchema,
@@ -396,6 +401,75 @@ async function importTeamsIntoDatabase(
   revalidateAdminPaths();
 
   return summary;
+}
+
+export async function runManualFootballSyncAction(
+  previousState: AdminActionResult | null,
+  formData: FormData
+): Promise<AdminActionResult> {
+  void previousState;
+  void formData;
+  const admin = await requireAdmin();
+
+  if (!isFootballApiConfigured()) {
+    return {
+      ok: false,
+      message: "Configure API_FOOTBALL_KEY antes de iniciar a sincronizacao."
+    };
+  }
+
+  const now = serverNow();
+  const cooldownHours = getFootballManualSyncCooldownHours();
+  const latestManualRun = await prisma.footballAutomationLog.findFirst({
+    orderBy: {
+      startedAt: "desc"
+    },
+    where: {
+      trigger: FOOTBALL_MANUAL_TRIGGER,
+      OR: [{ status: "SUCCESS" }, { callsUsed: { gt: 0 } }]
+    }
+  });
+  const nextAllowedAt = latestManualRun
+    ? new Date(latestManualRun.startedAt.getTime() + cooldownHours * 60 * 60_000)
+    : null;
+
+  if (nextAllowedAt && nextAllowedAt > now) {
+    return {
+      ok: false,
+      message: `A proxima sincronizacao manual estara disponivel em ${formatDateTimeInSaoPaulo(nextAllowedAt)}.`
+    };
+  }
+
+  const result = await runFootballAutomation(FOOTBALL_MANUAL_TRIGGER);
+
+  if (result.locked) {
+    return {
+      ok: false,
+      message: result.message
+    };
+  }
+
+  await createAuditLog(
+    admin.id,
+    "admin.football.sync.manual",
+    "FootballAutomation",
+    result.runId,
+    undefined,
+    result.summary
+  );
+  revalidateAdminPaths();
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: `Sincronizacao concluida com avisos: ${result.message}`
+    };
+  }
+
+  return {
+    ok: true,
+    message: `Sincronizacao concluida. ${result.message}`
+  };
 }
 
 export async function updateUserRoleAction(formData: FormData): Promise<AdminActionResult> {

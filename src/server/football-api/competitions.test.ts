@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { footballCompetitionConfigs } from "./competitions";
+import {
+  footballCompetitionConfigs,
+  getFootballManualSyncCooldownHours
+} from "./competitions";
+
+afterEach(() => {
+  delete process.env.FOOTBALL_MANUAL_SYNC_COOLDOWN_HOURS;
+});
 
 describe("footballCompetitionConfigs", () => {
   it("mantem os leagueIds confirmados na API-Football para 2026", () => {
@@ -37,5 +44,17 @@ describe("footballCompetitionConfigs", () => {
         season: 2026
       }
     ]);
+  });
+
+  it("usa intervalo manual de 12 horas por padrao", () => {
+    expect(getFootballManualSyncCooldownHours()).toBe(12);
+  });
+
+  it("limita o intervalo manual configuravel entre 1 e 72 horas", () => {
+    process.env.FOOTBALL_MANUAL_SYNC_COOLDOWN_HOURS = "24";
+    expect(getFootballManualSyncCooldownHours()).toBe(24);
+
+    process.env.FOOTBALL_MANUAL_SYNC_COOLDOWN_HOURS = "100";
+    expect(getFootballManualSyncCooldownHours()).toBe(72);
   });
 });

@@ -69,3 +69,11 @@ export function getFootballSyncCacheHours() {
 
   return Number.isFinite(configuredHours) && configuredHours >= 0 ? configuredHours : 12;
 }
+
+export function getFootballManualSyncCooldownHours() {
+  const configuredHours = Number(process.env.FOOTBALL_MANUAL_SYNC_COOLDOWN_HOURS ?? "12");
+
+  return Number.isFinite(configuredHours) && configuredHours >= 1
+    ? Math.min(configuredHours, 72)
+    : 12;
+}

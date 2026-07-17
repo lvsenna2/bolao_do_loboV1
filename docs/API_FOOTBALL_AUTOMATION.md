@@ -14,12 +14,23 @@ API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
 API_FOOTBALL_TIMEOUT_MS=8000
 API_FOOTBALL_RETRIES=1
 API_FOOTBALL_DAILY_RESERVE=250
+FOOTBALL_MANUAL_SYNC_COOLDOWN_HOURS=12
 CRON_SECRET=uma-chave-aleatoria-com-pelo-menos-32-caracteres
 ```
 
 Depois de adicionar as variaveis, faca um novo deploy. A migration
 `20260716000100_api_football_automation` precisa ser aplicada com `pnpm prisma:deploy` no
 build/deploy antes da primeira execucao.
+
+## Sincronizacao manual
+
+O painel `/admin/sincronizacao` possui o botao `Sincronizar agora`. Ele atualiza as cinco
+competicoes configuradas, replica rodadas e partidas para as ligas e processa placares e detalhes
+vencidos. Depois de uma execucao que consumiu chamadas, o servidor bloqueia uma nova tentativa
+pelo periodo definido em `FOOTBALL_MANUAL_SYNC_COOLDOWN_HOURS`.
+
+O cron permanece opcional. A existencia da rota nao inicia nenhuma execucao automaticamente;
+ela somente roda quando um agendador externo realiza uma requisicao autenticada.
 
 ## Agendamento com QStash
 

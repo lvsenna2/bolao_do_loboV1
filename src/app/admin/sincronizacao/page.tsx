@@ -3,10 +3,12 @@ import { Activity, AlertTriangle, CheckCircle2, Clock3, Radio, Server } from "lu
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
+import { ManualFootballSyncForm } from "@/features/admin/components/manual-football-sync-form";
 import { getAdminFootballSyncStatus } from "@/features/admin/data/admin-data";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function formatDate(date: Date | null | undefined) {
   return date ? formatDateTimeInSaoPaulo(date) : "Nunca";
@@ -34,30 +36,25 @@ function StatusPill({ status }: { status?: string | null }) {
 
 export default async function AdminFootballSyncPage() {
   const result = await getAdminFootballSyncStatus();
-  const { apiConfigured, automation, competitions, recentRuns, usage } = result.data;
-  const cronConfigured = Boolean(process.env.CRON_SECRET);
+  const { apiConfigured, automation, competitions, manual, recentRuns, usage } = result.data;
 
   return (
     <PageShell
-      description="Acompanhe a rotina automatica que atualiza partidas, placares e dados esportivos no banco."
+      description="Atualize campeonatos, partidas, placares e detalhes esportivos diretamente pelo painel."
       eyebrow="Administracao"
-      title="Monitoramento API-Football"
+      title="Sincronizacao API-Football"
     >
       <AdminAlert message={result.ok ? undefined : result.message} />
 
-      {!apiConfigured || !cronConfigured ? (
+      {!apiConfigured ? (
         <div className="mb-5 flex items-start gap-3 rounded-control border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
           <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
-          <p>
-            {!apiConfigured ? "API_FOOTBALL_KEY nao esta configurada. " : ""}
-            {!cronConfigured ? "CRON_SECRET nao esta configurado. " : ""}A automacao so inicia
-            quando as variaveis estiverem disponiveis no servidor.
-          </p>
+          <p>API_FOOTBALL_KEY nao esta configurada no servidor.</p>
         </div>
       ) : (
         <div className="mb-5 flex items-center gap-2 rounded-control border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
           <CheckCircle2 aria-hidden className="h-5 w-5" />
-          API e rota agendada protegida estao configuradas no servidor.
+          API configurada. A sincronizacao pode ser iniciada manualmente abaixo; o cron e opcional.
         </div>
       )}
 
@@ -65,7 +62,7 @@ export default async function AdminFootballSyncPage() {
         <Card>
           <CardContent className="flex items-center justify-between p-5">
             <div>
-              <p className="text-xs font-semibold uppercase text-app-muted">Automacao</p>
+              <p className="text-xs font-semibold uppercase text-app-muted">Sincronizacao</p>
               <div className="mt-2">
                 <StatusPill status={automation?.status} />
               </div>
@@ -115,35 +112,51 @@ export default async function AdminFootballSyncPage() {
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle>Execucao automatica</CardTitle>
+              <CardTitle>Atualizacao manual</CardTitle>
               <CardDescription>
-                O painel e somente informativo; nenhuma pagina precisa ficar aberta.
+                Executa uma atualizacao completa e fica bloqueada por {manual.cooldownHours} horas
+                para evitar consumo desnecessario.
               </CardDescription>
             </div>
             <StatusPill status={automation?.status} />
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-          <div>
-            <p className="text-app-muted">Ultima execucao</p>
-            <p className="font-semibold">{formatDate(automation?.lastFinishedAt)}</p>
+        <CardContent>
+          <div className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <p className="text-app-muted">Ultima execucao manual</p>
+              <p className="font-semibold">{formatDate(manual.lastRun?.finishedAt)}</p>
+            </div>
+            <div>
+              <p className="text-app-muted">Proxima liberacao</p>
+              <p className="font-semibold">
+                {manual.canRun
+                  ? "Disponivel agora"
+                  : automation?.status === "RUNNING"
+                    ? "Sincronizacao em andamento"
+                    : formatDate(manual.nextAvailableAt)}
+              </p>
+            </div>
+            <div>
+              <p className="text-app-muted">Escalacoes pendentes</p>
+              <p className="font-semibold">{automation?.pendingLineups ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-app-muted">Finais incompletos</p>
+              <p className="font-semibold">{automation?.pendingFinalDetails ?? 0}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-app-muted">Proxima prevista</p>
-            <p className="font-semibold">{formatDate(automation?.nextRunAt)}</p>
-          </div>
-          <div>
-            <p className="text-app-muted">Escalacoes pendentes</p>
-            <p className="font-semibold">{automation?.pendingLineups ?? 0}</p>
-          </div>
-          <div>
-            <p className="text-app-muted">Finais incompletos</p>
-            <p className="font-semibold">{automation?.pendingFinalDetails ?? 0}</p>
-          </div>
-          {automation?.lastError ? (
-            <p className="text-red-300 sm:col-span-2 xl:col-span-4">
-              Ultimo erro: {automation.lastError}
+
+          <div className="mt-5 border-t border-app-border pt-5">
+            <ManualFootballSyncForm disabled={!manual.canRun} />
+            <p className="mt-2 max-w-2xl text-xs text-app-muted">
+              O processo atualiza as cinco competicoes configuradas, replica rodadas e partidas
+              para as ligas e busca placares e detalhes que estiverem vencidos.
             </p>
+          </div>
+
+          {automation?.lastError ? (
+            <p className="mt-4 text-sm text-red-300">Ultimo erro: {automation.lastError}</p>
           ) : null}
         </CardContent>
       </Card>
@@ -197,7 +210,7 @@ export default async function AdminFootballSyncPage() {
         </CardHeader>
         <CardContent>
           {recentRuns.length === 0 ? (
-            <p className="text-sm text-app-muted">A rotina ainda nao foi executada.</p>
+            <p className="text-sm text-app-muted">Nenhuma sincronizacao foi executada.</p>
           ) : (
             <div className="space-y-3">
               {recentRuns.map((run) => (
@@ -207,7 +220,7 @@ export default async function AdminFootballSyncPage() {
                 >
                   <div>
                     <p className="font-semibold text-app-foreground">
-                      {run.message || "Sincronizacao automatica"}
+                      {run.message || "Sincronizacao API-Football"}
                     </p>
                     <p className="text-xs text-app-muted">
                       {formatDate(run.finishedAt || run.startedAt)} | {run.trigger}

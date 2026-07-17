@@ -38,12 +38,14 @@ import {
 import type { ExternalFootballCoverage, ExternalFootballFixture } from "./types";
 
 const AUTOMATION_KEY = "api-football-automatic";
+export const FOOTBALL_MANUAL_TRIGGER = "admin-manual";
 const LOCK_TTL_MS = 2 * 60_000;
 const NEXT_RUN_MS = 60_000;
 const MAX_CANDIDATES = 100;
 
 type AutomationSummary = {
   callsUsed: number;
+  catalogsSynced: number;
   errors: string[];
   fixturesUpdated: number;
   liveMatches: number;
@@ -71,6 +73,7 @@ export type FootballAutomationResult =
 function emptySummary(): AutomationSummary {
   return {
     callsUsed: 0,
+    catalogsSynced: 0,
     errors: [],
     fixturesUpdated: 0,
     liveMatches: 0,
@@ -483,6 +486,21 @@ async function maybeSyncOneCatalog(summary: AutomationSummary, dailyRemaining: n
   await syncApiFootballCompetitionIntoLeagues(stale);
 }
 
+async function syncManualCatalogs(summary: AutomationSummary) {
+  for (const config of footballCompetitionConfigs) {
+    const result = await syncFootballCompetition(config);
+    summary.callsUsed += result.summary.callsUsed;
+
+    if (!result.ok) {
+      summary.errors.push(`${config.name}: ${result.message}`);
+      continue;
+    }
+
+    await syncApiFootballCompetitionIntoLeagues(config);
+    summary.catalogsSynced += 1;
+  }
+}
+
 async function updateState(
   status: "RUNNING" | "SUCCESS" | "FAILED",
   summary: AutomationSummary,
@@ -544,10 +562,13 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
   await updateState("RUNNING", summary, { startedAt });
 
   try {
-    const [candidates, usage] = await Promise.all([
-      loadCandidates(),
-      getFootballApiUsageSnapshot()
-    ]);
+    const usage = await getFootballApiUsageSnapshot();
+
+    if (trigger === FOOTBALL_MANUAL_TRIGGER) {
+      await syncManualCatalogs(summary);
+    }
+
+    const candidates = await loadCandidates();
     const now = serverNow();
     summary.trackedMatches = candidates.length;
     summary.liveMatches = candidates.filter((candidate) =>
@@ -588,13 +609,22 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
     const dueIds = candidates
       .filter((candidate) => {
         const decision = decisions.get(candidate.apiId as number);
+        const needsDetails = Boolean(
+          decision?.events ||
+            decision?.history ||
+            decision?.lineups ||
+            decision?.players ||
+            decision?.statistics
+        );
         const missedLive =
           ["LIVE", "HALFTIME"].includes(candidate.status) &&
           !fixtures.has(candidate.apiId as number) &&
           (!candidate.liveSyncedAt ||
             now.getTime() - candidate.liveSyncedAt.getTime() >= 5 * 60_000);
         return (
-          (decision?.fixture && !["LIVE", "HALFTIME"].includes(candidate.status)) || missedLive
+          (decision?.fixture && !["LIVE", "HALFTIME"].includes(candidate.status)) ||
+          needsDetails ||
+          missedLive
         );
       })
       .map((candidate) => candidate.apiId as number);
@@ -650,10 +680,12 @@ export async function runFootballAutomation(trigger = "cron"): Promise<FootballA
       }
     }
 
-    await maybeSyncOneCatalog(summary, usage.dailyRemaining);
+    if (trigger !== FOOTBALL_MANUAL_TRIGGER) {
+      await maybeSyncOneCatalog(summary, usage.dailyRemaining);
+    }
 
     const finishedAt = serverNow();
-    const message = `${summary.fixturesUpdated} registro(s) de partida atualizado(s); ${summary.liveMatches} jogo(s) ao vivo; ${summary.callsUsed} chamada(s) externa(s).`;
+    const message = `${summary.catalogsSynced} campeonato(s) verificado(s); ${summary.fixturesUpdated} registro(s) de partida atualizado(s); ${summary.liveMatches} jogo(s) ao vivo; ${summary.callsUsed} chamada(s) externa(s).`;
     const status = summary.errors.length > 0 ? "FAILED" : "SUCCESS";
     await prisma.footballAutomationLog.update({
       data: {

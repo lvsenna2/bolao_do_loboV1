@@ -8,15 +8,17 @@ import type {
   UserRole
 } from "@prisma/client";
 
+import { getSaoPauloDayRangeUtc, serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
+import { FOOTBALL_MANUAL_TRIGGER } from "@/server/football-api/automation-service";
 import { isFootballApiConfigured } from "@/server/football-api/client";
 import {
   footballCompetitionConfigs,
+  getFootballManualSyncCooldownHours,
   getFootballSyncCacheHours
 } from "@/server/football-api/competitions";
 import { getFootballApiUsageSnapshot } from "@/server/football-api/request";
 import type { AdminDataResult } from "../types";
-import { getSaoPauloDayRangeUtc } from "@/lib/date-time";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -1417,6 +1419,12 @@ export async function getAdminFootballSyncStatus() {
         standings: 0
       }
     })),
+    manual: {
+      canRun: false,
+      cooldownHours: getFootballManualSyncCooldownHours(),
+      lastRun: null,
+      nextAvailableAt: null
+    },
     recentRuns: [],
     usage: {
       callsToday: 0,
@@ -1428,51 +1436,61 @@ export async function getAdminFootballSyncStatus() {
 
   try {
     const competitionKeys = footballCompetitionConfigs.map((competition) => competition.key);
-    const [logs, championships, automation, recentRuns, usage] = await Promise.all([
-      prisma.footballSyncLog.findMany({
-        orderBy: {
-          createdAt: "desc"
-        },
-        take: 100,
-        where: {
-          competitionKey: {
-            in: competitionKeys
+    const [logs, championships, automation, recentRuns, usage, latestManualRun] =
+      await Promise.all([
+        prisma.footballSyncLog.findMany({
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 100,
+          where: {
+            competitionKey: {
+              in: competitionKeys
+            }
           }
-        }
-      }),
-      prisma.championship.findMany({
-        include: {
-          seasons: {
-            include: {
-              _count: {
-                select: {
-                  rounds: true,
-                  standings: true
+        }),
+        prisma.championship.findMany({
+          include: {
+            seasons: {
+              include: {
+                _count: {
+                  select: {
+                    rounds: true,
+                    standings: true
+                  }
                 }
               }
             }
-          }
-        },
-        where: {
-          apiId: {
-            in: footballCompetitionConfigs.map((competition) => competition.leagueId)
           },
-          provider: "api-football"
-        }
-      }),
-      prisma.footballSyncState.findUnique({
-        where: {
-          key: "api-football-automatic"
-        }
-      }),
-      prisma.footballAutomationLog.findMany({
-        orderBy: {
-          createdAt: "desc"
-        },
-        take: 10
-      }),
-      getFootballApiUsageSnapshot()
-    ]);
+          where: {
+            apiId: {
+              in: footballCompetitionConfigs.map((competition) => competition.leagueId)
+            },
+            provider: "api-football"
+          }
+        }),
+        prisma.footballSyncState.findUnique({
+          where: {
+            key: "api-football-automatic"
+          }
+        }),
+        prisma.footballAutomationLog.findMany({
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 10
+        }),
+        getFootballApiUsageSnapshot(),
+        prisma.footballAutomationLog.findFirst({
+          orderBy: {
+            startedAt: "desc"
+          },
+          where: {
+            trigger: FOOTBALL_MANUAL_TRIGGER,
+            OR: [{ status: "SUCCESS" }, { callsUsed: { gt: 0 } }]
+          }
+        })
+      ]);
 
     const competitions = await Promise.all(
       footballCompetitionConfigs.map(async (competition) => {
@@ -1513,6 +1531,11 @@ export async function getAdminFootballSyncStatus() {
         };
       })
     );
+    const cooldownHours = getFootballManualSyncCooldownHours();
+    const nextAvailableAt = latestManualRun
+      ? new Date(latestManualRun.startedAt.getTime() + cooldownHours * 60 * 60_000)
+      : null;
+    const now = serverNow();
 
     return {
       ok: true as const,
@@ -1521,6 +1544,15 @@ export async function getAdminFootballSyncStatus() {
         automation,
         cacheHours: getFootballSyncCacheHours(),
         competitions,
+        manual: {
+          canRun:
+            isFootballApiConfigured() &&
+            automation?.status !== "RUNNING" &&
+            (!nextAvailableAt || nextAvailableAt <= now),
+          cooldownHours,
+          lastRun: latestManualRun,
+          nextAvailableAt
+        },
         recentRuns,
         usage
       }
