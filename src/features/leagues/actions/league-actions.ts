@@ -13,7 +13,7 @@ import {
 import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
-import { MercadoPagoApiError } from "@/server/mercado-pago/client";
+import { getMercadoPagoErrorDescription, MercadoPagoApiError } from "@/server/mercado-pago/client";
 import { createDynamicPixForPayment } from "@/server/mercado-pago/payment-service";
 import {
   createAdminLeagueSchema,
@@ -375,7 +375,7 @@ async function joinLeagueForUser(
     const [pricing, payer] = await Promise.all([
       getUserPaidLeaguePricing(userId, getMoneyNumber(league.entryFee)),
       prisma.user.findUnique({
-        select: { email: true, name: true },
+        select: { email: true },
         where: { id: userId }
       })
     ]);
@@ -444,7 +444,6 @@ async function joinLeagueForUser(
           amount: pricing.finalAmount,
           description: `Entrada na liga ${league.name}`,
           payerEmail: payer.email,
-          payerName: payer.name,
           paymentId: paymentRecord.id
         });
 
@@ -458,14 +457,45 @@ async function joinLeagueForUser(
 
         payment = createdPayment as PendingPixPayment;
       } catch (error) {
+        const providerDetail =
+          error instanceof MercadoPagoApiError
+            ? (getMercadoPagoErrorDescription(error.details) ?? error.message)
+            : "Falha interna ao criar a cobranca Pix.";
+        const isProviderRejection =
+          error instanceof MercadoPagoApiError && error.status >= 400 && error.status < 500;
+
+        console.error("Mercado Pago Pix creation failed", {
+          detail: providerDetail,
+          paymentId: paymentRecord.id,
+          status: error instanceof MercadoPagoApiError ? error.status : 500
+        });
+
+        if (isProviderRejection) {
+          await prisma.payment.updateMany({
+            data: {
+              checkoutKey: null,
+              providerStatus: "error",
+              providerStatusDetail: providerDetail.slice(0, 120),
+              status: "FAILED"
+            },
+            where: {
+              id: paymentRecord.id,
+              status: "PENDING",
+              transactionId: null
+            }
+          });
+        }
+
         const message =
           error instanceof MercadoPagoApiError
             ? error.message
             : "Nao foi possivel gerar o PIX no Mercado Pago.";
+        const retryLater =
+          error instanceof MercadoPagoApiError && (error.status === 429 || error.status >= 500);
 
         return {
           ok: false,
-          message: `${message} Tente novamente em alguns instantes.`
+          message: retryLater ? `${message} Tente novamente em alguns instantes.` : message
         };
       }
     }

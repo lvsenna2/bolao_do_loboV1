@@ -286,7 +286,6 @@ export const createAchievementBadgeSchema = z.object({
 });
 
 export const grantLeagueBadgeSchema = z.object({
-  badgeId: uuidSchema,
   category: z.enum([
     "CHAMPION",
     "RUNNER_UP",
@@ -298,8 +297,25 @@ export const grantLeagueBadgeSchema = z.object({
     "FAIR_PLAY",
     "CUSTOM"
   ]),
-  leagueId: uuidSchema,
-  reason: z.string().min(3, "Informe o motivo.").max(240).trim(),
+  championshipId: uuidSchema,
+  customTitle: z
+    .string()
+    .trim()
+    .max(100)
+    .transform((value) => value || undefined)
+    .optional(),
+  emblemColor: z
+    .string()
+    .regex(/^#[0-9A-F]{6}$/i, "Selecione uma cor valida.")
+    .transform((value) => value.toUpperCase()),
+  emblemIcon: z.enum(["TROPHY", "CROWN", "TARGET", "STAR", "AWARD", "SHIELD"]),
+  emblemStyle: z.enum(["MEDAL", "SHIELD", "SEAL", "RIBBON"]),
+  reason: z
+    .string()
+    .trim()
+    .max(240)
+    .transform((value) => value || undefined)
+    .optional(),
   userId: uuidSchema
 });
 

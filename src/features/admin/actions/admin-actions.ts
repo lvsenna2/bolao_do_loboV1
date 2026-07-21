@@ -3191,15 +3191,17 @@ export async function grantLeagueBadgeAction(formData: FormData): Promise<AdminA
     const result = await grantLeagueBadge({ adminId: admin.id, ...parsedInput.data });
     revalidateAdminPaths();
     revalidatePath("/conquistas");
+    revalidatePath("/ranking");
+    revalidatePath("/xp-ranking");
 
     return {
       ok: true,
-      message: `${result.badgeTitle} atribuido em ${result.leagueName}.`
+      message: `${result.badgeTitle} atribuido em ${result.championshipName}.`
     };
   } catch (error) {
     const message =
-      error instanceof Error && error.message === "USER_NOT_ACTIVE_IN_LEAGUE"
-        ? "O usuario precisa ser participante ativo da liga."
+      error instanceof Error && error.message === "USER_NOT_ACTIVE_IN_CHAMPIONSHIP"
+        ? "O usuario precisa participar de uma liga ativa deste campeonato."
         : "Nao foi possivel atribuir o emblema.";
 
     return { ok: false, message };
@@ -3221,10 +3223,12 @@ export async function revokeLeagueBadgeAction(formData: FormData): Promise<Admin
     });
     revalidateAdminPaths();
     revalidatePath("/conquistas");
+    revalidatePath("/ranking");
+    revalidatePath("/xp-ranking");
 
     return {
       ok: true,
-      message: `${result.badgeTitle} removido de ${result.leagueName}.`
+      message: `${result.badgeTitle} removido de ${result.championshipName}.`
     };
   } catch {
     return { ok: false, message: "Nao foi possivel remover o emblema." };

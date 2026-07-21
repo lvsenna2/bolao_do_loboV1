@@ -9,7 +9,6 @@ import {
   createMissionAction,
   createXpLevelAction,
   createXpTypeConfigAction,
-  grantLeagueBadgeAction,
   grantManualXpAction,
   recalculateUserXpAction,
   updateLeagueXpEnabledAction,
@@ -19,6 +18,7 @@ import {
   revokeLeagueBadgeAction
 } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
+import { ChampionshipEmblemAwardForm } from "@/features/admin/components/championship-emblem-award-form";
 import { AdminSelect } from "@/features/admin/components/admin-select";
 import { AdminStatCard } from "@/features/admin/components/admin-stat-card";
 import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
@@ -30,6 +30,7 @@ import {
   AdminTh
 } from "@/features/admin/components/admin-table";
 import { getAdminXpData, toCurrency } from "@/features/admin/data/admin-data";
+import { LeagueEmblem } from "@/features/xp/components/league-emblem";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,6 @@ export const dynamic = "force-dynamic";
 type FormAction = (formData: FormData) => Promise<void>;
 
 const grantManualXpFormAction = grantManualXpAction as unknown as FormAction;
-const grantLeagueBadgeFormAction = grantLeagueBadgeAction as unknown as FormAction;
 const revokeLeagueBadgeFormAction = revokeLeagueBadgeAction as unknown as FormAction;
 const createAchievementBadgeFormAction = createAchievementBadgeAction as unknown as FormAction;
 const createMissionFormAction = createMissionAction as unknown as FormAction;
@@ -71,9 +71,9 @@ function formatDate(date: Date) {
 export default async function AdminXpPage() {
   const result = await getAdminXpData();
   const {
-    awardSuggestions,
     awards,
     badges,
+    championships,
     events,
     levels,
     leagues,
@@ -583,124 +583,60 @@ export default async function AdminXpPage() {
         <CardHeader>
           <CardTitle>Emblemas e conquistas</CardTitle>
           <CardDescription>
-            Crie emblemas e premie destaques reais de cada liga sem alterar pontos ou XP.
+            Conceda insignias publicas aos destaques de cada campeonato sem alterar pontos ou XP.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-5 rounded-card border border-brand-gold/30 bg-brand-gold/5 p-4">
             <div className="flex items-center gap-2">
               <Award aria-hidden className="h-5 w-5 text-brand-gold" />
-              <h3 className="font-semibold text-app-foreground">Atribuir emblema de liga</h3>
+              <h3 className="font-semibold text-app-foreground">Atribuir insignia</h3>
             </div>
-            <form
-              action={grantLeagueBadgeFormAction}
-              className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-5 xl:items-end"
-            >
-              <AdminSelect label="Liga" name="leagueId" required>
-                <option value="">Selecione</option>
-                {leagues.map((league) => (
-                  <option key={league.id} value={league.id}>
-                    {league.name}
-                  </option>
-                ))}
-              </AdminSelect>
-              <AdminSelect label="Participante" name="userId" required>
-                <option value="">Selecione</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} ({user.email})
-                  </option>
-                ))}
-              </AdminSelect>
-              <AdminSelect label="Emblema" name="badgeId" required>
-                <option value="">Selecione</option>
-                {badges.map((badge) => (
-                  <option key={badge.id} value={badge.id}>
-                    {badge.title}
-                  </option>
-                ))}
-              </AdminSelect>
-              <AdminSelect defaultValue="CHAMPION" label="Motivo" name="category">
-                {Object.entries(awardCategoryLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </AdminSelect>
-              <label className="lg:col-span-2 xl:col-span-4">
-                <span className="mb-1 block text-sm font-medium text-app-foreground">
-                  Justificativa
-                </span>
-                <input
-                  className={`${inputClass} w-full`}
-                  name="reason"
-                  placeholder="Ex.: terminou a liga em primeiro lugar"
-                  required
-                />
-              </label>
-              <AdminSubmitButton
-                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-                pendingLabel="Atribuindo..."
-              >
-                Atribuir
-              </AdminSubmitButton>
-            </form>
+            <ChampionshipEmblemAwardForm championships={championships} users={users} />
+          </div>
 
-            {awardSuggestions.length > 0 ? (
-              <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                {awardSuggestions.slice(0, 8).map((suggestion) => (
+          <details className="rounded-control border border-app-border bg-app-background p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-app-foreground">
+              Catalogo de conquistas automaticas
+            </summary>
+            <div className="mt-4 border-t border-app-border pt-4">
+              <form
+                action={createAchievementBadgeFormAction}
+                className="mb-4 grid gap-3 lg:grid-cols-[140px_1fr_1fr_160px_auto] lg:items-end"
+              >
+                <input className={inputClass} name="key" placeholder="CUSTOM_BADGE" required />
+                <input className={inputClass} name="title" placeholder="Titulo" required />
+                <input className={inputClass} name="description" placeholder="Descricao" required />
+                <select className={inputClass} defaultValue="COMMON" name="rarity">
+                  <option value="COMMON">COMMON</option>
+                  <option value="RARE">RARE</option>
+                  <option value="EPIC">EPIC</option>
+                  <option value="LEGENDARY">LEGENDARY</option>
+                </select>
+                <AdminSubmitButton
+                  className="h-10 rounded-button bg-brand-gold px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
+                  pendingLabel="Criando..."
+                >
+                  Criar
+                </AdminSubmitButton>
+              </form>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {badges.map((badge) => (
                   <div
-                    className="rounded-control border border-app-border bg-app-background p-3"
-                    key={`${suggestion.leagueId}-${suggestion.category}`}
+                    className="rounded-control border border-app-border bg-black/20 p-3"
+                    key={badge.id}
                   >
-                    <p className="text-xs font-semibold uppercase text-brand-gold">
-                      {suggestion.label}
-                    </p>
-                    <p className="mt-1 font-semibold text-app-foreground">{suggestion.userName}</p>
-                    <p className="text-xs text-app-muted">
-                      {suggestion.leagueName} | {suggestion.metric}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-app-foreground">{badge.title}</p>
+                      <Badge>{badge.rarity}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-app-muted">{badge.key ?? "sem-key"}</p>
+                    <p className="mt-2 text-sm text-app-muted">{badge.description}</p>
                   </div>
                 ))}
               </div>
-            ) : null}
-          </div>
-
-          <form
-            action={createAchievementBadgeFormAction}
-            className="mb-4 grid gap-3 lg:grid-cols-[140px_1fr_1fr_160px_auto] lg:items-end"
-          >
-            <input className={inputClass} name="key" placeholder="CUSTOM_BADGE" required />
-            <input className={inputClass} name="title" placeholder="Titulo" required />
-            <input className={inputClass} name="description" placeholder="Descricao" required />
-            <select className={inputClass} defaultValue="COMMON" name="rarity">
-              <option value="COMMON">COMMON</option>
-              <option value="RARE">RARE</option>
-              <option value="EPIC">EPIC</option>
-              <option value="LEGENDARY">LEGENDARY</option>
-            </select>
-            <AdminSubmitButton
-              className="h-10 rounded-button bg-brand-gold px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-              pendingLabel="Criando..."
-            >
-              Criar
-            </AdminSubmitButton>
-          </form>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {badges.map((badge) => (
-              <div
-                className="rounded-control border border-app-border bg-app-background p-3"
-                key={badge.id}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-app-foreground">{badge.title}</p>
-                  <Badge>{badge.rarity}</Badge>
-                </div>
-                <p className="mt-1 text-xs text-app-muted">{badge.key ?? "sem-key"}</p>
-                <p className="mt-2 text-sm text-app-muted">{badge.description}</p>
-              </div>
-            ))}
-          </div>
+            </div>
+          </details>
 
           <div className="mt-5 border-t border-app-border pt-5">
             <h3 className="font-semibold text-app-foreground">Emblemas atribuidos</h3>
@@ -712,14 +648,13 @@ export default async function AdminXpPage() {
                     key={award.id}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-app-foreground">{award.badge.title}</p>
-                        <p className="text-sm text-app-muted">
-                          {award.user.name} | {award.league.name}
-                        </p>
-                      </div>
+                      <LeagueEmblem emblem={award} />
                       <Badge>{awardCategoryLabels[award.category]}</Badge>
                     </div>
+                    <p className="mt-3 text-sm font-semibold text-app-foreground">
+                      {award.user.name}
+                    </p>
+                    <p className="text-xs text-app-muted">{award.championship.name}</p>
                     <p className="mt-2 text-sm text-app-muted">{award.reason}</p>
                     <p className="mt-2 text-xs text-app-muted">
                       Por {award.awardedBy?.name ?? "Administrador"} em{" "}
@@ -739,7 +674,7 @@ export default async function AdminXpPage() {
                 ))}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-app-muted">Nenhum emblema de liga atribuido.</p>
+              <p className="mt-2 text-sm text-app-muted">Nenhuma insignia atribuida.</p>
             )}
           </div>
         </CardContent>

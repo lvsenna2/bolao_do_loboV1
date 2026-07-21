@@ -3,6 +3,7 @@ import { Medal } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { LeagueEmblemList } from "@/features/xp/components/league-emblem";
 import type { RankingRowView } from "../data/ranking-data";
 
 type RankingTableProps = {
@@ -87,6 +88,7 @@ export function RankingTable({ myRanking, rankings }: RankingTableProps) {
                       <div>
                         <p className="font-semibold text-app-foreground">{ranking.user.name}</p>
                         <p className="text-xs text-app-muted">@{ranking.user.username}</p>
+                        <LeagueEmblemList emblems={ranking.emblems} />
                       </div>
                     </div>
                   </td>

@@ -1,9 +1,11 @@
 import { prisma } from "@/server/db";
+import type { LeagueEmblemView } from "@/features/xp/components/league-emblem";
 import { getActiveXpLevels, getLevelForXp, type XpLevelView } from "../services/xp-service";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
 export type XpRankingRow = {
+  emblems: LeagueEmblemView[];
   level: XpLevelView;
   position: number;
   user: {
@@ -75,6 +77,7 @@ function buildRows(
 ) {
   return users
     .map((user) => ({
+      emblems: [],
       level: getLevelForXp(user.xp, levels),
       user,
       xp: xpByUser.get(user.id) ?? 0
@@ -96,6 +99,7 @@ async function getUserOptions(userId: string) {
         select: {
           championship: {
             select: {
+              id: true,
               name: true,
               seasons: {
                 orderBy: {
@@ -103,6 +107,7 @@ async function getUserOptions(userId: string) {
                 },
                 select: {
                   id: true,
+                  championshipId: true,
                   name: true,
                   year: true
                 },
@@ -131,26 +136,24 @@ async function getUserOptions(userId: string) {
   });
 
   const leagues = memberships.map((membership) => ({
+    championshipId: membership.league.championship.id,
     id: membership.league.id,
     label: `${membership.league.name} - ${membership.league.championship.name}`
   }));
-  const seasonMap = new Map<string, string>();
+  const seasonMap = new Map<string, { championshipId: string; label: string }>();
 
   for (const membership of memberships) {
     for (const season of membership.league.championship.seasons) {
-      seasonMap.set(
-        season.id,
-        `${membership.league.championship.name} ${season.name || season.year}`
-      );
+      seasonMap.set(season.id, {
+        championshipId: season.championshipId,
+        label: `${membership.league.championship.name} ${season.name || season.year}`
+      });
     }
   }
 
   return {
     leagues,
-    seasons: [...seasonMap.entries()].map(([id, label]) => ({
-      id,
-      label
-    }))
+    seasons: [...seasonMap.entries()].map(([id, value]) => ({ id, ...value }))
   };
 }
 
@@ -297,6 +300,37 @@ export async function getXpRankingData(
       const xpByUser = new Map(users.map((user) => [user.id, user.xp]));
 
       rows = buildRows(users, xpByUser, levels);
+    }
+
+    if (rows.length > 0) {
+      const selectedChampionshipId =
+        scope === "league"
+          ? options.leagues.find((league) => league.id === selectedLeagueId)?.championshipId
+          : scope === "season"
+            ? options.seasons.find((season) => season.id === selectedSeasonId)?.championshipId
+            : undefined;
+      const emblemAwards = await prisma.leagueBadgeAward.findMany({
+        include: {
+          badge: { select: { title: true } },
+          championship: { select: { name: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        where: {
+          ...(selectedChampionshipId ? { championshipId: selectedChampionshipId } : {}),
+          userId: { in: rows.map((row) => row.user.id) }
+        }
+      });
+      const emblemsByUser = emblemAwards.reduce<Map<string, LeagueEmblemView[]>>((map, award) => {
+        const current = map.get(award.userId) ?? [];
+        current.push(award);
+        map.set(award.userId, current);
+        return map;
+      }, new Map());
+
+      rows = rows.map((row) => ({
+        ...row,
+        emblems: emblemsByUser.get(row.user.id) ?? []
+      }));
     }
 
     const myRow = rows.find((row) => row.user.id === userId) ?? null;

@@ -865,6 +865,7 @@ export async function getAdminLeagueRankings(searchParams: SearchParams) {
       select: {
         championship: {
           select: {
+            id: true,
             name: true,
             seasons: {
               orderBy: {
@@ -898,6 +899,7 @@ export async function getAdminLeagueRankings(searchParams: SearchParams) {
       const season = league.championship.seasons[0];
 
       return {
+        championshipId: league.championship.id,
         championshipName: league.championship.name,
         id: league.id,
         label: `${league.name} - ${league.championship.name}${season ? ` ${season.name || season.year}` : ""}`,
@@ -922,96 +924,111 @@ export async function getAdminLeagueRankings(searchParams: SearchParams) {
       };
     }
 
-    const [rankings, participants, adjustments, allAdjustments] = await prisma.$transaction([
-      prisma.ranking.findMany({
-        include: {
-          user: {
-            select: {
-              avatarUrl: true,
-              email: true,
-              id: true,
-              level: true,
-              name: true,
-              username: true,
-              xp: true
-            }
-          }
-        },
-        orderBy: [
-          {
-            position: "asc"
-          },
-          {
-            points: "desc"
-          }
-        ],
-        where: {
-          leagueId: selectedLeagueId,
-          scope: "LEAGUE"
-        }
-      }),
-      prisma.leagueMember.findMany({
-        orderBy: {
-          user: {
-            name: "asc"
-          }
-        },
-        select: {
-          user: {
-            select: {
-              avatarUrl: true,
-              email: true,
-              id: true,
-              name: true,
-              username: true
-            }
-          }
-        },
-        where: {
-          leagueId: selectedLeagueId,
-          status: "ACTIVE"
-        }
-      }),
-      prisma.rankingAdjustment.findMany({
-        orderBy: {
-          createdAt: "desc"
-        },
-        select: {
-          admin: {
-            select: {
-              email: true,
-              name: true
+    const selectedChampionshipId = leagueOptions.find(
+      (league) => league.id === selectedLeagueId
+    )?.championshipId;
+
+    const [rankings, participants, adjustments, allAdjustments, emblemAwards] =
+      await prisma.$transaction([
+        prisma.ranking.findMany({
+          include: {
+            user: {
+              select: {
+                avatarUrl: true,
+                email: true,
+                id: true,
+                level: true,
+                name: true,
+                username: true,
+                xp: true
+              }
             }
           },
-          createdAt: true,
-          id: true,
-          pointsDelta: true,
-          reason: true,
-          user: {
-            select: {
-              avatarUrl: true,
-              email: true,
-              id: true,
-              name: true,
-              username: true
+          orderBy: [
+            {
+              position: "asc"
+            },
+            {
+              points: "desc"
             }
+          ],
+          where: {
+            leagueId: selectedLeagueId,
+            scope: "LEAGUE"
           }
-        },
-        take: 20,
-        where: {
-          leagueId: selectedLeagueId
-        }
-      }),
-      prisma.rankingAdjustment.findMany({
-        select: {
-          pointsDelta: true,
-          userId: true
-        },
-        where: {
-          leagueId: selectedLeagueId
-        }
-      })
-    ]);
+        }),
+        prisma.leagueMember.findMany({
+          orderBy: {
+            user: {
+              name: "asc"
+            }
+          },
+          select: {
+            user: {
+              select: {
+                avatarUrl: true,
+                email: true,
+                id: true,
+                name: true,
+                username: true
+              }
+            }
+          },
+          where: {
+            leagueId: selectedLeagueId,
+            status: "ACTIVE"
+          }
+        }),
+        prisma.rankingAdjustment.findMany({
+          orderBy: {
+            createdAt: "desc"
+          },
+          select: {
+            admin: {
+              select: {
+                email: true,
+                name: true
+              }
+            },
+            createdAt: true,
+            id: true,
+            pointsDelta: true,
+            reason: true,
+            user: {
+              select: {
+                avatarUrl: true,
+                email: true,
+                id: true,
+                name: true,
+                username: true
+              }
+            }
+          },
+          take: 20,
+          where: {
+            leagueId: selectedLeagueId
+          }
+        }),
+        prisma.rankingAdjustment.findMany({
+          select: {
+            pointsDelta: true,
+            userId: true
+          },
+          where: {
+            leagueId: selectedLeagueId
+          }
+        }),
+        prisma.leagueBadgeAward.findMany({
+          include: {
+            badge: { select: { title: true } },
+            championship: { select: { name: true } }
+          },
+          orderBy: { createdAt: "desc" },
+          where: {
+            championshipId: selectedChampionshipId ?? "00000000-0000-0000-0000-000000000000"
+          }
+        })
+      ]);
     const adjustmentTotals = allAdjustments.reduce<Map<string, number>>(
       (accumulator, adjustment) => {
         accumulator.set(
@@ -1023,6 +1040,12 @@ export async function getAdminLeagueRankings(searchParams: SearchParams) {
       },
       new Map<string, number>()
     );
+    const emblemsByUser = emblemAwards.reduce<Map<string, typeof emblemAwards>>((map, award) => {
+      const current = map.get(award.userId) ?? [];
+      current.push(award);
+      map.set(award.userId, current);
+      return map;
+    }, new Map());
 
     return {
       ok: true as const,
@@ -1032,7 +1055,8 @@ export async function getAdminLeagueRankings(searchParams: SearchParams) {
         participants: participants.map((participant) => participant.user),
         rankings: rankings.map((ranking) => ({
           ...ranking,
-          adjustmentPoints: adjustmentTotals.get(ranking.userId) ?? 0
+          adjustmentPoints: adjustmentTotals.get(ranking.userId) ?? 0,
+          emblems: emblemsByUser.get(ranking.userId) ?? []
         })),
         selectedLeague: leagueOptions.find((league) => league.id === selectedLeagueId) ?? null,
         selectedLeagueId
@@ -1653,6 +1677,7 @@ export async function getAdminXpData() {
     awards: [],
     events: [],
     badges: [],
+    championships: [],
     levels: [],
     leagues: [],
     missions: [],
@@ -1673,6 +1698,7 @@ export async function getAdminXpData() {
       events,
       users,
       leagues,
+      championships,
       missions,
       settings,
       badges,
@@ -1764,6 +1790,35 @@ export async function getAdminXpData() {
           }
         }
       }),
+      prisma.championship.findMany({
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          logo: true,
+          name: true,
+          seasons: {
+            orderBy: { year: "desc" },
+            select: { name: true, year: true },
+            take: 1
+          },
+          leagues: {
+            select: {
+              members: {
+                select: { userId: true },
+                where: { status: "ACTIVE" }
+              }
+            },
+            where: {
+              deletedAt: null,
+              status: { not: "ARCHIVED" }
+            }
+          }
+        },
+        where: {
+          deletedAt: null,
+          status: "ACTIVE"
+        }
+      }),
       prisma.mission.findMany({
         orderBy: {
           startsAt: "desc"
@@ -1801,6 +1856,7 @@ export async function getAdminXpData() {
         include: {
           awardedBy: { select: { name: true } },
           badge: true,
+          championship: { select: { logo: true, name: true } },
           league: { select: { name: true } },
           user: { select: { avatarUrl: true, email: true, name: true } }
         },
@@ -1912,6 +1968,22 @@ export async function getAdminXpData() {
         awardSuggestions,
         awards,
         badges,
+        championships: championships.map((championship) => {
+          const season = championship.seasons[0];
+
+          return {
+            id: championship.id,
+            label: `${championship.name}${season ? ` ${season.name || season.year}` : ""}`,
+            logo: championship.logo,
+            participantIds: [
+              ...new Set(
+                championship.leagues.flatMap((league) =>
+                  league.members.map((member) => member.userId)
+                )
+              )
+            ]
+          };
+        }),
         events,
         levels,
         leagues,

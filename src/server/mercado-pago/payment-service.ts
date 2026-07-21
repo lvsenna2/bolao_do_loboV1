@@ -46,7 +46,6 @@ export async function createDynamicPixForPayment(input: {
   amount: number;
   description: string;
   payerEmail: string;
-  payerName?: string | null;
   paymentId: string;
 }) {
   const expiresAt = new Date(serverNow().getTime() + PIX_EXPIRATION_HOURS * 60 * 60 * 1000);
@@ -56,8 +55,7 @@ export async function createDynamicPixForPayment(input: {
     expiresAt,
     idempotencyKey: input.paymentId,
     internalPaymentId: input.paymentId,
-    payerEmail: input.payerEmail,
-    payerName: input.payerName
+    payerEmail: input.payerEmail
   });
   const pix = getMercadoPagoPixData(providerPayment);
 

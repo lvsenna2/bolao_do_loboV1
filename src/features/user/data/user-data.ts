@@ -1013,6 +1013,9 @@ export async function getUserAchievements(userId: string) {
       prisma.leagueBadgeAward.findMany({
         include: {
           badge: true,
+          championship: {
+            select: { name: true }
+          },
           league: {
             select: {
               championship: { select: { name: true } },

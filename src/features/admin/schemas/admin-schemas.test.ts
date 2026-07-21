@@ -64,15 +64,19 @@ describe("admin schemas", () => {
     expect(parsed.success).toBe(false);
   });
 
-  it("valida a premiacao de um participante da liga", () => {
+  it("valida a insignia personalizada de um participante do campeonato", () => {
     const parsed = grantLeagueBadgeSchema.parse({
-      badgeId: "22222222-2222-4222-8222-222222222222",
       category: "MOST_HITS",
-      leagueId: uuid,
+      championshipId: uuid,
+      customTitle: "Artilheiro dos palpites",
+      emblemColor: "#22c55e",
+      emblemIcon: "TARGET",
+      emblemStyle: "SHIELD",
       reason: "Maior numero de resultados corretos.",
       userId: "33333333-3333-4333-8333-333333333333"
     });
 
     expect(parsed.category).toBe("MOST_HITS");
+    expect(parsed.emblemColor).toBe("#22C55E");
   });
 });

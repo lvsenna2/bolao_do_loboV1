@@ -316,8 +316,9 @@ model Championship {
   updatedAt        DateTime           @updatedAt @map("updated_at")
   deletedAt        DateTime?          @map("deleted_at")
 
-  leagues League[]
-  seasons Season[]
+  badgeAwards LeagueBadgeAward[]
+  leagues     League[]
+  seasons     Season[]
 
   @@unique([provider, apiId])
   @@index([country])
@@ -914,22 +915,30 @@ model Badge {
 }
 
 model LeagueBadgeAward {
-  id          String              @id @default(uuid()) @db.Uuid
-  leagueId    String              @map("league_id") @db.Uuid
-  userId      String              @map("user_id") @db.Uuid
-  badgeId     String              @map("badge_id") @db.Uuid
-  awardedById String?             @map("awarded_by_id") @db.Uuid
-  category    LeagueBadgeCategory
-  reason      String              @db.VarChar(240)
-  createdAt   DateTime            @default(now()) @map("created_at")
+  id             String              @id @default(uuid()) @db.Uuid
+  leagueId       String              @map("league_id") @db.Uuid
+  championshipId String              @map("championship_id") @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  badgeId        String              @map("badge_id") @db.Uuid
+  awardedById    String?             @map("awarded_by_id") @db.Uuid
+  category       LeagueBadgeCategory
+  reason         String              @db.VarChar(240)
+  customTitle    String?             @map("custom_title") @db.VarChar(100)
+  emblemColor    String              @default("#F4B41A") @map("emblem_color") @db.VarChar(7)
+  emblemStyle    String              @default("MEDAL") @map("emblem_style") @db.VarChar(24)
+  emblemIcon     String              @default("TROPHY") @map("emblem_icon") @db.VarChar(24)
+  createdAt      DateTime            @default(now()) @map("created_at")
 
-  league    League @relation(fields: [leagueId], references: [id], onDelete: Restrict)
-  user      User   @relation("LeagueBadgeAwardUser", fields: [userId], references: [id], onDelete: Cascade)
-  badge     Badge  @relation(fields: [badgeId], references: [id], onDelete: Restrict)
-  awardedBy User?  @relation("LeagueBadgeAwardAdmin", fields: [awardedById], references: [id], onDelete: SetNull)
+  league       League       @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+  championship Championship @relation(fields: [championshipId], references: [id], onDelete: Restrict)
+  user         User         @relation("LeagueBadgeAwardUser", fields: [userId], references: [id], onDelete: Cascade)
+  badge        Badge        @relation(fields: [badgeId], references: [id], onDelete: Restrict)
+  awardedBy    User?        @relation("LeagueBadgeAwardAdmin", fields: [awardedById], references: [id], onDelete: SetNull)
 
   @@unique([leagueId, userId, badgeId])
   @@index([leagueId, category])
+  @@index([championshipId, userId])
+  @@index([championshipId, category])
   @@index([userId, createdAt])
   @@index([badgeId])
   @@index([awardedById])

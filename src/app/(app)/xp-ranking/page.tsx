@@ -9,6 +9,7 @@ import { FormLoadingButton } from "@/components/ui/loading-button";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { UserStatCard } from "@/features/user/components/user-stat-card";
 import { getXpRankingData } from "@/features/xp/data/xp-ranking-data";
+import { LeagueEmblemList } from "@/features/xp/components/league-emblem";
 import { requireUser } from "@/server/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -127,6 +128,7 @@ export default async function XpRankingPage({ searchParams }: XpRankingPageProps
                   <div>
                     <p className="font-semibold text-app-foreground">{row.user.name}</p>
                     <p className="text-xs text-app-muted">@{row.user.username}</p>
+                    <LeagueEmblemList emblems={row.emblems} />
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

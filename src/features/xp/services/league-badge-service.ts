@@ -1,68 +1,105 @@
 import type { LeagueBadgeCategory } from "@prisma/client";
 
+import {
+  getLeagueEmblemCategory,
+  type LeagueEmblemIcon,
+  type LeagueEmblemStyle
+} from "@/features/xp/constants/league-emblems";
 import { prisma } from "@/server/db";
 
 type GrantLeagueBadgeInput = {
   adminId: string;
-  badgeId: string;
   category: LeagueBadgeCategory;
-  leagueId: string;
-  reason: string;
+  championshipId: string;
+  customTitle?: string;
+  emblemColor: string;
+  emblemIcon: LeagueEmblemIcon;
+  emblemStyle: LeagueEmblemStyle;
+  reason?: string;
   userId: string;
 };
 
 export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
   return prisma.$transaction(async (tx) => {
-    const [league, badge, membership] = await Promise.all([
-      tx.league.findFirst({
+    const categoryDefinition = getLeagueEmblemCategory(input.category);
+    const [championship, badge, membership] = await Promise.all([
+      tx.championship.findFirst({
         select: { id: true, name: true },
-        where: { deletedAt: null, id: input.leagueId }
+        where: { deletedAt: null, id: input.championshipId }
       }),
-      tx.badge.findUnique({
+      tx.badge.upsert({
+        create: {
+          description: `Reconhecimento de ${categoryDefinition.label.toLowerCase()} em um campeonato.`,
+          key: categoryDefinition.badgeKey,
+          rarity:
+            input.category === "CHAMPION" || input.category === "MOST_EXACT_SCORES"
+              ? "LEGENDARY"
+              : "EPIC",
+          title: categoryDefinition.defaultTitle
+        },
         select: { id: true, title: true },
-        where: { id: input.badgeId }
+        update: {},
+        where: { key: categoryDefinition.badgeKey }
       }),
-      tx.leagueMember.findUnique({
-        select: { status: true },
-        where: { leagueId_userId: { leagueId: input.leagueId, userId: input.userId } }
+      tx.leagueMember.findFirst({
+        orderBy: { joinedAt: "asc" },
+        select: { league: { select: { id: true, name: true } } },
+        where: {
+          league: {
+            championshipId: input.championshipId,
+            deletedAt: null,
+            status: { not: "ARCHIVED" }
+          },
+          status: "ACTIVE",
+          userId: input.userId
+        }
       })
     ]);
 
-    if (!league) {
-      throw new Error("LEAGUE_NOT_FOUND");
+    if (!championship) {
+      throw new Error("CHAMPIONSHIP_NOT_FOUND");
     }
 
-    if (!badge) {
-      throw new Error("BADGE_NOT_FOUND");
+    if (!membership) {
+      throw new Error("USER_NOT_ACTIVE_IN_CHAMPIONSHIP");
     }
 
-    if (membership?.status !== "ACTIVE") {
-      throw new Error("USER_NOT_ACTIVE_IN_LEAGUE");
-    }
-
+    const reason =
+      input.reason ?? `${input.customTitle || badge.title} no campeonato ${championship.name}.`;
     const award = await tx.leagueBadgeAward.upsert({
       create: {
         awardedById: input.adminId,
-        badgeId: input.badgeId,
+        badgeId: badge.id,
         category: input.category,
-        leagueId: input.leagueId,
-        reason: input.reason,
+        championshipId: input.championshipId,
+        customTitle: input.customTitle,
+        emblemColor: input.emblemColor,
+        emblemIcon: input.emblemIcon,
+        emblemStyle: input.emblemStyle,
+        leagueId: membership.league.id,
+        reason,
         userId: input.userId
       },
       update: {
         awardedById: input.adminId,
         category: input.category,
-        reason: input.reason
+        championshipId: input.championshipId,
+        customTitle: input.customTitle,
+        emblemColor: input.emblemColor,
+        emblemIcon: input.emblemIcon,
+        emblemStyle: input.emblemStyle,
+        reason
       },
       where: {
         leagueId_userId_badgeId: {
-          badgeId: input.badgeId,
-          leagueId: input.leagueId,
+          badgeId: badge.id,
+          leagueId: membership.league.id,
           userId: input.userId
         }
       }
     });
-    const notificationText = `${badge.title} em ${league.name}: ${input.reason}`;
+    const awardTitle = input.customTitle || badge.title;
+    const notificationText = `${awardTitle} em ${championship.name}: ${reason}`;
 
     await tx.notification.upsert({
       create: {
@@ -70,7 +107,7 @@ export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
         icon: "league-badge",
         message: notificationText,
         relatedEntityId: award.id,
-        title: "Novo emblema conquistado",
+        title: "Nova insignia conquistada",
         type: "RANKING",
         uniqueKey: `league-badge:${award.id}`,
         userId: input.userId
@@ -90,17 +127,22 @@ export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
         entity: "LeagueBadgeAward",
         entityId: award.id,
         newValue: {
-          badgeId: input.badgeId,
+          badgeId: badge.id,
           category: input.category,
-          leagueId: input.leagueId,
-          reason: input.reason,
+          championshipId: input.championshipId,
+          customTitle: input.customTitle,
+          emblemColor: input.emblemColor,
+          emblemIcon: input.emblemIcon,
+          emblemStyle: input.emblemStyle,
+          leagueId: membership.league.id,
+          reason,
           userId: input.userId
         },
         userId: input.adminId
       }
     });
 
-    return { award, badgeTitle: badge.title, leagueName: league.name };
+    return { award, badgeTitle: awardTitle, championshipName: championship.name };
   });
 }
 
@@ -109,7 +151,7 @@ export async function revokeLeagueBadge(input: { adminId: string; awardId: strin
     const award = await tx.leagueBadgeAward.findUnique({
       include: {
         badge: { select: { title: true } },
-        league: { select: { name: true } }
+        championship: { select: { name: true } }
       },
       where: { id: input.awardId }
     });
@@ -128,6 +170,11 @@ export async function revokeLeagueBadge(input: { adminId: string; awardId: strin
         oldValue: {
           badgeId: award.badgeId,
           category: award.category,
+          championshipId: award.championshipId,
+          customTitle: award.customTitle,
+          emblemColor: award.emblemColor,
+          emblemIcon: award.emblemIcon,
+          emblemStyle: award.emblemStyle,
           leagueId: award.leagueId,
           reason: award.reason,
           userId: award.userId
@@ -136,6 +183,9 @@ export async function revokeLeagueBadge(input: { adminId: string; awardId: strin
       }
     });
 
-    return { badgeTitle: award.badge.title, leagueName: award.league.name };
+    return {
+      badgeTitle: award.customTitle || award.badge.title,
+      championshipName: award.championship.name
+    };
   });
 }

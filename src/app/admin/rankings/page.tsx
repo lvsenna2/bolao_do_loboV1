@@ -20,6 +20,7 @@ import {
   AdminTh
 } from "@/features/admin/components/admin-table";
 import { getAdminLeagueRankings } from "@/features/admin/data/admin-data";
+import { LeagueEmblemList } from "@/features/xp/components/league-emblem";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
@@ -198,6 +199,7 @@ export default async function AdminRankingsPage({ searchParams }: AdminRankingsP
                       <p className="text-xs text-app-muted">
                         @{ranking.user.username} | {ranking.user.email}
                       </p>
+                      <LeagueEmblemList emblems={ranking.emblems} />
                     </div>
                   </div>
                 </AdminTd>

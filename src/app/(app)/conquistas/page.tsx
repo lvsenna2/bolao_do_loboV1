@@ -1,4 +1,4 @@
-import { Award, Crown, Lock } from "lucide-react";
+import { Award, Lock } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { requireUser } from "@/server/auth/session";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { formatDate, getUserAchievements } from "@/features/user/data/user-data";
+import { LeagueEmblem } from "@/features/xp/components/league-emblem";
 
 export const dynamic = "force-dynamic";
 
@@ -39,17 +40,8 @@ export default async function AchievementsPage() {
                   key={award.id}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-gold text-slate-950 shadow-soft">
-                      <Crown aria-hidden className="h-6 w-6" />
-                    </span>
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-semibold text-app-foreground">{award.badge.title}</h2>
-                        <Badge>{award.badge.rarity}</Badge>
-                      </div>
-                      <p className="mt-1 text-sm font-medium text-brand-gold">
-                        {award.league.name} | {award.league.championship.name}
-                      </p>
+                      <LeagueEmblem emblem={award} />
                       <p className="mt-2 text-sm text-app-muted">{award.reason}</p>
                       <p className="mt-3 text-xs text-app-muted">
                         Concedido em {formatDate(award.createdAt)}

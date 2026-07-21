@@ -26,7 +26,17 @@ type CreatePixPaymentInput = {
   idempotencyKey: string;
   internalPaymentId: string;
   payerEmail: string;
-  payerName?: string | null;
+};
+
+type MercadoPagoErrorCause = {
+  code?: number | string;
+  description?: string;
+};
+
+type MercadoPagoErrorBody = {
+  cause?: MercadoPagoErrorCause[] | MercadoPagoErrorCause | string;
+  error?: string;
+  message?: string;
 };
 
 export class MercadoPagoApiError extends Error {
@@ -59,18 +69,84 @@ function getAccessToken() {
 
 function getNotificationUrl() {
   const configured = process.env.MERCADO_PAGO_NOTIFICATION_URL?.trim();
-
-  if (configured) {
-    return configured;
-  }
-
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() ?? process.env.NEXTAUTH_URL?.trim() ?? "";
+  const candidates = [
+    configured,
+    appUrl && !appUrl.includes("localhost")
+      ? `${appUrl.replace(/\/$/, "")}/api/webhooks/mercado-pago`
+      : undefined
+  ];
 
-  if (!appUrl || appUrl.includes("localhost")) {
-    return undefined;
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    try {
+      const url = new URL(candidate);
+
+      if (url.protocol === "https:") {
+        return url.toString();
+      }
+    } catch {
+      continue;
+    }
   }
 
-  return `${appUrl.replace(/\/$/, "")}/api/webhooks/mercado-pago`;
+  return undefined;
+}
+
+export function getMercadoPagoErrorDescription(details: unknown) {
+  if (!details || typeof details !== "object") {
+    return null;
+  }
+
+  const body = details as MercadoPagoErrorBody;
+  const causes = Array.isArray(body.cause) ? body.cause : body.cause ? [body.cause] : [];
+  const causeDescriptions = causes.flatMap((cause) => {
+    if (typeof cause === "string") {
+      return cause;
+    }
+
+    return cause.description ? cause.description : [];
+  });
+  const messages = [body.message, ...causeDescriptions, body.error]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.trim());
+  const message = [...new Set(messages)].join(" | ");
+
+  return message ? message.slice(0, 300) : null;
+}
+
+function getMercadoPagoUserMessage(status: number, details: unknown) {
+  const description = getMercadoPagoErrorDescription(details);
+  const normalized = description?.toLowerCase() ?? "";
+
+  if (normalized.includes("without key enabled") || normalized.includes("qr render")) {
+    return "A conta Mercado Pago recebedora ainda nao possui uma chave Pix habilitada. Ative uma chave Pix no aplicativo do Mercado Pago e tente novamente.";
+  }
+
+  if (normalized.includes("test") && normalized.includes("credential")) {
+    return "O Mercado Pago recusou a cobranca porque a credencial configurada e de teste. Use o Access Token de producao para gerar um Pix real.";
+  }
+
+  if (normalized.includes("notification_url") || normalized.includes("notification url")) {
+    return "A URL de notificacao configurada no Mercado Pago e invalida. Revise MERCADO_PAGO_NOTIFICATION_URL na Vercel.";
+  }
+
+  if (normalized.includes("payer") && normalized.includes("collector")) {
+    return "O pagador nao pode ser a mesma conta Mercado Pago que recebera o pagamento.";
+  }
+
+  if (normalized.includes("transaction_amount") || normalized.includes("transaction amount")) {
+    return "O Mercado Pago recusou o valor da cobranca. Revise o valor de entrada da liga.";
+  }
+
+  if (description) {
+    return `O Mercado Pago recusou a cobranca: ${description}`;
+  }
+
+  return `Mercado Pago respondeu com status ${status}. Verifique o Access Token de producao e se o Pix esta ativo na conta recebedora.`;
 }
 
 async function mercadoPagoRequest<T>(
@@ -97,11 +173,14 @@ async function mercadoPagoRequest<T>(
     const body = (await response.json().catch(() => null)) as T | null;
 
     if (!response.ok || !body) {
-      throw new MercadoPagoApiError(
-        `Mercado Pago respondeu com status ${response.status}.`,
-        response.status,
-        body
-      );
+      const message = getMercadoPagoUserMessage(response.status, body);
+
+      console.error("Mercado Pago API request rejected", {
+        detail: getMercadoPagoErrorDescription(body),
+        path,
+        status: response.status
+      });
+      throw new MercadoPagoApiError(message, response.status, body);
     }
 
     return body;
@@ -120,17 +199,7 @@ async function mercadoPagoRequest<T>(
   }
 }
 
-function splitName(name?: string | null) {
-  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
-
-  return {
-    firstName: parts[0],
-    lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined
-  };
-}
-
 export async function createMercadoPagoPixPayment(input: CreatePixPaymentInput) {
-  const { firstName, lastName } = splitName(input.payerName);
   const notificationUrl = getNotificationUrl();
 
   return mercadoPagoRequest<MercadoPagoPayment>(
@@ -142,9 +211,7 @@ export async function createMercadoPagoPixPayment(input: CreatePixPaymentInput) 
         external_reference: input.internalPaymentId,
         ...(notificationUrl ? { notification_url: notificationUrl } : {}),
         payer: {
-          email: input.payerEmail,
-          ...(firstName ? { first_name: firstName } : {}),
-          ...(lastName ? { last_name: lastName } : {})
+          email: input.payerEmail.trim().toLowerCase()
         },
         payment_method_id: "pix",
         transaction_amount: Number(input.amount.toFixed(2))

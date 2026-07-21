@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
+import type { LeagueEmblemView } from "@/features/xp/components/league-emblem";
 import { prisma } from "@/server/db";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -7,6 +8,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 export type RankingRowView = {
   averageSubmitSeconds: number | null;
   currentStreak: number;
+  emblems: LeagueEmblemView[];
   exactScores: number;
   hits: number;
   id: string;
@@ -84,11 +86,13 @@ function mapRankingRow(
         };
       };
     };
-  }>
+  }>,
+  emblems: LeagueEmblemView[] = []
 ): RankingRowView {
   return {
     averageSubmitSeconds: row.averageSubmitSeconds,
     currentStreak: row.currentStreak,
+    emblems,
     exactScores: row.exactScores,
     hits: row.hits,
     id: row.id,
@@ -130,6 +134,7 @@ export async function getRankingPageData(
           select: {
             championship: {
               select: {
+                id: true,
                 name: true,
                 seasons: {
                   orderBy: {
@@ -175,6 +180,9 @@ export async function getRankingPageData(
     const requestedLeagueId = getParam(searchParams, "league");
     const selectedLeagueId =
       leagues.find((league) => league.id === requestedLeagueId)?.id ?? leagues[0]?.id ?? "";
+    const selectedChampionshipId = memberships.find(
+      (membership) => membership.league.id === selectedLeagueId
+    )?.league.championship.id;
 
     if (!selectedLeagueId) {
       return {
@@ -190,7 +198,7 @@ export async function getRankingPageData(
       leagueId: selectedLeagueId,
       scope: "LEAGUE"
     };
-    const [rankingRows, myRanking] = await prisma.$transaction([
+    const [rankingRows, myRanking, emblemAwards] = await prisma.$transaction([
       prisma.ranking.findMany({
         include: {
           user: {
@@ -232,11 +240,29 @@ export async function getRankingPageData(
           ...where,
           userId
         }
+      }),
+      prisma.leagueBadgeAward.findMany({
+        include: {
+          badge: { select: { title: true } },
+          championship: { select: { name: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        where: {
+          championshipId: selectedChampionshipId ?? "00000000-0000-0000-0000-000000000000"
+        }
       })
     ]);
 
-    const rankings = rankingRows.map(mapRankingRow);
-    const myRankingView = myRanking ? mapRankingRow(myRanking) : null;
+    const emblemsByUser = emblemAwards.reduce<Map<string, LeagueEmblemView[]>>((map, award) => {
+      const current = map.get(award.userId) ?? [];
+      current.push(award);
+      map.set(award.userId, current);
+      return map;
+    }, new Map());
+    const rankings = rankingRows.map((row) => mapRankingRow(row, emblemsByUser.get(row.userId)));
+    const myRankingView = myRanking
+      ? mapRankingRow(myRanking, emblemsByUser.get(myRanking.userId))
+      : null;
 
     return {
       ok: true,
