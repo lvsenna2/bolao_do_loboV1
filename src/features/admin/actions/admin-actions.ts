@@ -15,6 +15,7 @@ import {
   recalculateRankingsForMatch
 } from "@/features/ranking/services/ranking-service";
 import { processMatchScores } from "@/features/scoring/services/scoring-service";
+import { grantLeagueBadge, revokeLeagueBadge } from "@/features/xp/services/league-badge-service";
 import {
   evaluateAchievementsForUser,
   grantManualXp,
@@ -62,12 +63,15 @@ import {
   deleteLeagueSchema,
   deleteRoundSchema,
   generalSettingsSchema,
+  grantLeagueBadgeSchema,
+  grantManualXpSchema,
   homologateMatchResultSchema,
   importApiFootballTeamsSchema,
   importTeamPresetSchema,
   openRoundSchema,
   recalculateLeagueRankingSchema,
   recalculateUserXpSchema,
+  revokeLeagueBadgeSchema,
   softDeleteUserSchema,
   updateLeagueXpEnabledSchema,
   updateChampionshipStatusSchema,
@@ -81,8 +85,7 @@ import {
   adjustLeagueRankingSchema,
   updateXpLevelSchema,
   updateXpSettingsSchema,
-  updateXpTypeConfigSchema,
-  grantManualXpSchema
+  updateXpTypeConfigSchema
 } from "../schemas/admin-schemas";
 import type { AdminActionResult } from "../types";
 
@@ -481,9 +484,7 @@ export async function runManualFootballSyncAction(
     };
   }
 
-  const leagueSync = catalogUpdated
-    ? null
-    : await syncApiFootballCompetitionIntoLeagues(config);
+  const leagueSync = catalogUpdated ? null : await syncApiFootballCompetitionIntoLeagues(config);
 
   await createAuditLog(
     admin.id,
@@ -3174,6 +3175,62 @@ export async function createAchievementBadgeAction(formData: FormData): Promise<
   };
 }
 
+export async function grantLeagueBadgeAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = grantLeagueBadgeSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      message: "Revise os dados do emblema.",
+      fieldErrors: normalizeFieldErrors(parsedInput.error.flatten().fieldErrors)
+    };
+  }
+
+  try {
+    const result = await grantLeagueBadge({ adminId: admin.id, ...parsedInput.data });
+    revalidateAdminPaths();
+    revalidatePath("/conquistas");
+
+    return {
+      ok: true,
+      message: `${result.badgeTitle} atribuido em ${result.leagueName}.`
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message === "USER_NOT_ACTIVE_IN_LEAGUE"
+        ? "O usuario precisa ser participante ativo da liga."
+        : "Nao foi possivel atribuir o emblema.";
+
+    return { ok: false, message };
+  }
+}
+
+export async function revokeLeagueBadgeAction(formData: FormData): Promise<AdminActionResult> {
+  const admin = await requireAdmin();
+  const parsedInput = revokeLeagueBadgeSchema.safeParse(formDataToObject(formData));
+
+  if (!parsedInput.success) {
+    return { ok: false, message: "Emblema invalido." };
+  }
+
+  try {
+    const result = await revokeLeagueBadge({
+      adminId: admin.id,
+      awardId: parsedInput.data.awardId
+    });
+    revalidateAdminPaths();
+    revalidatePath("/conquistas");
+
+    return {
+      ok: true,
+      message: `${result.badgeTitle} removido de ${result.leagueName}.`
+    };
+  } catch {
+    return { ok: false, message: "Nao foi possivel remover o emblema." };
+  }
+}
+
 export async function createMissionAction(formData: FormData): Promise<AdminActionResult> {
   const admin = await requireAdmin();
   const parsedInput = createMissionSchema.safeParse(formDataToObject(formData));
@@ -3358,6 +3415,12 @@ export async function updatePaymentStatusAction(formData: FormData): Promise<Adm
         id: parsedInput.data.paymentId
       },
       data: {
+        checkoutKey:
+          parsedInput.data.status === "FAILED" ||
+          parsedInput.data.status === "CANCELLED" ||
+          parsedInput.data.status === "REFUNDED"
+            ? null
+            : undefined,
         status: parsedInput.data.status,
         paidAt
       },

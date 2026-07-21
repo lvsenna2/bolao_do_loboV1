@@ -285,6 +285,28 @@ export const createAchievementBadgeSchema = z.object({
   rarity: z.enum(["COMMON", "RARE", "EPIC", "LEGENDARY"])
 });
 
+export const grantLeagueBadgeSchema = z.object({
+  badgeId: uuidSchema,
+  category: z.enum([
+    "CHAMPION",
+    "RUNNER_UP",
+    "MOST_HITS",
+    "MOST_EXACT_SCORES",
+    "ROUND_STAR",
+    "CONSISTENCY",
+    "PARTICIPATION",
+    "FAIR_PLAY",
+    "CUSTOM"
+  ]),
+  leagueId: uuidSchema,
+  reason: z.string().min(3, "Informe o motivo.").max(240).trim(),
+  userId: uuidSchema
+});
+
+export const revokeLeagueBadgeSchema = z.object({
+  awardId: uuidSchema
+});
+
 export const createMissionSchema = z
   .object({
     key: z

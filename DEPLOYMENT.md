@@ -25,6 +25,8 @@ NEXT_PUBLIC_APP_URL="https://sua-url-publica"
 NEXTAUTH_SECRET="gere-um-segredo-forte"
 
 MERCADO_PAGO_ACCESS_TOKEN=""
+MERCADO_PAGO_WEBHOOK_SECRET=""
+MERCADO_PAGO_NOTIFICATION_URL="https://sua-url-publica/api/webhooks/mercado-pago"
 API_FOOTBALL_KEY=""
 API_FOOTBALL_BASE_URL="https://v3.football.api-sports.io"
 FOOTBALL_SYNC_CACHE_HOURS="12"
@@ -33,6 +35,11 @@ SMTP_PORT=""
 SMTP_USER=""
 SMTP_PASSWORD=""
 ```
+
+Para o PIX dinamico, use as credenciais de producao da sua aplicacao Mercado Pago. Em
+`Suas integracoes > Webhooks`, configure o evento de pagamentos para a mesma URL informada em
+`MERCADO_PAGO_NOTIFICATION_URL` e copie a assinatura secreta para
+`MERCADO_PAGO_WEBHOOK_SECRET`. Nunca use o Access Token em variaveis `NEXT_PUBLIC_*`.
 
 Para gerar `NEXTAUTH_SECRET` localmente:
 

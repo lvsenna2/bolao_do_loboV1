@@ -1,20 +1,21 @@
 "use client";
 
-import { Check, Clipboard, Clock3, QrCode, ShieldCheck } from "lucide-react";
+import { Check, Clipboard, Clock3, ExternalLink, QrCode, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 type PixPaymentCardProps = {
   amountLabel: string;
   discountAmountLabel?: string;
   discountPercent?: number;
+  expiresAtLabel?: string;
   finalAmountLabel?: string;
   leagueName: string;
   levelName?: string;
   minimumAmountLabel?: string;
   originalAmountLabel?: string;
   pixCode: string;
-  pixKey: string;
   qrCodeDataUri: string;
+  ticketUrl?: string | null;
   transactionId: string;
 };
 
@@ -22,14 +23,15 @@ export function PixPaymentCard({
   amountLabel,
   discountAmountLabel,
   discountPercent = 0,
+  expiresAtLabel,
   finalAmountLabel,
   leagueName,
   levelName,
   minimumAmountLabel,
   originalAmountLabel,
   pixCode,
-  pixKey,
   qrCodeDataUri,
+  ticketUrl,
   transactionId
 }: PixPaymentCardProps) {
   const [copied, setCopied] = useState(false);
@@ -52,8 +54,8 @@ export function PixPaymentCard({
             </span>
             <h3 className="mt-4 text-xl font-bold text-white">{leagueName}</h3>
             <p className="mt-2 max-w-xl text-sm leading-6 text-amber-50/80">
-              Entrada privada reservada. Assim que o pagamento for aprovado pelo administrador, a
-              liga libera rodadas, ranking e palpites para sua conta.
+              Cobranca dinamica protegida pelo Mercado Pago. A liga sera liberada automaticamente
+              depois que o PIX for confirmado.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -67,9 +69,11 @@ export function PixPaymentCard({
               </div>
               <div className="rounded-control border border-white/10 bg-white/[0.08] p-3 sm:col-span-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100/70">
-                  Chave Pix
+                  Validade da cobranca
                 </p>
-                <p className="mt-1 break-all text-sm font-semibold text-white">{pixKey}</p>
+                <p className="mt-1 text-sm font-semibold text-white">
+                  {expiresAtLabel ?? "Consulte o Mercado Pago"}
+                </p>
               </div>
             </div>
 
@@ -135,11 +139,22 @@ export function PixPaymentCard({
             )}
             {copied ? "Copiado" : "Copiar Pix"}
           </button>
+          {ticketUrl ? (
+            <a
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-button border border-brand-gold/40 px-4 text-sm font-bold text-brand-gold transition hover:bg-brand-gold/10"
+              href={ticketUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <ExternalLink aria-hidden className="h-4 w-4" />
+              Abrir no Mercado Pago
+            </a>
+          ) : null}
         </div>
 
         <p className="mt-3 flex items-center gap-2 text-xs text-amber-100/70">
           <ShieldCheck aria-hidden className="h-4 w-4 text-brand-gold" />
-          Identificador: {transactionId}
+          Cobranca Mercado Pago: {transactionId}
         </p>
       </div>
     </section>

@@ -1449,106 +1449,105 @@ export async function getAdminFootballSyncStatus() {
       usage,
       latestManualRun,
       detailMatchesByCompetition
-    ] =
-      await Promise.all([
-        prisma.footballSyncLog.findMany({
-          orderBy: {
-            createdAt: "desc"
-          },
-          take: 100,
-          where: {
-            competitionKey: {
-              in: competitionKeys
-            }
+    ] = await Promise.all([
+      prisma.footballSyncLog.findMany({
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 100,
+        where: {
+          competitionKey: {
+            in: competitionKeys
           }
-        }),
-        prisma.championship.findMany({
-          include: {
-            seasons: {
-              include: {
-                _count: {
-                  select: {
-                    rounds: {
-                      where: {
-                        leagueId: null
-                      }
-                    },
-                    standings: true
-                  }
+        }
+      }),
+      prisma.championship.findMany({
+        include: {
+          seasons: {
+            include: {
+              _count: {
+                select: {
+                  rounds: {
+                    where: {
+                      leagueId: null
+                    }
+                  },
+                  standings: true
                 }
               }
             }
+          }
+        },
+        where: {
+          apiId: {
+            in: footballCompetitionConfigs.map((competition) => competition.leagueId)
           },
-          where: {
-            apiId: {
-              in: footballCompetitionConfigs.map((competition) => competition.leagueId)
+          provider: "api-football"
+        }
+      }),
+      prisma.footballSyncState.findUnique({
+        where: {
+          key: "api-football-automatic"
+        }
+      }),
+      prisma.footballAutomationLog.findMany({
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 10
+      }),
+      getFootballApiUsageSnapshot(),
+      prisma.footballAutomationLog.findFirst({
+        orderBy: {
+          startedAt: "desc"
+        },
+        where: {
+          trigger: FOOTBALL_MANUAL_TRIGGER,
+          OR: [{ status: "SUCCESS" }, { callsUsed: { gt: 0 } }]
+        }
+      }),
+      Promise.all(
+        footballCompetitionConfigs.map((competition) =>
+          prisma.match.findMany({
+            orderBy: { kickoff: "desc" },
+            select: {
+              apiId: true,
+              awayTeam: { select: { name: true } },
+              eventsSyncedAt: true,
+              fullySyncedAt: true,
+              historySyncedAt: true,
+              homeTeam: { select: { name: true } },
+              id: true,
+              kickoff: true,
+              lineupsSyncedAt: true,
+              playersSyncedAt: true,
+              round: { select: { name: true, number: true } },
+              statisticsSyncedAt: true,
+              status: true
             },
-            provider: "api-football"
-          }
-        }),
-        prisma.footballSyncState.findUnique({
-          where: {
-            key: "api-football-automatic"
-          }
-        }),
-        prisma.footballAutomationLog.findMany({
-          orderBy: {
-            createdAt: "desc"
-          },
-          take: 10
-        }),
-        getFootballApiUsageSnapshot(),
-        prisma.footballAutomationLog.findFirst({
-          orderBy: {
-            startedAt: "desc"
-          },
-          where: {
-            trigger: FOOTBALL_MANUAL_TRIGGER,
-            OR: [{ status: "SUCCESS" }, { callsUsed: { gt: 0 } }]
-          }
-        }),
-        Promise.all(
-          footballCompetitionConfigs.map((competition) =>
-            prisma.match.findMany({
-              orderBy: { kickoff: "desc" },
-              select: {
-                apiId: true,
-                awayTeam: { select: { name: true } },
-                eventsSyncedAt: true,
-                fullySyncedAt: true,
-                historySyncedAt: true,
-                homeTeam: { select: { name: true } },
-                id: true,
-                kickoff: true,
-                lineupsSyncedAt: true,
-                playersSyncedAt: true,
-                round: { select: { name: true, number: true } },
-                statisticsSyncedAt: true,
-                status: true
+            take: 120,
+            where: {
+              apiId: { not: null },
+              deletedAt: null,
+              kickoff: {
+                gte: new Date(serverNow().getTime() - 30 * 86_400_000),
+                lte: new Date(serverNow().getTime() + 45 * 86_400_000)
               },
-              take: 120,
-              where: {
-                apiId: { not: null },
-                deletedAt: null,
-                kickoff: {
-                  gte: new Date(serverNow().getTime() - 30 * 86_400_000),
-                  lte: new Date(serverNow().getTime() + 45 * 86_400_000)
-                },
-                round: {
-                  leagueId: null,
-                  season: {
-                    championship: {
-                      apiId: competition.leagueId,
-                      provider: "api-football"
-                    },
-                    year: competition.season
-                  }
+              round: {
+                leagueId: null,
+                season: {
+                  championship: {
+                    apiId: competition.leagueId,
+                    provider: "api-football"
+                  },
+                  year: competition.season
                 }
               }
-            })
-          )
+            }
+          })
         )
-      ]);
+      )
+    ]);
 
     const competitions = await Promise.all(
       footballCompetitionConfigs.map(async (competition) => {
@@ -1650,6 +1649,8 @@ export async function getAdminFootballSyncStatus() {
 
 export async function getAdminXpData() {
   const empty = {
+    awardSuggestions: [],
+    awards: [],
     events: [],
     badges: [],
     levels: [],
@@ -1677,7 +1678,9 @@ export async function getAdminXpData() {
       badges,
       eventCount,
       xpAggregate,
-      usersWithXp
+      usersWithXp,
+      awards,
+      leagueRankings
     ] = await prisma.$transaction([
       prisma.xpLevel.findMany({
         orderBy: {
@@ -1793,6 +1796,28 @@ export async function getAdminXpData() {
             gt: 0
           }
         }
+      }),
+      prisma.leagueBadgeAward.findMany({
+        include: {
+          awardedBy: { select: { name: true } },
+          badge: true,
+          league: { select: { name: true } },
+          user: { select: { avatarUrl: true, email: true, name: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50
+      }),
+      prisma.ranking.findMany({
+        orderBy: [{ leagueId: "asc" }, { position: "asc" }, { points: "desc" }],
+        select: {
+          exactScores: true,
+          hits: true,
+          league: { select: { id: true, name: true } },
+          points: true,
+          position: true,
+          user: { select: { id: true, name: true } }
+        },
+        where: { leagueId: { not: null }, scope: "LEAGUE" }
       })
     ]);
 
@@ -1803,10 +1828,89 @@ export async function getAdminXpData() {
         : typeof settingValue === "string"
           ? Number(settingValue)
           : 1;
+    const rankingsByLeague = leagueRankings.reduce<Map<string, typeof leagueRankings>>(
+      (map, ranking) => {
+        if (!ranking.league) {
+          return map;
+        }
+
+        const rows = map.get(ranking.league.id) ?? [];
+        rows.push(ranking);
+        map.set(ranking.league.id, rows);
+        return map;
+      },
+      new Map()
+    );
+    const awardSuggestions = Array.from(rankingsByLeague.values()).flatMap((rankings) => {
+      const league = rankings[0]?.league;
+
+      if (!league || rankings.length === 0) {
+        return [];
+      }
+
+      const byPosition = [...rankings].sort(
+        (left, right) => (left.position ?? 9999) - (right.position ?? 9999)
+      );
+      const mostHits = [...rankings].sort(
+        (left, right) => right.hits - left.hits || right.points - left.points
+      )[0];
+      const mostExact = [...rankings].sort(
+        (left, right) => right.exactScores - left.exactScores || right.points - left.points
+      )[0];
+
+      return [
+        byPosition[0]
+          ? {
+              category: "CHAMPION" as const,
+              label: "Campeao atual",
+              leagueId: league.id,
+              leagueName: league.name,
+              metric: `${byPosition[0].points} pontos`,
+              userId: byPosition[0].user.id,
+              userName: byPosition[0].user.name
+            }
+          : null,
+        byPosition[1]
+          ? {
+              category: "RUNNER_UP" as const,
+              label: "Vice atual",
+              leagueId: league.id,
+              leagueName: league.name,
+              metric: `${byPosition[1].points} pontos`,
+              userId: byPosition[1].user.id,
+              userName: byPosition[1].user.name
+            }
+          : null,
+        mostHits
+          ? {
+              category: "MOST_HITS" as const,
+              label: "Mais resultados corretos",
+              leagueId: league.id,
+              leagueName: league.name,
+              metric: `${mostHits.hits} acertos`,
+              userId: mostHits.user.id,
+              userName: mostHits.user.name
+            }
+          : null,
+        mostExact
+          ? {
+              category: "MOST_EXACT_SCORES" as const,
+              label: "Mais placares exatos",
+              leagueId: league.id,
+              leagueName: league.name,
+              metric: `${mostExact.exactScores} exatos`,
+              userId: mostExact.user.id,
+              userName: mostExact.user.name
+            }
+          : null
+      ].filter((suggestion): suggestion is NonNullable<typeof suggestion> => Boolean(suggestion));
+    });
 
     return {
       ok: true as const,
       data: {
+        awardSuggestions,
+        awards,
         badges,
         events,
         levels,

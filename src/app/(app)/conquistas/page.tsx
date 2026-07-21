@@ -1,4 +1,4 @@
-import { Award, Lock } from "lucide-react";
+import { Award, Crown, Lock } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function AchievementsPage() {
   const sessionUser = await requireUser();
   const result = await getUserAchievements(sessionUser.id);
-  const { achieved, locked } = result.data;
+  const { achieved, leagueAwards, locked } = result.data;
 
   return (
     <PageShell
@@ -22,6 +22,51 @@ export default async function AchievementsPage() {
       title="Conquistas"
     >
       <UserAlert message={result.ok ? undefined : result.message} />
+
+      <Card className="mb-5 border-brand-gold/30">
+        <CardHeader>
+          <CardTitle>Emblemas de liga</CardTitle>
+          <CardDescription>
+            Premiacoes oficiais concedidas pelo desempenho em suas ligas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {leagueAwards.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {leagueAwards.map((award) => (
+                <article
+                  className="rounded-card border border-brand-gold/35 bg-brand-gold/5 p-4"
+                  key={award.id}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-gold text-slate-950 shadow-soft">
+                      <Crown aria-hidden className="h-6 w-6" />
+                    </span>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-semibold text-app-foreground">{award.badge.title}</h2>
+                        <Badge>{award.badge.rarity}</Badge>
+                      </div>
+                      <p className="mt-1 text-sm font-medium text-brand-gold">
+                        {award.league.name} | {award.league.championship.name}
+                      </p>
+                      <p className="mt-2 text-sm text-app-muted">{award.reason}</p>
+                      <p className="mt-3 text-xs text-app-muted">
+                        Concedido em {formatDate(award.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              description="Quando voce for premiado em uma liga, o emblema aparecera aqui."
+              title="Nenhum emblema de liga ainda"
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card>

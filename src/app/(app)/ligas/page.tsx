@@ -9,9 +9,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AvailableLeagueList } from "@/features/leagues/components/available-league-list";
+import { JoinAvailableLeagueButton } from "@/features/leagues/components/join-available-league-button";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
 import { PixPaymentCard } from "@/features/payments/components/pix-payment-card";
-import { createQrSvgDataUri, getPixReceiverKey } from "@/features/payments/pix";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { formatCurrency, formatDate, getUserLeagues } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
@@ -153,16 +153,26 @@ export default async function LeaguesPage() {
                     </div>
                   </div>
 
-                  {membership.status === "PENDING_PAYMENT" && pendingPixPayment?.qrCode ? (
+                  {membership.status === "PENDING_PAYMENT" &&
+                  pendingPixPayment?.qrCode &&
+                  pendingPixPayment.qrCodeBase64 ? (
                     <div className="mt-4">
                       <PixPaymentCard
                         amountLabel={formatCurrency(pendingPixPayment.amount)}
+                        expiresAtLabel={formatDate(pendingPixPayment.expiresAt)}
                         leagueName={membership.league.name}
                         pixCode={pendingPixPayment.qrCode}
-                        pixKey={getPixReceiverKey()}
-                        qrCodeDataUri={createQrSvgDataUri(pendingPixPayment.qrCode)}
+                        qrCodeDataUri={`data:image/png;base64,${pendingPixPayment.qrCodeBase64}`}
+                        ticketUrl={pendingPixPayment.ticketUrl}
                         transactionId={pendingPixPayment.transactionId ?? "PENDENTE"}
                       />
+                    </div>
+                  ) : membership.status === "PENDING_PAYMENT" ? (
+                    <div className="mt-4 rounded-control border border-brand-gold/30 bg-brand-gold/5 p-4">
+                      <p className="mb-3 text-sm text-app-muted">
+                        Gere uma cobranca dinamica para concluir sua entrada nesta liga.
+                      </p>
+                      <JoinAvailableLeagueButton leagueId={membership.league.id} requiresPayment />
                     </div>
                   ) : null}
 

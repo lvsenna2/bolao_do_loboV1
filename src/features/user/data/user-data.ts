@@ -740,14 +740,17 @@ export async function getUserLeagues(userId: string) {
                 },
                 select: {
                   amount: true,
+                  expiresAt: true,
                   gateway: true,
                   qrCode: true,
+                  qrCodeBase64: true,
                   status: true,
+                  ticketUrl: true,
                   transactionId: true
                 },
                 take: 1,
                 where: {
-                  gateway: "PIX",
+                  gateway: "MERCADO_PAGO",
                   status: "PENDING",
                   userId
                 }
@@ -985,11 +988,12 @@ export async function getUnreadNotificationCount(userId: string) {
 export async function getUserAchievements(userId: string) {
   const empty = {
     achieved: [],
+    leagueAwards: [],
     locked: []
   };
 
   try {
-    const [achievements, badges] = await prisma.$transaction([
+    const [achievements, badges, leagueAwards] = await prisma.$transaction([
       prisma.achievement.findMany({
         include: {
           badge: true
@@ -1005,15 +1009,32 @@ export async function getUserAchievements(userId: string) {
         orderBy: {
           title: "asc"
         }
+      }),
+      prisma.leagueBadgeAward.findMany({
+        include: {
+          badge: true,
+          league: {
+            select: {
+              championship: { select: { name: true } },
+              name: true
+            }
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        where: { userId }
       })
     ]);
 
-    const achievedBadgeIds = new Set(achievements.map((achievement) => achievement.badgeId));
+    const achievedBadgeIds = new Set([
+      ...achievements.map((achievement) => achievement.badgeId),
+      ...leagueAwards.map((award) => award.badgeId)
+    ]);
 
     return {
       ok: true as const,
       data: {
         achieved: achievements,
+        leagueAwards,
         locked: badges.filter((badge) => !achievedBadgeIds.has(badge.id))
       }
     };

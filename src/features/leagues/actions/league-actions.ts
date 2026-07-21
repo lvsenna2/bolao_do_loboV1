@@ -4,12 +4,7 @@ import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
-import {
-  createPixPayload,
-  createPixTransactionId,
-  createQrSvgDataUri,
-  getPixReceiverKey
-} from "@/features/payments/pix";
+import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import {
   evaluateAchievementsForUser,
   getUserPaidLeaguePricing,
@@ -18,6 +13,8 @@ import {
 import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
+import { MercadoPagoApiError } from "@/server/mercado-pago/client";
+import { createDynamicPixForPayment } from "@/server/mercado-pago/payment-service";
 import {
   createAdminLeagueSchema,
   createLeagueSchema,
@@ -194,8 +191,11 @@ type JoinableLeague = {
 type PendingPixPayment = {
   id: string;
   amount: Prisma.Decimal | number | string;
-  qrCode: string | null;
-  transactionId: string | null;
+  expiresAt: Date | null;
+  qrCode: string;
+  qrCodeBase64: string;
+  ticketUrl: string | null;
+  transactionId: string;
 };
 
 type PaidLeaguePricing = Awaited<ReturnType<typeof getUserPaidLeaguePricing>>;
@@ -220,14 +220,6 @@ function toPaymentIntent(
   payment: PendingPixPayment,
   pricing: PaidLeaguePricing
 ): LeaguePaymentIntent {
-  const pixCode =
-    payment.qrCode ??
-    createPixPayload({
-      amount: getMoneyNumber(payment.amount),
-      description: league.name,
-      transactionId: payment.transactionId ?? createPixTransactionId()
-    });
-
   return {
     amountLabel: formatMoney(payment.amount),
     discountAmountLabel: formatMoney(pricing.discountAmount),
@@ -237,11 +229,14 @@ function toPaymentIntent(
     levelName: pricing.level.name,
     minimumAmountLabel: formatMoney(pricing.minimumEntryFee),
     originalAmountLabel: formatMoney(pricing.originalAmount),
-    pixCode,
-    pixKey: getPixReceiverKey(),
-    qrCodeDataUri: createQrSvgDataUri(pixCode),
+    expiresAtLabel: payment.expiresAt
+      ? formatDateTimeInSaoPaulo(payment.expiresAt)
+      : "Consulte o Mercado Pago",
+    pixCode: payment.qrCode,
+    qrCodeDataUri: `data:image/png;base64,${payment.qrCodeBase64}`,
     requiresPayment: true,
-    transactionId: payment.transactionId ?? "PENDENTE"
+    ticketUrl: payment.ticketUrl,
+    transactionId: payment.transactionId
   };
 }
 
@@ -252,49 +247,40 @@ async function createPendingPixPayment(
   pricing: PaidLeaguePricing
 ) {
   const finalAmount = pricing.finalAmount;
-  const existingPayment = await tx.payment.findFirst({
-    orderBy: {
-      createdAt: "desc"
-    },
+  const checkoutKey = `league:${league.id}:user:${userId}`;
+  const existingPayment = await tx.payment.findUnique({
     select: {
       id: true,
       amount: true,
+      expiresAt: true,
       qrCode: true,
+      qrCodeBase64: true,
+      ticketUrl: true,
       transactionId: true
     },
-    where: {
-      gateway: "PIX",
-      leagueId: league.id,
-      status: "PENDING",
-      userId
-    }
+    where: { checkoutKey }
   });
 
   if (existingPayment) {
     const currentAmount = getMoneyNumber(existingPayment.amount);
+    const isUsable =
+      Math.abs(currentAmount - finalAmount) < 0.01 &&
+      Boolean(existingPayment.qrCode) &&
+      Boolean(existingPayment.qrCodeBase64) &&
+      (!existingPayment.expiresAt || existingPayment.expiresAt > serverNow());
 
-    if (Math.abs(currentAmount - finalAmount) < 0.01) {
+    if (isUsable) {
       return existingPayment;
     }
 
-    const transactionId = existingPayment.transactionId ?? createPixTransactionId();
-    const pixCode = createPixPayload({
-      amount: finalAmount,
-      description: league.name,
-      transactionId
-    });
+    if (!existingPayment.qrCode && Math.abs(currentAmount - finalAmount) < 0.01) {
+      return existingPayment;
+    }
 
-    return tx.payment.update({
+    await tx.payment.update({
       data: {
-        amount: finalAmount,
-        qrCode: pixCode,
-        transactionId
-      },
-      select: {
-        id: true,
-        amount: true,
-        qrCode: true,
-        transactionId: true
+        checkoutKey: null,
+        status: "CANCELLED"
       },
       where: {
         id: existingPayment.id
@@ -302,29 +288,26 @@ async function createPendingPixPayment(
     });
   }
 
-  const transactionId = createPixTransactionId();
-  const pixCode = createPixPayload({
-    amount: finalAmount,
-    description: league.name,
-    transactionId
-  });
-
-  return tx.payment.create({
-    data: {
+  return tx.payment.upsert({
+    create: {
       amount: finalAmount,
-      gateway: "PIX",
+      checkoutKey,
+      gateway: "MERCADO_PAGO",
       leagueId: league.id,
-      qrCode: pixCode,
       status: "PENDING",
-      transactionId,
       userId
     },
+    update: {},
     select: {
       id: true,
       amount: true,
+      expiresAt: true,
       qrCode: true,
+      qrCodeBase64: true,
+      ticketUrl: true,
       transactionId: true
-    }
+    },
+    where: { checkoutKey }
   });
 }
 
@@ -389,8 +372,19 @@ async function joinLeagueForUser(
   }
 
   if (requiresPixPayment(league)) {
-    const pricing = await getUserPaidLeaguePricing(userId, getMoneyNumber(league.entryFee));
-    const payment = await prisma.$transaction(async (tx) => {
+    const [pricing, payer] = await Promise.all([
+      getUserPaidLeaguePricing(userId, getMoneyNumber(league.entryFee)),
+      prisma.user.findUnique({
+        select: { email: true, name: true },
+        where: { id: userId }
+      })
+    ]);
+
+    if (!payer) {
+      return { ok: false, message: "Usuario nao encontrado." };
+    }
+
+    const paymentRecord = await prisma.$transaction(async (tx) => {
       if (existingMembership) {
         await tx.leagueMember.update({
           data: {
@@ -425,7 +419,7 @@ async function joinLeagueForUser(
             amount: pendingPayment.amount.toString(),
             discountAmount: pricing.discountAmount,
             discountPercent: pricing.discountPercent,
-            gateway: "PIX",
+            gateway: "MERCADO_PAGO",
             inviteCode: league.inviteCode,
             leagueId: league.id,
             leagueName: league.name,
@@ -440,11 +434,48 @@ async function joinLeagueForUser(
       return pendingPayment;
     });
 
+    let payment: PendingPixPayment;
+
+    if (paymentRecord.qrCode && paymentRecord.qrCodeBase64 && paymentRecord.transactionId) {
+      payment = paymentRecord as PendingPixPayment;
+    } else {
+      try {
+        const createdPayment = await createDynamicPixForPayment({
+          amount: pricing.finalAmount,
+          description: `Entrada na liga ${league.name}`,
+          payerEmail: payer.email,
+          payerName: payer.name,
+          paymentId: paymentRecord.id
+        });
+
+        if (
+          !createdPayment.qrCode ||
+          !createdPayment.qrCodeBase64 ||
+          !createdPayment.transactionId
+        ) {
+          throw new MercadoPagoApiError("O Mercado Pago nao retornou o QR Code.", 502);
+        }
+
+        payment = createdPayment as PendingPixPayment;
+      } catch (error) {
+        const message =
+          error instanceof MercadoPagoApiError
+            ? error.message
+            : "Nao foi possivel gerar o PIX no Mercado Pago.";
+
+        return {
+          ok: false,
+          message: `${message} Tente novamente em alguns instantes.`
+        };
+      }
+    }
+
     revalidateLeaguePaths();
 
     return {
       ok: true,
-      message: "Pagamento Pix gerado. Aguarde a aprovacao do administrador para entrar na liga.",
+      message:
+        "Pagamento Pix gerado pelo Mercado Pago. A entrada sera liberada apos a confirmacao.",
       data: toPaymentIntent(league, payment, pricing)
     };
   }

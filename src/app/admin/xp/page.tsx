@@ -1,4 +1,4 @@
-import { Flame, History, Settings, Sparkles, Trophy } from "lucide-react";
+import { Award, Flame, History, Settings, Sparkles, Trash2, Trophy } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Avatar } from "@/components/ui/avatar";
@@ -9,12 +9,14 @@ import {
   createMissionAction,
   createXpLevelAction,
   createXpTypeConfigAction,
+  grantLeagueBadgeAction,
   grantManualXpAction,
   recalculateUserXpAction,
   updateLeagueXpEnabledAction,
   updateXpLevelAction,
   updateXpSettingsAction,
-  updateXpTypeConfigAction
+  updateXpTypeConfigAction,
+  revokeLeagueBadgeAction
 } from "@/features/admin/actions/admin-actions";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
 import { AdminSelect } from "@/features/admin/components/admin-select";
@@ -35,6 +37,8 @@ export const dynamic = "force-dynamic";
 type FormAction = (formData: FormData) => Promise<void>;
 
 const grantManualXpFormAction = grantManualXpAction as unknown as FormAction;
+const grantLeagueBadgeFormAction = grantLeagueBadgeAction as unknown as FormAction;
+const revokeLeagueBadgeFormAction = revokeLeagueBadgeAction as unknown as FormAction;
 const createAchievementBadgeFormAction = createAchievementBadgeAction as unknown as FormAction;
 const createMissionFormAction = createMissionAction as unknown as FormAction;
 const createXpLevelFormAction = createXpLevelAction as unknown as FormAction;
@@ -48,6 +52,18 @@ const updateXpTypeConfigFormAction = updateXpTypeConfigAction as unknown as Form
 const inputClass =
   "h-10 rounded-control border border-app-border bg-app-background px-3 text-sm text-app-foreground outline-none transition placeholder:text-app-muted focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20";
 
+const awardCategoryLabels = {
+  CHAMPION: "Campeao da liga",
+  RUNNER_UP: "Vice-campeao",
+  MOST_HITS: "Mais resultados corretos",
+  MOST_EXACT_SCORES: "Mais placares exatos",
+  ROUND_STAR: "Destaque da rodada",
+  CONSISTENCY: "Constancia",
+  PARTICIPATION: "Participacao",
+  FAIR_PLAY: "Fair play",
+  CUSTOM: "Premio personalizado"
+} as const;
+
 function formatDate(date: Date) {
   return formatDateTimeInSaoPaulo(date);
 }
@@ -55,6 +71,8 @@ function formatDate(date: Date) {
 export default async function AdminXpPage() {
   const result = await getAdminXpData();
   const {
+    awardSuggestions,
+    awards,
     badges,
     events,
     levels,
@@ -563,10 +581,91 @@ export default async function AdminXpPage() {
 
       <Card className="mt-5">
         <CardHeader>
-          <CardTitle>Conquistas</CardTitle>
-          <CardDescription>Crie definicoes de conquistas para expansoes futuras.</CardDescription>
+          <CardTitle>Emblemas e conquistas</CardTitle>
+          <CardDescription>
+            Crie emblemas e premie destaques reais de cada liga sem alterar pontos ou XP.
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-5 rounded-card border border-brand-gold/30 bg-brand-gold/5 p-4">
+            <div className="flex items-center gap-2">
+              <Award aria-hidden className="h-5 w-5 text-brand-gold" />
+              <h3 className="font-semibold text-app-foreground">Atribuir emblema de liga</h3>
+            </div>
+            <form
+              action={grantLeagueBadgeFormAction}
+              className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-5 xl:items-end"
+            >
+              <AdminSelect label="Liga" name="leagueId" required>
+                <option value="">Selecione</option>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>
+                    {league.name}
+                  </option>
+                ))}
+              </AdminSelect>
+              <AdminSelect label="Participante" name="userId" required>
+                <option value="">Selecione</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.email})
+                  </option>
+                ))}
+              </AdminSelect>
+              <AdminSelect label="Emblema" name="badgeId" required>
+                <option value="">Selecione</option>
+                {badges.map((badge) => (
+                  <option key={badge.id} value={badge.id}>
+                    {badge.title}
+                  </option>
+                ))}
+              </AdminSelect>
+              <AdminSelect defaultValue="CHAMPION" label="Motivo" name="category">
+                {Object.entries(awardCategoryLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </AdminSelect>
+              <label className="lg:col-span-2 xl:col-span-4">
+                <span className="mb-1 block text-sm font-medium text-app-foreground">
+                  Justificativa
+                </span>
+                <input
+                  className={`${inputClass} w-full`}
+                  name="reason"
+                  placeholder="Ex.: terminou a liga em primeiro lugar"
+                  required
+                />
+              </label>
+              <AdminSubmitButton
+                className="h-10 rounded-button bg-brand-gold px-4 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
+                pendingLabel="Atribuindo..."
+              >
+                Atribuir
+              </AdminSubmitButton>
+            </form>
+
+            {awardSuggestions.length > 0 ? (
+              <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                {awardSuggestions.slice(0, 8).map((suggestion) => (
+                  <div
+                    className="rounded-control border border-app-border bg-app-background p-3"
+                    key={`${suggestion.leagueId}-${suggestion.category}`}
+                  >
+                    <p className="text-xs font-semibold uppercase text-brand-gold">
+                      {suggestion.label}
+                    </p>
+                    <p className="mt-1 font-semibold text-app-foreground">{suggestion.userName}</p>
+                    <p className="text-xs text-app-muted">
+                      {suggestion.leagueName} | {suggestion.metric}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <form
             action={createAchievementBadgeFormAction}
             className="mb-4 grid gap-3 lg:grid-cols-[140px_1fr_1fr_160px_auto] lg:items-end"
@@ -601,6 +700,47 @@ export default async function AdminXpPage() {
                 <p className="mt-2 text-sm text-app-muted">{badge.description}</p>
               </div>
             ))}
+          </div>
+
+          <div className="mt-5 border-t border-app-border pt-5">
+            <h3 className="font-semibold text-app-foreground">Emblemas atribuidos</h3>
+            {awards.length > 0 ? (
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {awards.map((award) => (
+                  <article
+                    className="rounded-control border border-app-border bg-app-background p-3"
+                    key={award.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-app-foreground">{award.badge.title}</p>
+                        <p className="text-sm text-app-muted">
+                          {award.user.name} | {award.league.name}
+                        </p>
+                      </div>
+                      <Badge>{awardCategoryLabels[award.category]}</Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-app-muted">{award.reason}</p>
+                    <p className="mt-2 text-xs text-app-muted">
+                      Por {award.awardedBy?.name ?? "Administrador"} em{" "}
+                      {formatDate(award.createdAt)}
+                    </p>
+                    <form action={revokeLeagueBadgeFormAction} className="mt-3">
+                      <input name="awardId" type="hidden" value={award.id} />
+                      <AdminSubmitButton
+                        className="inline-flex h-9 items-center gap-2 rounded-button border border-red-400/40 px-3 text-sm font-medium text-red-300 transition hover:bg-red-500/10"
+                        pendingLabel="Removendo..."
+                      >
+                        <Trash2 aria-hidden className="h-4 w-4" />
+                        Remover
+                      </AdminSubmitButton>
+                    </form>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-app-muted">Nenhum emblema de liga atribuido.</p>
+            )}
           </div>
         </CardContent>
       </Card>
