@@ -1025,7 +1025,13 @@ export async function getAdminLeagueRankings(searchParams: SearchParams) {
           },
           orderBy: { createdAt: "desc" },
           where: {
-            championshipId: selectedChampionshipId ?? "00000000-0000-0000-0000-000000000000"
+            OR: [
+              {
+                championshipId:
+                  selectedChampionshipId ?? "00000000-0000-0000-0000-000000000000"
+              },
+              { isUniversal: true }
+            ]
           }
         })
       ]);

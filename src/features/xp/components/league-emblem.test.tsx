@@ -4,26 +4,34 @@ import { describe, expect, it } from "vitest";
 import { LeagueEmblem, LeagueEmblemList } from "./league-emblem";
 
 const emblem = {
-  badge: { title: "Mira Certeira" },
+  badge: { title: "Mestre dos Placares" },
   championship: { name: "Brasileirao 2026" },
-  customTitle: "Rei dos Acertos",
-  emblemColor: "#22C55E",
-  emblemIcon: "TARGET",
-  emblemStyle: "SHIELD",
-  id: "award-1"
+  customTitle: "Mestre dos Placares",
+  emblemColor: "#F4B41A",
+  emblemIcon: "OFFICIAL",
+  emblemKey: "SCORE_MASTER",
+  emblemStyle: "CATALOG",
+  id: "award-1",
+  isUniversal: false
 };
 
 describe("LeagueEmblem", () => {
-  it("exibe a insignia personalizada e o campeonato", () => {
+  it("exibe a insignia oficial e o campeonato", () => {
     render(<LeagueEmblem emblem={emblem} />);
 
-    expect(screen.getByText("Rei dos Acertos")).toBeInTheDocument();
+    expect(screen.getByText("Mestre dos Placares")).toBeInTheDocument();
     expect(screen.getByText("Brasileirao 2026")).toBeInTheDocument();
   });
 
   it("mantem o significado acessivel na versao compacta do ranking", () => {
     render(<LeagueEmblemList emblems={[emblem]} />);
 
-    expect(screen.getByLabelText("Rei dos Acertos, Brasileirao 2026")).toBeInTheDocument();
+    expect(screen.getByLabelText("Mestre dos Placares, Brasileirao 2026")).toBeInTheDocument();
+  });
+
+  it("identifica uma insignia universal", () => {
+    render(<LeagueEmblem emblem={{ ...emblem, isUniversal: true }} />);
+
+    expect(screen.getByText("Emblema universal")).toBeInTheDocument();
   });
 });

@@ -927,6 +927,8 @@ model LeagueBadgeAward {
   emblemColor    String              @default("#F4B41A") @map("emblem_color") @db.VarChar(7)
   emblemStyle    String              @default("MEDAL") @map("emblem_style") @db.VarChar(24)
   emblemIcon     String              @default("TROPHY") @map("emblem_icon") @db.VarChar(24)
+  emblemKey      String?             @map("emblem_key") @db.VarChar(40)
+  isUniversal    Boolean             @default(false) @map("is_universal")
   createdAt      DateTime            @default(now()) @map("created_at")
 
   league       League       @relation(fields: [leagueId], references: [id], onDelete: Restrict)
@@ -940,6 +942,8 @@ model LeagueBadgeAward {
   @@index([championshipId, userId])
   @@index([championshipId, category])
   @@index([userId, createdAt])
+  @@index([userId, isUniversal])
+  @@index([emblemKey])
   @@index([badgeId])
   @@index([awardedById])
   @@map("league_badge_awards")

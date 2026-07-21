@@ -316,7 +316,11 @@ export async function getXpRankingData(
         },
         orderBy: { createdAt: "desc" },
         where: {
-          ...(selectedChampionshipId ? { championshipId: selectedChampionshipId } : {}),
+          ...(selectedChampionshipId
+            ? {
+                OR: [{ championshipId: selectedChampionshipId }, { isUniversal: true }]
+              }
+            : {}),
           userId: { in: rows.map((row) => row.user.id) }
         }
       });

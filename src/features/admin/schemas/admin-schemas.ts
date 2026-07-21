@@ -286,36 +286,37 @@ export const createAchievementBadgeSchema = z.object({
 });
 
 export const grantLeagueBadgeSchema = z.object({
-  category: z.enum([
-    "CHAMPION",
-    "RUNNER_UP",
-    "MOST_HITS",
-    "MOST_EXACT_SCORES",
-    "ROUND_STAR",
-    "CONSISTENCY",
-    "PARTICIPATION",
-    "FAIR_PLAY",
-    "CUSTOM"
-  ]),
   championshipId: uuidSchema,
-  customTitle: z
-    .string()
-    .trim()
-    .max(100)
-    .transform((value) => value || undefined)
-    .optional(),
-  emblemColor: z
-    .string()
-    .regex(/^#[0-9A-F]{6}$/i, "Selecione uma cor valida.")
-    .transform((value) => value.toUpperCase()),
-  emblemIcon: z.enum(["TROPHY", "CROWN", "TARGET", "STAR", "AWARD", "SHIELD"]),
-  emblemStyle: z.enum(["MEDAL", "SHIELD", "SEAL", "RIBBON"]),
+  emblemKey: z.enum([
+    "ROUND_HIGHLIGHT",
+    "WORLD_CUP_CHAMPION",
+    "LIBERTADORES_CHAMPION",
+    "BRASILEIRAO_CHAMPION",
+    "LOBAO_DO_BOLAO",
+    "SCORE_MASTER",
+    "BOLAO_BRAIN",
+    "REGULARITY",
+    "EVOLUTION",
+    "ROUND_SURPRISE",
+    "UNBREAKABLE_DEFENSE",
+    "FAIR_PLAY",
+    "LOYAL_WOLF",
+    "PUNCTUAL",
+    "GUARANTEED_PODIUM",
+    "WILDCARD_KING",
+    "LUCKY",
+    "X_RAY",
+    "LEGENDARY",
+    "DIAMOND",
+    "FIRE_BET"
+  ]),
   reason: z
     .string()
     .trim()
     .max(240)
     .transform((value) => value || undefined)
     .optional(),
+  scope: z.enum(["CHAMPIONSHIP", "UNIVERSAL"]),
   userId: uuidSchema
 });
 

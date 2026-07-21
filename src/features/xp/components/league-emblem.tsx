@@ -1,7 +1,15 @@
-import { Award, Crown, Medal, Shield, Star, Target, Trophy } from "lucide-react";
+import Image from "next/image";
 import type { CSSProperties } from "react";
 
+import {
+  resolveLeagueEmblem,
+  type OfficialLeagueEmblem
+} from "@/features/xp/constants/league-emblems";
 import { cn } from "@/lib/utils";
+
+const SOURCE_WIDTH = 1536;
+const SOURCE_HEIGHT = 1024;
+const EMBLEM_SPRITE = "/brand/emblems/catalogo-oficial.png";
 
 export type LeagueEmblemView = {
   badge: {
@@ -13,8 +21,10 @@ export type LeagueEmblemView = {
   customTitle: string | null;
   emblemColor: string;
   emblemIcon: string;
+  emblemKey?: string | null;
   emblemStyle: string;
   id: string;
+  isUniversal?: boolean;
 };
 
 type LeagueEmblemProps = {
@@ -23,61 +33,68 @@ type LeagueEmblemProps = {
   emblem: LeagueEmblemView;
 };
 
-const iconMap = {
-  AWARD: Award,
-  CROWN: Crown,
-  MEDAL: Medal,
-  SHIELD: Shield,
-  STAR: Star,
-  TARGET: Target,
-  TROPHY: Trophy
-} as const;
-
-const styleClass = {
-  MEDAL: "rounded-full border-double border-[3px]",
-  RIBBON: "rounded-sm border-b-4",
-  SEAL: "rounded-full border-2 ring-2 ring-current ring-offset-2 ring-offset-app-background",
-  SHIELD: "rounded-t-md rounded-b-xl border-2"
-} as const;
-
-function safeColor(value: string) {
-  return /^#[0-9A-F]{6}$/i.test(value) ? value : "#F4B41A";
-}
-
-export function LeagueEmblem({ className, compact = false, emblem }: LeagueEmblemProps) {
-  const color = safeColor(emblem.emblemColor);
-  const Icon = iconMap[emblem.emblemIcon as keyof typeof iconMap] ?? Trophy;
-  const title = emblem.customTitle || emblem.badge.title;
-  const shape = styleClass[emblem.emblemStyle as keyof typeof styleClass] ?? styleClass.MEDAL;
-  const css = {
-    backgroundColor: `${color}1F`,
-    borderColor: color,
-    color
+export function OfficialEmblemArtwork({
+  className,
+  emblem,
+  priority = false
+}: {
+  className?: string;
+  emblem: OfficialLeagueEmblem;
+  priority?: boolean;
+}) {
+  const { crop } = emblem;
+  const imageStyle = {
+    height: "auto",
+    left: `${(-crop.x / crop.width) * 100}%`,
+    maxWidth: "none",
+    top: `${(-crop.y / crop.height) * 100}%`,
+    width: `${(SOURCE_WIDTH / crop.width) * 100}%`
   } satisfies CSSProperties;
 
   return (
     <span
-      aria-label={`${title}, ${emblem.championship.name}`}
-      className={cn("inline-flex min-w-0 items-center gap-2", className)}
-      title={`${title} - ${emblem.championship.name}`}
+      aria-hidden
+      className={cn("relative block shrink-0 overflow-hidden bg-black", className)}
+      style={{ aspectRatio: `${crop.width} / ${crop.height}` }}
     >
-      <span
-        aria-hidden
-        className={cn(
-          "inline-flex shrink-0 items-center justify-center shadow-[0_0_14px_rgba(244,180,26,0.18)]",
-          compact ? "h-7 w-7" : "h-11 w-11",
-          shape
-        )}
-        style={css}
-      >
-        <Icon className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} strokeWidth={2.2} />
-      </span>
+      <Image
+        alt=""
+        className="absolute select-none"
+        draggable={false}
+        height={SOURCE_HEIGHT}
+        priority={priority}
+        src={EMBLEM_SPRITE}
+        style={imageStyle}
+        width={SOURCE_WIDTH}
+      />
+    </span>
+  );
+}
+
+export function LeagueEmblem({ className, compact = false, emblem }: LeagueEmblemProps) {
+  const definition = resolveLeagueEmblem(
+    emblem.emblemKey,
+    emblem.customTitle || emblem.badge.title,
+    emblem.championship.name
+  );
+  const scopeLabel = emblem.isUniversal ? "Emblema universal" : emblem.championship.name;
+
+  return (
+    <span
+      aria-label={`${definition.title}, ${scopeLabel}`}
+      className={cn("inline-flex min-w-0 items-center gap-2", className)}
+      title={`${definition.title} - ${scopeLabel}`}
+    >
+      <OfficialEmblemArtwork
+        className={cn("drop-shadow-[0_0_8px_rgba(244,180,26,0.28)]", compact ? "w-9" : "w-20")}
+        emblem={definition}
+      />
       {compact ? null : (
         <span className="min-w-0">
-          <span className="block truncate text-xs font-semibold text-app-foreground">{title}</span>
-          <span className="block truncate text-[11px] text-app-muted">
-            {emblem.championship.name}
+          <span className="block text-sm font-semibold leading-tight text-app-foreground">
+            {definition.title}
           </span>
+          <span className="mt-1 block text-xs text-app-muted">{scopeLabel}</span>
         </span>
       )}
     </span>
@@ -89,13 +106,22 @@ export function LeagueEmblemList({ emblems }: { emblems: LeagueEmblemView[] }) {
     return null;
   }
 
+  const uniqueEmblems = emblems.filter(
+    (emblem, index, items) =>
+      items.findIndex(
+        (candidate) =>
+          (candidate.emblemKey || candidate.badge.title) ===
+          (emblem.emblemKey || emblem.badge.title)
+      ) === index
+  );
+
   return (
-    <div aria-label="Insignias conquistadas" className="mt-2 flex flex-wrap items-center gap-1.5">
-      {emblems.slice(0, 4).map((emblem) => (
+    <div aria-label="Insignias conquistadas" className="mt-2 flex flex-wrap items-center gap-2">
+      {uniqueEmblems.slice(0, 4).map((emblem) => (
         <LeagueEmblem compact emblem={emblem} key={emblem.id} />
       ))}
-      {emblems.length > 4 ? (
-        <span className="text-[11px] font-medium text-app-muted">+{emblems.length - 4}</span>
+      {uniqueEmblems.length > 4 ? (
+        <span className="text-[11px] font-medium text-app-muted">+{uniqueEmblems.length - 4}</span>
       ) : null}
     </div>
   );

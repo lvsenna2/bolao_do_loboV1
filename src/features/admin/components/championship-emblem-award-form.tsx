@@ -1,19 +1,17 @@
 "use client";
 
-import { Award, Check } from "lucide-react";
+import { Award, Check, Globe2, Trophy } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 
 import { grantLeagueBadgeAction } from "@/features/admin/actions/admin-actions";
 import { AdminSubmitButton } from "@/features/admin/components/admin-submit-button";
 import type { AdminActionResult } from "@/features/admin/types";
+import { OfficialEmblemArtwork, LeagueEmblem } from "@/features/xp/components/league-emblem";
 import {
-  leagueEmblemCategories,
-  leagueEmblemColors,
-  leagueEmblemIcons,
-  leagueEmblemStyles,
-  type LeagueEmblemCategory
+  officialLeagueEmblems,
+  type LeagueEmblemScope,
+  type OfficialLeagueEmblemKey
 } from "@/features/xp/constants/league-emblems";
-import { LeagueEmblem } from "@/features/xp/components/league-emblem";
 import { cn } from "@/lib/utils";
 
 type ChampionshipOption = {
@@ -47,28 +45,35 @@ export function ChampionshipEmblemAwardForm({
     initialState
   );
   const [championshipId, setChampionshipId] = useState("");
-  const [category, setCategory] = useState<LeagueEmblemCategory>("CHAMPION");
-  const [color, setColor] = useState("#F4B41A");
-  const [emblemStyle, setEmblemStyle] = useState("MEDAL");
-  const [emblemIcon, setEmblemIcon] = useState("TROPHY");
-  const [customTitle, setCustomTitle] = useState("");
+  const [userId, setUserId] = useState("");
+  const [emblemKey, setEmblemKey] = useState<OfficialLeagueEmblemKey>("ROUND_HIGHLIGHT");
+  const [scope, setScope] = useState<LeagueEmblemScope>("CHAMPIONSHIP");
   const selectedChampionship = championships.find((item) => item.id === championshipId);
-  const categoryDefinition = leagueEmblemCategories.find((item) => item.key === category)!;
+  const selectedEmblem = officialLeagueEmblems.find((item) => item.key === emblemKey)!;
   const participantIds = useMemo(
     () => new Set(selectedChampionship?.participantIds ?? []),
     [selectedChampionship]
   );
   const participants = users.filter((user) => participantIds.has(user.id));
 
+  function selectEmblem(key: OfficialLeagueEmblemKey) {
+    const emblem = officialLeagueEmblems.find((item) => item.key === key)!;
+    setEmblemKey(key);
+    setScope(emblem.recommendedScope);
+  }
+
   return (
-    <form action={action} className="mt-4 space-y-5">
+    <form action={action} className="mt-4 space-y-6">
       <div className="grid gap-4 lg:grid-cols-3">
         <label className="space-y-2">
           <span className="text-sm font-medium text-app-foreground">Campeonato</span>
           <select
             className={inputClass}
             name="championshipId"
-            onChange={(event) => setChampionshipId(event.target.value)}
+            onChange={(event) => {
+              setChampionshipId(event.target.value);
+              setUserId("");
+            }}
             required
             value={championshipId}
           >
@@ -83,7 +88,14 @@ export function ChampionshipEmblemAwardForm({
 
         <label className="space-y-2">
           <span className="text-sm font-medium text-app-foreground">Participante</span>
-          <select className={inputClass} disabled={!championshipId} name="userId" required>
+          <select
+            className={inputClass}
+            disabled={!championshipId}
+            name="userId"
+            onChange={(event) => setUserId(event.target.value)}
+            required
+            value={userId}
+          >
             <option value="">
               {championshipId ? "Selecione o participante" : "Escolha primeiro o campeonato"}
             </option>
@@ -101,132 +113,96 @@ export function ChampionshipEmblemAwardForm({
         </label>
 
         <label className="space-y-2">
-          <span className="text-sm font-medium text-app-foreground">Atribuicao</span>
+          <span className="text-sm font-medium text-app-foreground">Onde sera exibido</span>
           <select
             className={inputClass}
-            name="category"
-            onChange={(event) => setCategory(event.target.value as LeagueEmblemCategory)}
-            value={category}
+            name="scope"
+            onChange={(event) => setScope(event.target.value as LeagueEmblemScope)}
+            value={scope}
           >
-            {leagueEmblemCategories.map((item) => (
-              <option key={item.key} value={item.key}>
-                {item.label}
-              </option>
-            ))}
+            <option value="CHAMPIONSHIP">Somente neste campeonato</option>
+            <option value="UNIVERSAL">Universal: todas as ligas</option>
           </select>
         </label>
       </div>
 
-      <div className="grid gap-5 border-t border-app-border pt-5 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-app-foreground">Titulo personalizado</span>
-              <input
-                className={inputClass}
-                maxLength={100}
-                name="customTitle"
-                onChange={(event) => setCustomTitle(event.target.value)}
-                placeholder={categoryDefinition.defaultTitle}
-                value={customTitle}
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-app-foreground">Estilo</span>
-              <select
-                className={inputClass}
-                name="emblemStyle"
-                onChange={(event) => setEmblemStyle(event.target.value)}
-                value={emblemStyle}
-              >
-                {leagueEmblemStyles.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-app-foreground">Simbolo</span>
-              <select
-                className={inputClass}
-                name="emblemIcon"
-                onChange={(event) => setEmblemIcon(event.target.value)}
-                value={emblemIcon}
-              >
-                {leagueEmblemIcons.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+      <fieldset className="border-t border-app-border pt-5">
+        <legend className="flex items-center gap-2 pr-3 text-sm font-semibold text-app-foreground">
+          <Trophy aria-hidden className="h-4 w-4 text-brand-gold" />
+          Escolha a insignia oficial
+        </legend>
+        <input name="emblemKey" type="hidden" value={emblemKey} />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {officialLeagueEmblems.map((emblem) => {
+            const selected = emblem.key === emblemKey;
 
-          <fieldset>
-            <legend className="text-sm font-medium text-app-foreground">Cor da insignia</legend>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {leagueEmblemColors.map((item) => (
-                <button
-                  aria-label={item.label}
-                  className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-full border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold",
-                    color === item.value ? "border-white" : "border-transparent"
-                  )}
-                  key={item.value}
-                  onClick={() => setColor(item.value)}
-                  style={{ backgroundColor: item.value }}
-                  title={item.label}
-                  type="button"
-                >
-                  {color === item.value ? (
-                    <Check aria-hidden className="h-4 w-4 text-black" />
+            return (
+              <button
+                aria-pressed={selected}
+                className={cn(
+                  "relative grid min-h-32 grid-cols-[68px_minmax(0,1fr)] items-center gap-3 rounded-control border bg-black/35 p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold",
+                  selected
+                    ? "border-brand-gold shadow-[0_0_20px_rgba(244,180,26,0.14)]"
+                    : "border-app-border hover:border-brand-gold/60"
+                )}
+                key={emblem.key}
+                onClick={() => selectEmblem(emblem.key)}
+                type="button"
+              >
+                <OfficialEmblemArtwork className="w-16" emblem={emblem} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold leading-tight text-app-foreground">
+                    {emblem.title}
+                  </span>
+                  <span className="mt-1 block text-xs leading-4 text-app-muted">
+                    {emblem.description}
+                  </span>
+                  {emblem.recommendedScope === "UNIVERSAL" ? (
+                    <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-cyan-300">
+                      <Globe2 aria-hidden className="h-3 w-3" />
+                      Universal recomendado
+                    </span>
                   ) : null}
-                </button>
-              ))}
-              <label className="inline-flex h-9 items-center gap-2 rounded-control border border-app-border px-2 text-xs text-app-muted">
-                Personalizada
-                <input
-                  aria-label="Cor personalizada"
-                  className="h-6 w-8 cursor-pointer border-0 bg-transparent p-0"
-                  name="emblemColor"
-                  onChange={(event) => setColor(event.target.value.toUpperCase())}
-                  type="color"
-                  value={color}
-                />
-              </label>
-            </div>
-          </fieldset>
-
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-app-foreground">Descricao opcional</span>
-            <input
-              className={inputClass}
-              maxLength={240}
-              name="reason"
-              placeholder="Ex.: maior pontuacao do Brasileirao 2026"
-            />
-          </label>
+                </span>
+                {selected ? (
+                  <span className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-gold text-black">
+                    <Check aria-hidden className="h-3.5 w-3.5" />
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
+      </fieldset>
+
+      <div className="grid gap-4 border-t border-app-border pt-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <label className="block space-y-2">
+          <span className="text-sm font-medium text-app-foreground">Justificativa opcional</span>
+          <input
+            className={inputClass}
+            maxLength={240}
+            name="reason"
+            placeholder={selectedEmblem.description}
+          />
+        </label>
 
         <div className="rounded-control border border-brand-gold/30 bg-black/30 p-4">
           <p className="text-xs font-semibold uppercase text-brand-gold">Previa no ranking</p>
-          <div className="mt-5">
+          <div className="mt-4">
             <LeagueEmblem
               emblem={{
-                badge: { title: categoryDefinition.defaultTitle },
+                badge: { title: selectedEmblem.title },
                 championship: { name: selectedChampionship?.label ?? "Campeonato" },
-                customTitle: customTitle || null,
-                emblemColor: color,
-                emblemIcon,
-                emblemStyle,
-                id: "preview"
+                customTitle: selectedEmblem.title,
+                emblemColor: "#F4B41A",
+                emblemIcon: "OFFICIAL",
+                emblemKey,
+                emblemStyle: "CATALOG",
+                id: "preview",
+                isUniversal: scope === "UNIVERSAL"
               }}
             />
           </div>
-          <p className="mt-4 text-xs leading-5 text-app-muted">
-            A insignia aparecera ao lado do participante nos rankings deste campeonato.
-          </p>
         </div>
       </div>
 
@@ -246,7 +222,7 @@ export function ChampionshipEmblemAwardForm({
 
       <AdminSubmitButton
         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand-gold px-5 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:opacity-60 sm:w-auto"
-        disabled={!championshipId || participants.length === 0}
+        disabled={!championshipId || !userId || participants.length === 0}
         pendingLabel="Atribuindo..."
       >
         <Award aria-hidden className="h-4 w-4" />

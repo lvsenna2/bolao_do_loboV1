@@ -1,27 +1,29 @@
 import type { LeagueBadgeCategory } from "@prisma/client";
 
 import {
-  getLeagueEmblemCategory,
-  type LeagueEmblemIcon,
-  type LeagueEmblemStyle
+  getOfficialLeagueEmblem,
+  type LeagueEmblemScope,
+  type OfficialLeagueEmblemKey
 } from "@/features/xp/constants/league-emblems";
 import { prisma } from "@/server/db";
 
 type GrantLeagueBadgeInput = {
   adminId: string;
-  category: LeagueBadgeCategory;
   championshipId: string;
-  customTitle?: string;
-  emblemColor: string;
-  emblemIcon: LeagueEmblemIcon;
-  emblemStyle: LeagueEmblemStyle;
+  emblemKey: OfficialLeagueEmblemKey;
   reason?: string;
+  scope: LeagueEmblemScope;
   userId: string;
 };
 
 export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
   return prisma.$transaction(async (tx) => {
-    const categoryDefinition = getLeagueEmblemCategory(input.category);
+    const emblem = getOfficialLeagueEmblem(input.emblemKey);
+
+    if (!emblem) {
+      throw new Error("EMBLEM_NOT_FOUND");
+    }
+
     const [championship, badge, membership] = await Promise.all([
       tx.championship.findFirst({
         select: { id: true, name: true },
@@ -29,17 +31,20 @@ export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
       }),
       tx.badge.upsert({
         create: {
-          description: `Reconhecimento de ${categoryDefinition.label.toLowerCase()} em um campeonato.`,
-          key: categoryDefinition.badgeKey,
-          rarity:
-            input.category === "CHAMPION" || input.category === "MOST_EXACT_SCORES"
-              ? "LEGENDARY"
-              : "EPIC",
-          title: categoryDefinition.defaultTitle
+          description: emblem.description,
+          image: `/brand/emblems/catalogo-oficial.png#${emblem.key}`,
+          key: `OFFICIAL_EMBLEM_${emblem.key}`,
+          rarity: emblem.rarity,
+          title: emblem.title
         },
         select: { id: true, title: true },
-        update: {},
-        where: { key: categoryDefinition.badgeKey }
+        update: {
+          description: emblem.description,
+          image: `/brand/emblems/catalogo-oficial.png#${emblem.key}`,
+          rarity: emblem.rarity,
+          title: emblem.title
+        },
+        where: { key: `OFFICIAL_EMBLEM_${emblem.key}` }
       }),
       tx.leagueMember.findFirst({
         orderBy: { joinedAt: "asc" },
@@ -64,42 +69,47 @@ export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
       throw new Error("USER_NOT_ACTIVE_IN_CHAMPIONSHIP");
     }
 
+    const isUniversal = input.scope === "UNIVERSAL";
     const reason =
-      input.reason ?? `${input.customTitle || badge.title} no campeonato ${championship.name}.`;
-    const award = await tx.leagueBadgeAward.upsert({
-      create: {
-        awardedById: input.adminId,
-        badgeId: badge.id,
-        category: input.category,
-        championshipId: input.championshipId,
-        customTitle: input.customTitle,
-        emblemColor: input.emblemColor,
-        emblemIcon: input.emblemIcon,
-        emblemStyle: input.emblemStyle,
-        leagueId: membership.league.id,
-        reason,
-        userId: input.userId
-      },
-      update: {
-        awardedById: input.adminId,
-        category: input.category,
-        championshipId: input.championshipId,
-        customTitle: input.customTitle,
-        emblemColor: input.emblemColor,
-        emblemIcon: input.emblemIcon,
-        emblemStyle: input.emblemStyle,
-        reason
-      },
+      input.reason ??
+      (isUniversal
+        ? `${badge.title}, reconhecimento valido em todas as ligas.`
+        : `${badge.title} no campeonato ${championship.name}.`);
+    const existingAward = await tx.leagueBadgeAward.findFirst({
+      select: { id: true },
       where: {
-        leagueId_userId_badgeId: {
-          badgeId: badge.id,
-          leagueId: membership.league.id,
-          userId: input.userId
-        }
+        badgeId: badge.id,
+        ...(isUniversal
+          ? { isUniversal: true }
+          : { championshipId: input.championshipId, isUniversal: false }),
+        userId: input.userId
       }
     });
-    const awardTitle = input.customTitle || badge.title;
-    const notificationText = `${awardTitle} em ${championship.name}: ${reason}`;
+    const awardData = {
+      awardedById: input.adminId,
+      badgeId: badge.id,
+      category: emblem.category as LeagueBadgeCategory,
+      championshipId: input.championshipId,
+      customTitle: emblem.title,
+      emblemColor: "#F4B41A",
+      emblemIcon: "OFFICIAL",
+      emblemKey: emblem.key,
+      emblemStyle: "CATALOG",
+      isUniversal,
+      leagueId: membership.league.id,
+      reason,
+      userId: input.userId
+    };
+    const award = existingAward
+      ? await tx.leagueBadgeAward.update({
+          data: awardData,
+          where: { id: existingAward.id }
+        })
+      : await tx.leagueBadgeAward.create({
+          data: awardData
+        });
+    const awardTitle = badge.title;
+    const notificationText = `${awardTitle} ${isUniversal ? "(universal)" : `em ${championship.name}`}: ${reason}`;
 
     await tx.notification.upsert({
       create: {
@@ -128,12 +138,10 @@ export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
         entityId: award.id,
         newValue: {
           badgeId: badge.id,
-          category: input.category,
+          category: emblem.category,
           championshipId: input.championshipId,
-          customTitle: input.customTitle,
-          emblemColor: input.emblemColor,
-          emblemIcon: input.emblemIcon,
-          emblemStyle: input.emblemStyle,
+          emblemKey: emblem.key,
+          isUniversal,
           leagueId: membership.league.id,
           reason,
           userId: input.userId
@@ -142,7 +150,12 @@ export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
       }
     });
 
-    return { award, badgeTitle: awardTitle, championshipName: championship.name };
+    return {
+      award,
+      badgeTitle: awardTitle,
+      championshipName: championship.name,
+      isUniversal
+    };
   });
 }
 
@@ -174,7 +187,9 @@ export async function revokeLeagueBadge(input: { adminId: string; awardId: strin
           customTitle: award.customTitle,
           emblemColor: award.emblemColor,
           emblemIcon: award.emblemIcon,
+          emblemKey: award.emblemKey,
           emblemStyle: award.emblemStyle,
+          isUniversal: award.isUniversal,
           leagueId: award.leagueId,
           reason: award.reason,
           userId: award.userId

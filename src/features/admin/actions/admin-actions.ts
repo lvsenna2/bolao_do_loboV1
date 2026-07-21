@@ -3196,7 +3196,9 @@ export async function grantLeagueBadgeAction(formData: FormData): Promise<AdminA
 
     return {
       ok: true,
-      message: `${result.badgeTitle} atribuido em ${result.championshipName}.`
+      message: result.isUniversal
+        ? `${result.badgeTitle} atribuido como emblema universal.`
+        : `${result.badgeTitle} atribuido em ${result.championshipName}.`
     };
   } catch (error) {
     const message =

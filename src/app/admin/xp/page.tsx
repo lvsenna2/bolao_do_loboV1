@@ -583,7 +583,8 @@ export default async function AdminXpPage() {
         <CardHeader>
           <CardTitle>Emblemas e conquistas</CardTitle>
           <CardDescription>
-            Conceda insignias publicas aos destaques de cada campeonato sem alterar pontos ou XP.
+            Conceda insignias oficiais por campeonato ou validas em todas as ligas, sem alterar
+            pontos ou XP.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -654,7 +655,11 @@ export default async function AdminXpPage() {
                     <p className="mt-3 text-sm font-semibold text-app-foreground">
                       {award.user.name}
                     </p>
-                    <p className="text-xs text-app-muted">{award.championship.name}</p>
+                    <p className="text-xs text-app-muted">
+                      {award.isUniversal
+                        ? `Universal | origem: ${award.championship.name}`
+                        : award.championship.name}
+                    </p>
                     <p className="mt-2 text-sm text-app-muted">{award.reason}</p>
                     <p className="mt-2 text-xs text-app-muted">
                       Por {award.awardedBy?.name ?? "Administrador"} em{" "}

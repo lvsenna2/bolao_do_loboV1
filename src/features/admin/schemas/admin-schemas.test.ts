@@ -64,19 +64,16 @@ describe("admin schemas", () => {
     expect(parsed.success).toBe(false);
   });
 
-  it("valida a insignia personalizada de um participante do campeonato", () => {
+  it("valida uma insignia oficial universal para um participante", () => {
     const parsed = grantLeagueBadgeSchema.parse({
-      category: "MOST_HITS",
       championshipId: uuid,
-      customTitle: "Artilheiro dos palpites",
-      emblemColor: "#22c55e",
-      emblemIcon: "TARGET",
-      emblemStyle: "SHIELD",
+      emblemKey: "LOBAO_DO_BOLAO",
       reason: "Maior numero de resultados corretos.",
+      scope: "UNIVERSAL",
       userId: "33333333-3333-4333-8333-333333333333"
     });
 
-    expect(parsed.category).toBe("MOST_HITS");
-    expect(parsed.emblemColor).toBe("#22C55E");
+    expect(parsed.emblemKey).toBe("LOBAO_DO_BOLAO");
+    expect(parsed.scope).toBe("UNIVERSAL");
   });
 });
