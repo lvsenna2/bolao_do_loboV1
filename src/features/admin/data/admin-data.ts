@@ -560,7 +560,6 @@ export async function getAdminRounds(searchParams: SearchParams) {
             orderBy: {
               kickoff: "asc"
             },
-            take: 12,
             where: {
               deletedAt: null
             }
@@ -578,7 +577,11 @@ export async function getAdminRounds(searchParams: SearchParams) {
           },
           _count: {
             select: {
-              matches: true,
+              matches: {
+                where: {
+                  deletedAt: null
+                }
+              },
               rankings: true
             }
           }
