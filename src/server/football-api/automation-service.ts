@@ -386,43 +386,31 @@ async function syncHistory(
   matchIds: string[],
   summary: AutomationSummary
 ) {
-  const homeRecent = await fetchApiFootballTeamFixtures(fixture.homeTeam.apiId, {
-    last: 5,
-    leagueId: config.leagueId,
-    season: config.season
-  });
-  summary.callsUsed += homeRecent.callsUsed;
+  const [homeRecent, awayRecent, headToHead, homeSeasonStats, awaySeasonStats] = await Promise.all([
+    fetchApiFootballTeamFixtures(fixture.homeTeam.apiId, {
+      last: 5,
+      leagueId: config.leagueId,
+      season: config.season
+    }),
+    fetchApiFootballTeamFixtures(fixture.awayTeam.apiId, {
+      last: 5,
+      leagueId: config.leagueId,
+      season: config.season
+    }),
+    fetchApiFootballHeadToHead(fixture.homeTeam.apiId, fixture.awayTeam.apiId, 5),
+    fetchApiFootballTeamStatistics(config.leagueId, config.season, fixture.homeTeam.apiId),
+    fetchApiFootballTeamStatistics(config.leagueId, config.season, fixture.awayTeam.apiId)
+  ]);
+
+  summary.callsUsed +=
+    homeRecent.callsUsed +
+    awayRecent.callsUsed +
+    headToHead.callsUsed +
+    homeSeasonStats.callsUsed +
+    awaySeasonStats.callsUsed;
   if (!homeRecent.ok) throw new Error(homeRecent.message);
-
-  const awayRecent = await fetchApiFootballTeamFixtures(fixture.awayTeam.apiId, {
-    last: 5,
-    leagueId: config.leagueId,
-    season: config.season
-  });
-  summary.callsUsed += awayRecent.callsUsed;
   if (!awayRecent.ok) throw new Error(awayRecent.message);
-
-  const headToHead = await fetchApiFootballHeadToHead(
-    fixture.homeTeam.apiId,
-    fixture.awayTeam.apiId,
-    5
-  );
-  summary.callsUsed += headToHead.callsUsed;
   if (!headToHead.ok) throw new Error(headToHead.message);
-
-  const homeSeasonStats = await fetchApiFootballTeamStatistics(
-    config.leagueId,
-    config.season,
-    fixture.homeTeam.apiId
-  );
-  summary.callsUsed += homeSeasonStats.callsUsed;
-
-  const awaySeasonStats = await fetchApiFootballTeamStatistics(
-    config.leagueId,
-    config.season,
-    fixture.awayTeam.apiId
-  );
-  summary.callsUsed += awaySeasonStats.callsUsed;
 
   await saveFixtureInsights(matchIds, fixture.homeTeam.apiId, fixture.awayTeam.apiId, {
     awayRecent: awayRecent.data,
