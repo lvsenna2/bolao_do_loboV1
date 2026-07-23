@@ -747,9 +747,13 @@ export async function runFootballAutomation(
         missedLive
       );
     });
+    const remainingFixtureLimit =
+      options.detailMode === "lineups-history" && fixtures.size === 0
+        ? Math.min(fixtureLimit, 1)
+        : fixtureLimit;
     const dueIds = dueCandidates
       .filter((candidate) => !fixtures.has(candidate.apiId as number))
-      .slice(0, Math.max(0, fixtureLimit - fixtures.size))
+      .slice(0, Math.max(0, remainingFixtureLimit - fixtures.size))
       .map((candidate) => candidate.apiId as number);
 
     for (const fixtureIds of chunk(dueIds, 20)) {

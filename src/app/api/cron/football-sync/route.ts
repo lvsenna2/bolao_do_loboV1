@@ -46,7 +46,9 @@ async function handler(request: Request) {
       includeCatalog: false
     }
   );
-  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+  // Scheduled retries happen on the next cycle. Returning 500 here makes QStash
+  // overlap retries with the two-minute schedule and can keep the sync lock busy.
+  return NextResponse.json(result);
 }
 
 export const GET = handler;
