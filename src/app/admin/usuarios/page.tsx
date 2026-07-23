@@ -25,6 +25,7 @@ import {
 } from "@/features/admin/actions/admin-actions";
 import { getAdminUsers } from "@/features/admin/data/admin-data";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
+import { formatBrazilianPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,10 @@ export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
     >
       <AdminAlert message={result.ok ? undefined : result.message} />
 
-      <AdminFilterForm placeholder="Nome, e-mail ou username" query={String(params.q ?? "")}>
+      <AdminFilterForm
+        placeholder="Nome, e-mail, username ou telefone"
+        query={String(params.q ?? "")}
+      >
         <AdminSelect defaultValue={String(params.role ?? "")} label="Permissao" name="role">
           <option value="">Todas</option>
           {Object.values(UserRole).map((role) => (
@@ -155,6 +159,18 @@ export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
                       <p className="font-semibold">{user.name}</p>
                       <p className="text-xs text-app-muted">@{user.username}</p>
                       <p className="text-xs text-app-muted">{user.email}</p>
+                      {user.phone ? (
+                        <a
+                          className="mt-1 inline-flex text-xs font-medium text-emerald-400 hover:text-emerald-300"
+                          href={`https://wa.me/${user.phone}`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {formatBrazilianPhone(user.phone)}
+                        </a>
+                      ) : (
+                        <p className="text-xs text-app-muted">Telefone nao informado</p>
+                      )}
                     </div>
                   </AdminTd>
                   <AdminTd>

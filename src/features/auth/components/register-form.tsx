@@ -29,6 +29,7 @@ export function RegisterForm() {
       lastName: "",
       username: "",
       email: "",
+      phone: "",
       birthDate: "",
       password: "",
       confirmPassword: "",
@@ -85,6 +86,17 @@ export function RegisterForm() {
         label="E-mail"
         type="email"
         {...register("email")}
+      />
+      <AuthField
+        autoComplete="tel"
+        error={errors.phone?.message}
+        id="phone"
+        inputMode="tel"
+        label="WhatsApp"
+        maxLength={18}
+        placeholder="(21) 96469-6114"
+        type="tel"
+        {...register("phone")}
       />
       <AuthField
         error={errors.birthDate?.message}

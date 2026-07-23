@@ -239,6 +239,11 @@ export async function getAdminUsers(searchParams: SearchParams) {
                   contains: q,
                   mode: "insensitive"
                 }
+              },
+              {
+                phone: {
+                  contains: q
+                }
               }
             ]
           }
@@ -257,6 +262,7 @@ export async function getAdminUsers(searchParams: SearchParams) {
           name: true,
           username: true,
           email: true,
+          phone: true,
           role: true,
           status: true,
           xp: true,
@@ -1027,8 +1033,7 @@ export async function getAdminLeagueRankings(searchParams: SearchParams) {
           where: {
             OR: [
               {
-                championshipId:
-                  selectedChampionshipId ?? "00000000-0000-0000-0000-000000000000"
+                championshipId: selectedChampionshipId ?? "00000000-0000-0000-0000-000000000000"
               },
               { isUniversal: true }
             ]

@@ -16,6 +16,7 @@ export async function GET() {
       name: true,
       username: true,
       email: true,
+      phone: true,
       role: true,
       status: true,
       createdAt: true,
@@ -24,11 +25,12 @@ export async function GET() {
   });
 
   const csv = createCsv(
-    ["name", "username", "email", "role", "status", "created_at", "last_login_at"],
+    ["name", "username", "email", "phone", "role", "status", "created_at", "last_login_at"],
     users.map((user) => [
       user.name,
       user.username,
       user.email,
+      user.phone ?? "",
       user.role,
       user.status,
       formatDateTimeInSaoPaulo(user.createdAt, { seconds: true }),

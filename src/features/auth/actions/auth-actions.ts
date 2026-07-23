@@ -116,6 +116,7 @@ export async function registerUserAction(input: RegisterInput): Promise<AuthActi
         lastName: data.lastName,
         username: data.username,
         email: data.email,
+        phone: data.phone,
         birthDate: createBirthDate(data.birthDate),
         passwordHash,
         status: "ACTIVE",

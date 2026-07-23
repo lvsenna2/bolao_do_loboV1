@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizeBrazilianPhone } from "@/lib/phone";
+
 const passwordSchema = z
   .string()
   .min(8, "A senha deve ter pelo menos 8 caracteres.")
@@ -31,6 +33,14 @@ export const registerSchema = z
       .trim()
       .toLowerCase(),
     email: z.string().email("Informe um e-mail valido.").trim().toLowerCase(),
+    phone: z
+      .string()
+      .trim()
+      .refine(
+        (value) => normalizeBrazilianPhone(value) !== null,
+        "Informe um telefone valido com DDD."
+      )
+      .transform((value) => normalizeBrazilianPhone(value)!),
     birthDate: dateInputSchema,
     password: passwordSchema,
     confirmPassword: z.string().min(1, "Confirme sua senha."),

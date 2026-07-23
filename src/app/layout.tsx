@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 
 import { ThemeScript } from "@/components/layout/theme-script";
+import { WhatsappContactButton } from "@/components/layout/whatsapp-contact-button";
 import { Providers } from "./providers";
 
 const geist = Geist({
@@ -33,6 +34,7 @@ export default function RootLayout({
       </head>
       <body className={geist.variable}>
         <Providers>{children}</Providers>
+        <WhatsappContactButton />
       </body>
     </html>
   );
