@@ -63,6 +63,47 @@ describe("scoring service", () => {
     expect(score.jokerApplied).toBe(true);
   });
 
+  it("awards winner points when 0 x 1 predicts the same winner as a 1 x 2 result", () => {
+    const score = calculateGuessScore(
+      {
+        awayPrediction: 1,
+        homePrediction: 0,
+        joker: false,
+        prediction: "AWAY"
+      },
+      {
+        awayScore: 2,
+        homeScore: 1
+      },
+      scoring
+    );
+
+    expect(score.basePoints).toBe(3);
+    expect(score.bonusPoints).toBe(0);
+    expect(score.totalPoints).toBe(3);
+    expect(score.winnerHit).toBe(true);
+    expect(score.exactScore).toBe(false);
+  });
+
+  it("uses the numeric guess score when a legacy prediction field is inconsistent", () => {
+    const score = calculateGuessScore(
+      {
+        awayPrediction: 1,
+        homePrediction: 0,
+        joker: false,
+        prediction: "HOME"
+      },
+      {
+        awayScore: 2,
+        homeScore: 1
+      },
+      scoring
+    );
+
+    expect(score.totalPoints).toBe(3);
+    expect(score.winnerHit).toBe(true);
+  });
+
   it("returns zero points for a wrong winner and wrong score", () => {
     const score = calculateGuessScore(
       {

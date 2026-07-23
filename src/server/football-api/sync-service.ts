@@ -79,6 +79,16 @@ const matchScoreSyncSelect = Prisma.validator<Prisma.MatchSelect>()({
   homeScore: true,
   homologatedAt: true,
   id: true,
+  guesses: {
+    select: {
+      id: true
+    },
+    take: 1,
+    where: {
+      deletedAt: null,
+      score: null
+    }
+  },
   kickoff: true,
   lastSyncedAt: true,
   status: true
@@ -460,11 +470,8 @@ async function upsertFixtures(
     }
   }
 
-  let nextRoundNumber = Math.max(
-    roundsResult.data.length,
-    ...existingRounds.map((round) => round.number),
-    0
-  ) + 1;
+  let nextRoundNumber =
+    Math.max(roundsResult.data.length, ...existingRounds.map((round) => round.number), 0) + 1;
   for (const [roundName, kickoff] of firstKickoffByRound.entries()) {
     if (roundsByName.has(roundName)) continue;
 
@@ -805,6 +812,19 @@ function getFixtureScores(fixture: ExternalFootballFixture) {
   };
 }
 
+export function shouldProcessFixtureScores(input: {
+  guessCount: number;
+  hasMissingScore: boolean;
+  needsHomologation: boolean;
+  shouldHomologate: boolean;
+}) {
+  return (
+    input.shouldHomologate &&
+    input.guessCount > 0 &&
+    (input.needsHomologation || input.hasMissingScore)
+  );
+}
+
 async function updateMatchFromFixture(
   match: MatchForScoreSync,
   fixture: ExternalFootballFixture,
@@ -816,6 +836,12 @@ async function updateMatchFromFixture(
   const statusChanged = match.status !== status;
   const shouldHomologate = status === "FINISHED" && hasScore;
   const needsHomologation = shouldHomologate && (!match.homologatedAt || scoreChanged);
+  const needsScoreProcessing = shouldProcessFixtureScores({
+    guessCount: match._count.guesses,
+    hasMissingScore: match.guesses.length > 0,
+    needsHomologation,
+    shouldHomologate
+  });
   const updateData: Prisma.MatchUpdateInput = {
     apiStatus: fixture.statusShort,
     city: fixture.city,
@@ -866,7 +892,7 @@ async function updateMatchFromFixture(
     }
   }
 
-  if (!needsHomologation || match._count.guesses === 0) {
+  if (!needsScoreProcessing) {
     return;
   }
 
@@ -877,6 +903,62 @@ async function updateMatchFromFixture(
   summary.processedGuesses += scoringSummary.processedGuesses;
   summary.rankingRows += rankingSummary.leagueRows;
   summary.xpEvents += xpSummary.resultHitEvents + xpSummary.exactScoreEvents;
+}
+
+async function backfillMissingCompetitionScores(
+  config: FootballCompetitionConfig,
+  summary: ScoreSyncCounter
+) {
+  const matches = await prisma.match.findMany({
+    orderBy: {
+      kickoff: "asc"
+    },
+    select: {
+      id: true
+    },
+    take: 100,
+    where: {
+      awayScore: {
+        not: null
+      },
+      deletedAt: null,
+      guesses: {
+        some: {
+          deletedAt: null,
+          score: null
+        }
+      },
+      homeScore: {
+        not: null
+      },
+      homologatedAt: {
+        not: null
+      },
+      round: {
+        leagueId: {
+          not: null
+        },
+        season: {
+          championship: {
+            apiId: config.leagueId,
+            provider: PROVIDER
+          },
+          year: config.season
+        }
+      },
+      status: "FINISHED"
+    }
+  });
+
+  for (const match of matches) {
+    const scoringSummary = await processMatchScores(match.id);
+    const xpSummary = await grantMatchResultXp(match.id);
+    const rankingSummary = await recalculateRankingsForMatch(match.id);
+
+    summary.processedGuesses += scoringSummary.processedGuesses;
+    summary.rankingRows += rankingSummary.leagueRows;
+    summary.xpEvents += xpSummary.resultHitEvents + xpSummary.exactScoreEvents;
+  }
 }
 
 export async function applyFootballFixture(
@@ -906,6 +988,7 @@ export async function syncFootballCompetitionScores(
 
   try {
     const now = serverNow();
+    await backfillMissingCompetitionScores(config, summary);
     const localCandidates = await prisma.match.findMany({
       orderBy: {
         kickoff: "asc"

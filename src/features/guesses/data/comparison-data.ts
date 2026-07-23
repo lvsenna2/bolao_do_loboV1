@@ -7,6 +7,7 @@ import type { GuessDataResult } from "../types/guess-action-result";
 type SearchParams = Record<string, string | string[] | undefined>;
 
 type TeamView = {
+  apiId: number | null;
   id: string;
   logo: string | null;
   name: string;
@@ -69,12 +70,23 @@ export type GuessComparisonMatchView = {
   status: MatchStatus;
 };
 
+export type GuessComparisonRoundView = {
+  championshipName: string;
+  id: string;
+  label: string;
+  leagueId: string;
+  leagueName: string;
+  matches: GuessComparisonMatchView[];
+  number: number;
+  startsAt: string;
+};
+
 export type GuessComparisonData = {
   leagues: Array<{
     id: string;
     name: string;
   }>;
-  matches: GuessComparisonMatchView[];
+  rounds: GuessComparisonRoundView[];
   selectedLeagueId: string;
   stats: {
     hiddenMatches: number;
@@ -83,6 +95,7 @@ export type GuessComparisonData = {
 };
 
 const teamSelect = {
+  apiId: true,
   id: true,
   logo: true,
   name: true,
@@ -130,8 +143,13 @@ function mapGuess(guess: ComparisonGuessRecord): ComparisonGuessView {
   };
 }
 
-function canShowOtherGuesses(match: { kickoff: Date; status: MatchStatus }, now: Date) {
-  return match.kickoff <= now || match.status !== "SCHEDULED";
+export function canShowOtherGuesses(match: { kickoff: Date; status: MatchStatus }, now: Date) {
+  return (
+    match.kickoff <= now ||
+    match.status === "LIVE" ||
+    match.status === "HALFTIME" ||
+    match.status === "FINISHED"
+  );
 }
 
 export async function getGuessComparisonData(
@@ -140,7 +158,7 @@ export async function getGuessComparisonData(
 ): Promise<GuessDataResult<GuessComparisonData>> {
   const empty: GuessComparisonData = {
     leagues: [],
-    matches: [],
+    rounds: [],
     selectedLeagueId: "",
     stats: {
       hiddenMatches: 0,
@@ -185,96 +203,118 @@ export async function getGuessComparisonData(
     }
 
     const now = serverNow();
-    const matches = await prisma.match.findMany({
-      orderBy: {
-        kickoff: "desc"
-      },
+    const roundRecords = await prisma.round.findMany({
+      orderBy: [{ startsAt: "desc" }, { number: "desc" }],
       select: {
-        awayTeam: {
-          select: teamSelect
+        id: true,
+        league: {
+          select: {
+            championshipId: true,
+            id: true,
+            name: true
+          }
         },
-        guesses: {
+        matches: {
           orderBy: {
-            submittedAt: "asc"
+            kickoff: "asc"
           },
           select: {
-            awayPrediction: true,
-            homePrediction: true,
-            id: true,
-            joker: true,
-            prediction: true,
-            score: {
-              select: {
-                exactScore: true,
-                totalPoints: true,
-                winnerHit: true
-              }
+            awayTeam: {
+              select: teamSelect
             },
-            submittedAt: true,
-            user: {
+            guesses: {
+              orderBy: {
+                submittedAt: "asc"
+              },
               select: {
-                avatarUrl: true,
+                awayPrediction: true,
+                homePrediction: true,
                 id: true,
-                name: true,
-                username: true
+                joker: true,
+                prediction: true,
+                score: {
+                  select: {
+                    exactScore: true,
+                    totalPoints: true,
+                    winnerHit: true
+                  }
+                },
+                submittedAt: true,
+                user: {
+                  select: {
+                    avatarUrl: true,
+                    id: true,
+                    name: true,
+                    username: true
+                  }
+                },
+                userId: true
+              },
+              where: {
+                deletedAt: null,
+                OR: [{ leagueId: selectedLeagueId }, { leagueId: null }],
+                user: {
+                  memberships: {
+                    some: {
+                      leagueId: selectedLeagueId,
+                      status: "ACTIVE"
+                    }
+                  }
+                }
               }
             },
-            userId: true
+            homeTeam: {
+              select: teamSelect
+            },
+            id: true,
+            kickoff: true,
+            status: true
           },
           where: {
             deletedAt: null,
-            leagueId: selectedLeagueId,
-            user: {
-              memberships: {
-                some: {
-                  leagueId: selectedLeagueId,
-                  status: "ACTIVE"
-                }
+            guesses: {
+              some: {
+                deletedAt: null,
+                OR: [{ leagueId: selectedLeagueId }, { leagueId: null }]
               }
             }
           }
         },
-        homeTeam: {
-          select: teamSelect
-        },
-        id: true,
-        kickoff: true,
-        round: {
+        name: true,
+        number: true,
+        season: {
           select: {
-            league: {
+            championship: {
               select: {
-                championshipId: true,
+                id: true,
                 name: true
               }
             },
             name: true,
-            number: true,
-            season: {
-              select: {
-                championship: {
-                  select: {
-                    id: true,
-                    name: true
-                  }
-                },
-                name: true,
-                year: true
-              }
+            year: true
+          }
+        },
+        startsAt: true
+      },
+      take: 100,
+      where: {
+        leagueId: selectedLeagueId,
+        league: {
+          deletedAt: null,
+          members: {
+            some: {
+              status: "ACTIVE",
+              userId
             }
           }
         },
-        status: true
-      },
-      take: 80,
-      where: {
-        deletedAt: null,
-        round: {
-          leagueId: selectedLeagueId,
-          league: {
-            members: {
+        matches: {
+          some: {
+            deletedAt: null,
+            guesses: {
               some: {
-                status: "ACTIVE",
-                userId
+                deletedAt: null,
+                OR: [{ leagueId: selectedLeagueId }, { leagueId: null }]
               }
             }
           }
@@ -282,39 +322,62 @@ export async function getGuessComparisonData(
       }
     });
 
-    const consistentMatches = matches.filter(
-      (match) => match.round.league?.championshipId === match.round.season.championship.id
-    );
-    const mappedMatches = consistentMatches.map((match) => {
-      const isVisible = canShowOtherGuesses(match, now);
-      const ownGuess = match.guesses.find((guess) => guess.userId === userId) ?? null;
-      const guesses = isVisible
-        ? match.guesses.map(mapGuess)
-        : match.guesses.filter((guess) => guess.userId === userId).map(mapGuess);
+    const rounds = roundRecords
+      .filter(
+        (round) =>
+          round.league?.championshipId === round.season.championship.id && round.matches.length > 0
+      )
+      .map((round): GuessComparisonRoundView => {
+        const league = round.league;
 
-      return {
-        awayTeam: match.awayTeam,
-        championshipName: match.round.season.championship.name,
-        guesses,
-        hiddenGuessCount: isVisible
-          ? 0
-          : match.guesses.filter((guess) => guess.userId !== userId).length,
-        homeTeam: match.homeTeam,
-        id: match.id,
-        isVisible,
-        kickoff: match.kickoff.toISOString(),
-        leagueName: match.round.league?.name ?? "Liga",
-        ownGuess: ownGuess ? mapGuess(ownGuess) : null,
-        roundLabel: getRoundLabel(match.round),
-        status: match.status
-      };
-    });
+        if (!league) {
+          throw new Error("Rodada sem liga.");
+        }
+
+        const roundLabel = getRoundLabel(round);
+        const matches = round.matches.map((match): GuessComparisonMatchView => {
+          const isVisible = canShowOtherGuesses(match, now);
+          const ownGuess = match.guesses.find((guess) => guess.userId === userId) ?? null;
+          const guesses = isVisible
+            ? match.guesses.map(mapGuess)
+            : match.guesses.filter((guess) => guess.userId === userId).map(mapGuess);
+
+          return {
+            awayTeam: match.awayTeam,
+            championshipName: round.season.championship.name,
+            guesses,
+            hiddenGuessCount: isVisible
+              ? 0
+              : match.guesses.filter((guess) => guess.userId !== userId).length,
+            homeTeam: match.homeTeam,
+            id: match.id,
+            isVisible,
+            kickoff: match.kickoff.toISOString(),
+            leagueName: league.name,
+            ownGuess: ownGuess ? mapGuess(ownGuess) : null,
+            roundLabel,
+            status: match.status
+          };
+        });
+
+        return {
+          championshipName: round.season.championship.name,
+          id: round.id,
+          label: roundLabel,
+          leagueId: league.id,
+          leagueName: league.name,
+          matches,
+          number: round.number,
+          startsAt: round.startsAt.toISOString()
+        };
+      });
+    const mappedMatches = rounds.flatMap((round) => round.matches);
 
     return {
       ok: true,
       data: {
         leagues,
-        matches: mappedMatches,
+        rounds,
         selectedLeagueId,
         stats: {
           hiddenMatches: mappedMatches.filter((match) => !match.isVisible).length,

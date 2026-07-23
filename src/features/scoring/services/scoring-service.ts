@@ -57,7 +57,11 @@ export function calculateGuessScore(
   scoring: ScoringDefaults
 ): CalculatedScore {
   const officialPrediction = getOfficialPrediction(official.homeScore, official.awayScore);
-  const winnerHit = guess.prediction === officialPrediction;
+  const guessedPrediction =
+    guess.homePrediction !== null && guess.awayPrediction !== null
+      ? getOfficialPrediction(guess.homePrediction, guess.awayPrediction)
+      : guess.prediction;
+  const winnerHit = guessedPrediction === officialPrediction;
   const exactScore =
     guess.homePrediction === official.homeScore && guess.awayPrediction === official.awayScore;
   const basePoints = winnerHit ? scoring.winnerHit : 0;

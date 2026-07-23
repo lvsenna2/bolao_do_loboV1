@@ -1,15 +1,12 @@
-import { EyeOff, GitCompareArrows, Trophy } from "lucide-react";
+import { GitCompareArrows } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
-import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormLoadingButton } from "@/components/ui/loading-button";
+import { ComparisonBoard } from "@/features/guesses/components/comparison-board";
 import { getGuessComparisonData } from "@/features/guesses/data/comparison-data";
-import type { ComparisonGuessView } from "@/features/guesses/data/comparison-data";
 import { UserAlert } from "@/features/user/components/user-alert";
-import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { requireUser } from "@/server/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -18,33 +15,11 @@ type CompareGuessesPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-function formatDate(date: string) {
-  return formatDateTimeInSaoPaulo(date);
-}
-
-function getScoreLabel(guess: ComparisonGuessView) {
-  if (guess.homePrediction === null || guess.awayPrediction === null) {
-    return "Sem placar";
-  }
-
-  return `${guess.homePrediction} x ${guess.awayPrediction}`;
-}
-
-function getPredictionLabel(prediction: ComparisonGuessView["prediction"]) {
-  const labels = {
-    AWAY: "Visitante",
-    DRAW: "Empate",
-    HOME: "Mandante"
-  } satisfies Record<ComparisonGuessView["prediction"], string>;
-
-  return labels[prediction];
-}
-
 export default async function CompareGuessesPage({ searchParams }: CompareGuessesPageProps) {
   const params = await searchParams;
   const user = await requireUser();
   const result = await getGuessComparisonData(user.id, params);
-  const { leagues, matches, selectedLeagueId, stats } = result.data;
+  const { leagues, rounds, selectedLeagueId } = result.data;
 
   return (
     <PageShell
@@ -98,102 +73,8 @@ export default async function CompareGuessesPage({ searchParams }: CompareGuesse
         </CardContent>
       </Card>
 
-      <div className="mb-5 grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardContent className="flex items-center justify-between p-5">
-            <span className="text-sm text-app-muted">Partidas liberadas</span>
-            <strong className="text-2xl text-app-foreground">{stats.visibleMatches}</strong>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center justify-between p-5">
-            <span className="text-sm text-app-muted">Aguardando inicio</span>
-            <strong className="text-2xl text-app-foreground">{stats.hiddenMatches}</strong>
-          </CardContent>
-        </Card>
-      </div>
-
-      {matches.length > 0 ? (
-        <div className="grid gap-5">
-          {matches.map((match) => (
-            <Card key={match.id}>
-              <CardHeader>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <CardTitle>
-                      {match.homeTeam.shortName || match.homeTeam.name} x{" "}
-                      {match.awayTeam.shortName || match.awayTeam.name}
-                    </CardTitle>
-                    <CardDescription>
-                      {match.championshipName} | {match.roundLabel} | {formatDate(match.kickoff)}
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge>{match.status}</Badge>
-                    <Badge tone={match.isVisible ? "success" : "warning"}>
-                      {match.isVisible ? "Comparacao liberada" : "Oculto ate iniciar"}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {!match.isVisible && match.hiddenGuessCount > 0 ? (
-                  <div className="mb-4 flex items-center gap-2 rounded-control border border-brand-gold/30 bg-brand-gold/10 p-3 text-sm text-app-foreground">
-                    <EyeOff aria-hidden className="h-4 w-4 text-brand-gold" />
-                    {match.hiddenGuessCount} palpites de outros usuarios serao exibidos apos o
-                    inicio da partida.
-                  </div>
-                ) : null}
-
-                {match.guesses.length > 0 ? (
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {match.guesses.map((guess) => (
-                      <article
-                        className="rounded-control border border-app-border bg-app-background p-3"
-                        key={guess.id}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar name={guess.user.name} src={guess.user.avatarUrl} />
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-app-foreground">
-                              {guess.user.name}
-                            </p>
-                            <p className="text-xs text-app-muted">@{guess.user.username}</p>
-                          </div>
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <span className="text-xl font-bold text-app-foreground">
-                            {getScoreLabel(guess)}
-                          </span>
-                          <Badge tone="info">{getPredictionLabel(guess.prediction)}</Badge>
-                          {guess.joker ? <Badge tone="warning">Curinga</Badge> : null}
-                          {guess.score ? (
-                            <Badge tone={guess.score.totalPoints > 0 ? "success" : "neutral"}>
-                              {guess.score.totalPoints} pts
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <p className="mt-2 text-xs text-app-muted">
-                          Enviado em {formatDate(guess.submittedAt)}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState
-                    description={
-                      match.ownGuess
-                        ? "Seu palpite aparecera aqui quando a comparacao for liberada."
-                        : "Nenhum palpite registrado para esta partida."
-                    }
-                    icon={Trophy}
-                    title="Sem palpites visiveis"
-                  />
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      {rounds.length > 0 ? (
+        <ComparisonBoard initialRounds={rounds} />
       ) : (
         <EmptyState
           description="Nao ha partidas com palpites para a liga selecionada."
