@@ -326,7 +326,7 @@ function decisionNeedsWork(decision: FixtureSyncDecision) {
   );
 }
 
-function applyDetailMode(
+export function applyDetailMode(
   decision: FixtureSyncDecision,
   mode: FootballAutomationOptions["detailMode"]
 ) {
@@ -778,12 +778,8 @@ export async function runFootballAutomation(
       try {
         const applied = await applyFootballFixture(config, fixture);
         if (applied.matchIds.length === 0) continue;
-        const decision = decisionForCandidate(
-          candidate,
-          usage.dailyRemaining,
-          now,
-          Boolean(options.matchId)
-        );
+        const decision = decisions.get(fixture.apiId);
+        if (!decision) continue;
         const historyAllowed = decision.history && historyBudget > 0;
         if (historyAllowed) historyBudget -= 1;
         await syncDetails({
