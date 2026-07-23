@@ -8,6 +8,7 @@ export type LeaguePaymentIntent = {
   levelName: string;
   minimumAmountLabel: string;
   originalAmountLabel: string;
+  paymentId: string;
   pixCode: string;
   qrCodeDataUri: string;
   requiresPayment: true;

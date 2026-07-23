@@ -229,6 +229,7 @@ function toPaymentIntent(
     levelName: pricing.level.name,
     minimumAmountLabel: formatMoney(pricing.minimumEntryFee),
     originalAmountLabel: formatMoney(pricing.originalAmount),
+    paymentId: payment.id,
     expiresAtLabel: payment.expiresAt
       ? formatDateTimeInSaoPaulo(payment.expiresAt)
       : "Consulte o Mercado Pago",

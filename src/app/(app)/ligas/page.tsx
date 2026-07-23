@@ -161,6 +161,7 @@ export default async function LeaguesPage() {
                         amountLabel={formatCurrency(pendingPixPayment.amount)}
                         expiresAtLabel={formatDate(pendingPixPayment.expiresAt)}
                         leagueName={membership.league.name}
+                        paymentId={pendingPixPayment.id}
                         pixCode={pendingPixPayment.qrCode}
                         qrCodeDataUri={`data:image/png;base64,${pendingPixPayment.qrCodeBase64}`}
                         ticketUrl={pendingPixPayment.ticketUrl}

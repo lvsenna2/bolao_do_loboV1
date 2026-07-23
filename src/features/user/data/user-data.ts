@@ -742,6 +742,7 @@ export async function getUserLeagues(userId: string) {
                   amount: true,
                   expiresAt: true,
                   gateway: true,
+                  id: true,
                   qrCode: true,
                   qrCodeBase64: true,
                   status: true,

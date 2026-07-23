@@ -1,7 +1,10 @@
 "use client";
 
-import { Check, Clipboard, Clock3, ExternalLink, QrCode, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { Check, Clipboard, Clock3, ExternalLink, Loader2, QrCode, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { checkMercadoPagoPaymentAction } from "@/features/payments/actions/payment-actions";
 
 type PixPaymentCardProps = {
   amountLabel: string;
@@ -13,6 +16,7 @@ type PixPaymentCardProps = {
   levelName?: string;
   minimumAmountLabel?: string;
   originalAmountLabel?: string;
+  paymentId: string;
   pixCode: string;
   qrCodeDataUri: string;
   ticketUrl?: string | null;
@@ -29,12 +33,45 @@ export function PixPaymentCard({
   levelName,
   minimumAmountLabel,
   originalAmountLabel,
+  paymentId,
   pixCode,
   qrCodeDataUri,
   ticketUrl,
   transactionId
 }: PixPaymentCardProps) {
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const [paymentApproved, setPaymentApproved] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const checkingRef = useRef(false);
+
+  const checkPayment = useCallback(async () => {
+    if (checkingRef.current || paymentApproved) {
+      return;
+    }
+
+    checkingRef.current = true;
+    setIsChecking(true);
+
+    try {
+      const result = await checkMercadoPagoPaymentAction(paymentId);
+
+      if (result.ok && result.status === "APPROVED") {
+        setPaymentApproved(true);
+        router.refresh();
+      }
+    } finally {
+      checkingRef.current = false;
+      setIsChecking(false);
+    }
+  }, [paymentApproved, paymentId, router]);
+
+  useEffect(() => {
+    void checkPayment();
+    const interval = window.setInterval(() => void checkPayment(), 10_000);
+
+    return () => window.clearInterval(interval);
+  }, [checkPayment]);
 
   async function copyPixCode() {
     await navigator.clipboard.writeText(pixCode);
@@ -49,8 +86,12 @@ export function PixPaymentCard({
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center">
           <div className="flex-1">
             <span className="inline-flex items-center gap-2 rounded-full border border-brand-gold/30 bg-brand-gold/15 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-brand-gold">
-              <Clock3 aria-hidden className="h-3.5 w-3.5" />
-              Aguardando pagamento
+              {paymentApproved ? (
+                <Check aria-hidden className="h-3.5 w-3.5" />
+              ) : (
+                <Clock3 aria-hidden className="h-3.5 w-3.5" />
+              )}
+              {paymentApproved ? "Pagamento aprovado" : "Aguardando pagamento"}
             </span>
             <h3 className="mt-4 text-xl font-bold text-white">{leagueName}</h3>
             <p className="mt-2 max-w-xl text-sm leading-6 text-amber-50/80">
@@ -150,6 +191,23 @@ export function PixPaymentCard({
               Abrir no Mercado Pago
             </a>
           ) : null}
+          <button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-button border border-brand-gold/40 px-4 text-sm font-bold text-brand-gold transition hover:bg-brand-gold/10 disabled:cursor-wait disabled:opacity-70"
+            disabled={isChecking || paymentApproved}
+            onClick={() => void checkPayment()}
+            type="button"
+          >
+            {isChecking ? (
+              <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+            ) : (
+              <ShieldCheck aria-hidden className="h-4 w-4" />
+            )}
+            {paymentApproved
+              ? "Entrada liberada"
+              : isChecking
+                ? "Verificando..."
+                : "Verificar pagamento"}
+          </button>
         </div>
 
         <p className="mt-3 flex items-center gap-2 text-xs text-amber-100/70">
