@@ -38,7 +38,13 @@ async function handler(request: Request) {
   }
 
   const result = await runFootballAutomation(
-    request.headers.get("upstash-signature") ? "qstash" : "cron"
+    request.headers.get("upstash-signature") ? "qstash" : "cron",
+    {
+      detailMode: "lineups-history",
+      fixtureLimit: 2,
+      historyBudget: 1,
+      includeCatalog: false
+    }
   );
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }

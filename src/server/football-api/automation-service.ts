@@ -63,6 +63,7 @@ export type AutomationSummary = {
 
 export type FootballAutomationOptions = {
   competitionKey?: FootballCompetitionKey;
+  detailMode?: "full" | "lineups-history";
   fixtureLimit?: number;
   historyBudget?: number;
   includeCatalog?: boolean;
@@ -317,12 +318,26 @@ async function loadCandidates(
 function decisionNeedsWork(decision: FixtureSyncDecision) {
   return Boolean(
     decision.fixture ||
-      decision.events ||
-      decision.history ||
-      decision.lineups ||
-      decision.players ||
-      decision.statistics
+    decision.events ||
+    decision.history ||
+    decision.lineups ||
+    decision.players ||
+    decision.statistics
   );
+}
+
+function applyDetailMode(
+  decision: FixtureSyncDecision,
+  mode: FootballAutomationOptions["detailMode"]
+) {
+  if (mode !== "lineups-history") return decision;
+
+  return {
+    ...decision,
+    events: false,
+    players: false,
+    statistics: false
+  };
 }
 
 function decisionForCandidate(
@@ -703,7 +718,10 @@ export async function runFootballAutomation(
     const decisions = new Map(
       candidates.map((candidate) => [
         candidate.apiId as number,
-        decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId))
+        applyDetailMode(
+          decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId)),
+          options.detailMode
+        )
       ])
     );
     const fixtures = new Map<number, ExternalFootballFixture>();
@@ -715,31 +733,35 @@ export async function runFootballAutomation(
     );
 
     if (fixtureLimit > 0 && liveCandidates.length > 0) {
+      const selectedLiveIds = new Set(
+        liveCandidates.slice(0, fixtureLimit).map((candidate) => candidate.apiId as number)
+      );
       const liveResult = await fetchApiFootballLiveFixtures(
         activeConfigs.map((config) => config.leagueId)
       );
       summary.callsUsed += liveResult.callsUsed;
-      if (liveResult.ok) liveResult.data.forEach((fixture) => fixtures.set(fixture.apiId, fixture));
-      else summary.errors.push(liveResult.message);
+      if (liveResult.ok) {
+        liveResult.data
+          .filter((fixture) => selectedLiveIds.has(fixture.apiId))
+          .forEach((fixture) => fixtures.set(fixture.apiId, fixture));
+      } else summary.errors.push(liveResult.message);
     }
 
-    const dueCandidates = candidates
-      .filter((candidate) => {
-        const decision = decisions.get(candidate.apiId as number);
-        const missedLive =
-          ["LIVE", "HALFTIME"].includes(candidate.status) &&
-          !fixtures.has(candidate.apiId as number) &&
-          (!candidate.liveSyncedAt ||
-            now.getTime() - candidate.liveSyncedAt.getTime() >= 5 * 60_000);
-        return (
-          (decision?.fixture && !["LIVE", "HALFTIME"].includes(candidate.status)) ||
-          (decision ? decisionNeedsWork(decision) : false) ||
-          missedLive
-        );
-      });
+    const dueCandidates = candidates.filter((candidate) => {
+      const decision = decisions.get(candidate.apiId as number);
+      const missedLive =
+        ["LIVE", "HALFTIME"].includes(candidate.status) &&
+        !fixtures.has(candidate.apiId as number) &&
+        (!candidate.liveSyncedAt || now.getTime() - candidate.liveSyncedAt.getTime() >= 5 * 60_000);
+      return (
+        (decision?.fixture && !["LIVE", "HALFTIME"].includes(candidate.status)) ||
+        (decision ? decisionNeedsWork(decision) : false) ||
+        missedLive
+      );
+    });
     const dueIds = dueCandidates
       .filter((candidate) => !fixtures.has(candidate.apiId as number))
-      .slice(0, fixtureLimit)
+      .slice(0, Math.max(0, fixtureLimit - fixtures.size))
       .map((candidate) => candidate.apiId as number);
 
     for (const fixtureIds of chunk(dueIds, 20)) {
@@ -802,7 +824,7 @@ export async function runFootballAutomation(
       }
     }
 
-    if (trigger !== FOOTBALL_MANUAL_TRIGGER) {
+    if (trigger !== FOOTBALL_MANUAL_TRIGGER && options.includeCatalog !== false) {
       await maybeSyncOneCatalog(summary, usage.dailyRemaining);
     }
 
