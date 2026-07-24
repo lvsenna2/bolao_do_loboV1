@@ -8,6 +8,7 @@ import {
 } from "@/features/scoring/data/scoring-settings";
 import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
+import { isMatchAcceptingGuesses, isRoundAcceptingGuesses } from "../guess-availability";
 import type { GuessDataResult } from "../types/guess-action-result";
 
 export { getPointsPreview, getScoringDefaults, type ScoringDefaults };
@@ -184,18 +185,14 @@ function getRoundLabel(round: {
 
 function canEditMatch(
   kickoff: Date,
-  roundStartsAt: Date,
   roundEndsAt: Date,
   roundStatus: RoundStatus,
   matchStatus: MatchStatus,
   now: Date
 ) {
   return (
-    kickoff > now &&
-    roundStartsAt <= now &&
-    roundEndsAt >= now &&
-    roundStatus === "OPEN" &&
-    matchStatus === "SCHEDULED"
+    isRoundAcceptingGuesses(roundStatus, roundEndsAt, now) &&
+    isMatchAcceptingGuesses(matchStatus, kickoff, now)
   );
 }
 
@@ -307,9 +304,6 @@ export async function getGuessesPageData(
               deletedAt: null
             }
           },
-          startsAt: {
-            lte: now
-          },
           status: {
             in: ["OPEN", "LIVE"]
           }
@@ -338,7 +332,6 @@ export async function getGuessesPageData(
             awayTeam: match.awayTeam,
             canEdit: canEditMatch(
               match.kickoff,
-              round.startsAt,
               round.endsAt,
               round.status,
               match.status,

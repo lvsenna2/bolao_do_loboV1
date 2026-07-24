@@ -1027,9 +1027,6 @@ async function getGuessReminderRecipients() {
                   status: "SCHEDULED"
                 }
               },
-              startsAt: {
-                lte: now
-              },
               status: "OPEN"
             }
           }
@@ -1059,9 +1056,6 @@ async function getGuessReminderRecipients() {
                 },
                 status: "SCHEDULED"
               }
-            },
-            startsAt: {
-              lte: now
             },
             status: "OPEN"
           }
@@ -1910,6 +1904,15 @@ async function propagateBaseRoundToOpenLeagueCopies(
   };
 }
 
+const OPEN_ROUND_FALLBACK_MS = 7 * 86_400_000;
+
+function getOpenRoundUpdate(endsAt: Date, now: Date) {
+  return {
+    endsAt: endsAt <= now ? new Date(now.getTime() + OPEN_ROUND_FALLBACK_MS) : endsAt,
+    status: "OPEN" as const
+  };
+}
+
 export async function updateRoundStatusAction(formData: FormData): Promise<AdminActionResult> {
   const admin = await requireAdmin();
   const parsedInput = updateRoundStatusSchema.safeParse(formDataToObject(formData));
@@ -1924,6 +1927,7 @@ export async function updateRoundStatusAction(formData: FormData): Promise<Admin
 
   const currentRound = await prisma.round.findUnique({
     select: {
+      endsAt: true,
       id: true,
       leagueId: true,
       number: true,
@@ -1947,11 +1951,15 @@ export async function updateRoundStatusAction(formData: FormData): Promise<Admin
     };
   }
 
+  const now = serverNow();
+  const updateData =
+    parsedInput.data.status === "OPEN"
+      ? getOpenRoundUpdate(currentRound.endsAt, now)
+      : { status: parsedInput.data.status };
   const round = await prisma.round.update({
-    data: {
-      status: parsedInput.data.status
-    },
+    data: updateData,
     select: {
+      endsAt: true,
       id: true,
       status: true
     },
@@ -1959,9 +1967,7 @@ export async function updateRoundStatusAction(formData: FormData): Promise<Admin
       id: currentRound.id
     }
   });
-  const propagation = await propagateBaseRoundToOpenLeagueCopies(currentRound, {
-    status: parsedInput.data.status
-  });
+  const propagation = await propagateBaseRoundToOpenLeagueCopies(currentRound, updateData);
 
   await createAuditLog(admin.id, "admin.round.status_updated", "Round", round.id, currentRound, {
     ...round,
@@ -2018,14 +2024,10 @@ export async function openRoundAction(formData: FormData): Promise<AdminActionRe
   }
 
   const now = serverNow();
-  const fallbackEnd = new Date(now.getTime() + 7 * 86_400_000);
+  const updateData = getOpenRoundUpdate(currentRound.endsAt, now);
 
   const round = await prisma.round.update({
-    data: {
-      endsAt: currentRound.endsAt <= now ? fallbackEnd : currentRound.endsAt,
-      startsAt: currentRound.startsAt > now ? now : currentRound.startsAt,
-      status: "OPEN"
-    },
+    data: updateData,
     select: {
       endsAt: true,
       id: true,
@@ -2036,11 +2038,7 @@ export async function openRoundAction(formData: FormData): Promise<AdminActionRe
       id: currentRound.id
     }
   });
-  const propagation = await propagateBaseRoundToOpenLeagueCopies(currentRound, {
-    endsAt: round.endsAt,
-    startsAt: round.startsAt,
-    status: "OPEN"
-  });
+  const propagation = await propagateBaseRoundToOpenLeagueCopies(currentRound, updateData);
 
   await createAuditLog(admin.id, "admin.round.opened", "Round", round.id, currentRound, {
     ...round,

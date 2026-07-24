@@ -9,6 +9,7 @@ import { prisma } from "@/server/db";
 import { grantGuessSubmittedXp } from "@/features/xp/services/xp-service";
 import { serverNow } from "@/lib/date-time";
 import { getPointsPreview, getScoringDefaults } from "../data/guess-data";
+import { isMatchAcceptingGuesses, isRoundAcceptingGuesses } from "../guess-availability";
 import {
   deleteGuessSchema,
   upsertGuessSchema,
@@ -29,7 +30,6 @@ type EditableMatch = {
     season: {
       championshipId: string;
     };
-    startsAt: Date;
     status: string;
   };
   status: string;
@@ -48,19 +48,17 @@ function validateEditableMatch(match: EditableMatch | null, now = serverNow()) {
     return "Partida nao encontrada.";
   }
 
-  if (match.status !== "SCHEDULED") {
-    return "Esta partida nao esta aberta para palpites.";
-  }
-
-  if (match.kickoff <= now) {
-    return "O prazo para esta partida foi encerrado.";
+  if (!isMatchAcceptingGuesses(match.status, match.kickoff, now)) {
+    return match.kickoff <= now
+      ? "O prazo para esta partida foi encerrado."
+      : "Esta partida nao esta aberta para palpites.";
   }
 
   if (match.round.status !== "OPEN") {
     return "A rodada desta partida nao esta aberta.";
   }
 
-  if (match.round.startsAt > now || match.round.endsAt < now) {
+  if (!isRoundAcceptingGuesses(match.round.status, match.round.endsAt, now)) {
     return "A rodada nao esta dentro do periodo de envio.";
   }
 
@@ -157,7 +155,6 @@ export async function upsertGuessAction(
                 championshipId: true
               }
             },
-            startsAt: true,
             status: true
           }
         },

@@ -323,9 +323,6 @@ export async function getUserHomeData(userId: string) {
             leagueId: {
               in: activeLeagueIds
             },
-            startsAt: {
-              lte: now
-            },
             status: "OPEN"
           },
           status: "SCHEDULED"
