@@ -109,6 +109,35 @@ export async function getSpecialRoundDetail(id: string, userId?: string) {
   });
 }
 
+export function getSpecialRoundPredictionReview(id: string, userId: string) {
+  return prisma.specialRoundEntry.findUnique({
+    include: {
+      predictions: true,
+      specialRound: {
+        include: {
+          markets: {
+            include: {
+              options: {
+                orderBy: { sortOrder: "asc" },
+                where: { active: true }
+              },
+              result: true
+            },
+            orderBy: { sortOrder: "asc" },
+            where: { active: true }
+          }
+        }
+      }
+    },
+    where: {
+      specialRoundId_userId: {
+        specialRoundId: id,
+        userId
+      }
+    }
+  });
+}
+
 export function getAdminSpecialRoundDetail(id: string) {
   return prisma.specialRound.findUnique({
     include: {

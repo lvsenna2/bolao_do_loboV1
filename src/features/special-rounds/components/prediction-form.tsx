@@ -2,6 +2,8 @@
 
 import type { SpecialRoundAnswerType } from "@prisma/client";
 import { Save } from "lucide-react";
+import type { Route } from "next";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -27,6 +29,7 @@ export function SpecialRoundPredictionForm({
   markets: Market[];
   specialRoundId: string;
 }) {
+  const router = useRouter();
   const [answers, setAnswers] = useState<Record<string, SpecialRoundAnswer>>(initialAnswers);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -39,6 +42,10 @@ export function SpecialRoundPredictionForm({
     startTransition(async () => {
       const result = await submitSpecialRoundPredictionsAction({ answers, specialRoundId });
       setMessage(result.message);
+      if (result.ok) {
+        router.push(`/rodadas-especiais/${specialRoundId}/meu-palpite` as Route);
+        router.refresh();
+      }
     });
   }
 

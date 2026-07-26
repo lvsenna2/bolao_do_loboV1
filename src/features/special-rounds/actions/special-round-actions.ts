@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
+import { runFootballAutomation } from "@/server/football-api/automation-service";
 import { getMercadoPagoPayment, refundMercadoPagoPayment } from "@/server/mercado-pago/client";
 import { createSpecialRoundPix, reconcileSpecialRoundPayment } from "../services/payment-service";
 import {
@@ -41,6 +42,7 @@ function revalidateSpecialRounds(id?: string) {
   revalidatePath("/notificacoes");
   if (id) {
     revalidatePath(`/rodadas-especiais/${id}`);
+    revalidatePath(`/rodadas-especiais/${id}/meu-palpite`);
     revalidatePath(`/admin/rodadas-especiais/${id}`);
   }
 }
@@ -916,7 +918,7 @@ export async function homologateSpecialRoundFromCatalogAction(
       });
       await tx.specialRoundAuditLog.create({
         data: {
-          action: "special_round.homologated_from_catalog",
+          action: "special_round.homologated_from_match_data",
           actorId: admin.id,
           entity: "SpecialRound",
           entityId: round.id,
@@ -954,6 +956,90 @@ export async function homologateSpecialRoundFromCatalogAction(
       ok: false
     };
   }
+}
+
+export async function syncAndHomologateSpecialRoundAction(
+  specialRoundId: string
+): Promise<SpecialRoundActionResult<{ missing?: string[] }>> {
+  const admin = await requireAdmin();
+  const id = idSchema.safeParse(specialRoundId);
+  if (!id.success) return { message: "Rodada invalida.", ok: false };
+
+  const round = await prisma.specialRound.findUnique({
+    select: {
+      match: {
+        select: {
+          apiId: true,
+          id: true
+        }
+      }
+    },
+    where: { id: id.data }
+  });
+
+  if (!round?.match) {
+    return {
+      message: "Esta rodada nao esta vinculada a uma partida do catalogo.",
+      ok: false
+    };
+  }
+  if (!round.match.apiId) {
+    return {
+      message: "A partida selecionada nao possui um fixtureId da API-Football.",
+      ok: false
+    };
+  }
+
+  const sync = await runFootballAutomation("special-round-manual", {
+    fixtureLimit: 1,
+    historyBudget: 0,
+    includeCatalog: false,
+    matchId: round.match.id
+  });
+
+  if ("locked" in sync && sync.locked) {
+    return {
+      message: "Outra sincronizacao esta em andamento. Tente novamente em instantes.",
+      ok: false
+    };
+  }
+  if (sync.summary.fixturesUpdated === 0) {
+    return {
+      message: `A API-Football nao atualizou esta partida: ${sync.message}`,
+      ok: false
+    };
+  }
+
+  await prisma.specialRoundAuditLog.create({
+    data: {
+      action: "special_round.fixture_synced_from_api",
+      actorId: admin.id,
+      entity: "SpecialRound",
+      entityId: id.data,
+      metadata: json({
+        apiFixtureId: round.match.apiId,
+        callsUsed: sync.summary.callsUsed,
+        matchId: round.match.id,
+        syncRunId: sync.runId
+      }),
+      specialRoundId: id.data
+    }
+  });
+
+  const homologation = await homologateSpecialRoundFromCatalogAction(id.data);
+  if (!homologation.ok) {
+    return {
+      data: homologation.data,
+      message: `A partida foi consultada na API-Football, mas ainda nao pode ser homologada. ${homologation.message}`,
+      ok: false
+    };
+  }
+
+  return {
+    data: homologation.data,
+    message: `Partida atualizada pela API-Football. ${homologation.message}`,
+    ok: true
+  };
 }
 
 export async function calculateSpecialRoundAction(

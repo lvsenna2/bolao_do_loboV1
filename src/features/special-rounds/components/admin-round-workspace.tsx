@@ -12,9 +12,9 @@ import {
   confirmSpecialRoundEntryAction,
   deleteSpecialRoundAction,
   duplicateSpecialRoundAction,
-  homologateSpecialRoundFromCatalogAction,
   markSpecialRoundPrizePaidAction,
   refundSpecialRoundEntryAction,
+  syncAndHomologateSpecialRoundAction,
   toggleSpecialRoundEntryBlockAction,
   updateSpecialRoundTieBreakAction,
   updateSpecialRoundStatusAction
@@ -317,17 +317,17 @@ export function AdminSpecialRoundWorkspace({
       <section className="rounded-card border border-app-border bg-app-surface p-5" id="resultados">
         <h2 className="text-lg font-semibold">Resultados e apuracao</h2>
         <p className="mt-1 text-sm text-app-muted">
-          Depois do encerramento, o sistema usa placar, eventos e estatisticas ja salvos no banco.
-          Nenhuma chamada nova e feita a API.
+          O sistema consulta na API-Football somente a partida vinculada a esta rodada, atualiza
+          placar, eventos e estatisticas no banco e depois realiza a apuracao.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <LoadingButton
             className="h-11 rounded-button bg-brand-gold px-4 font-semibold text-black"
             isLoading={pending}
-            loadingLabel="Homologando..."
-            onClick={() => run(() => homologateSpecialRoundFromCatalogAction(specialRoundId))}
+            loadingLabel="Atualizando..."
+            onClick={() => run(() => syncAndHomologateSpecialRoundAction(specialRoundId))}
           >
-            Homologar pelo catalogo
+            Atualizar partida e homologar
           </LoadingButton>
           {["AWAITING_RESULT", "CALCULATING"].includes(status) ? (
             <LoadingButton

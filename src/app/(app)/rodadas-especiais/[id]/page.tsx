@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
-import { Coins, LockKeyhole, Trophy, Users } from "lucide-react";
+import { Coins, Eye, LockKeyhole, Trophy, Users } from "lucide-react";
+import type { Route } from "next";
+import Link from "next/link";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -177,6 +179,15 @@ export default async function SpecialRoundDetailPage({
           </Card>
           {!entry && ["REGISTRATION_OPEN", "PREDICTIONS_OPEN"].includes(round.status) ? (
             <JoinSpecialRound name={round.name} specialRoundId={round.id} />
+          ) : null}
+          {entry?.predictions.length ? (
+            <Link
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button border border-brand-gold/40 bg-brand-gold/10 px-4 font-semibold text-brand-gold"
+              href={`/rodadas-especiais/${round.id}/meu-palpite` as Route}
+            >
+              <Eye className="h-4 w-4" />
+              Visualizar meu palpite
+            </Link>
           ) : null}
           {round.rules ? (
             <Card>
