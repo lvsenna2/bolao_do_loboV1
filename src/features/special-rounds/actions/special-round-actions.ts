@@ -15,7 +15,12 @@ import {
 import { deriveCatalogResults } from "../services/catalog-result-service";
 import { buildAutomaticSpecialRoundMarkets } from "../services/default-markets";
 import { evaluateSpecialRoundAnswer, rankSpecialRoundEntries } from "../services/scoring-service";
-import { assertSpecialRoundTransition, isPredictionWindowOpen } from "../services/state-service";
+import {
+  assertSpecialRoundTransition,
+  blockingSpecialRoundStatuses,
+  canDeleteSpecialRoundEntries,
+  isPredictionWindowOpen
+} from "../services/state-service";
 import {
   automaticSpecialRoundSchema,
   idSchema,
@@ -140,7 +145,7 @@ export async function createAutomaticSpecialRoundAction(
 
       const existing = await tx.specialRound.findFirst({
         select: { id: true },
-        where: { matchId: match.id, status: { not: "CANCELLED" } }
+        where: { matchId: match.id, status: { in: blockingSpecialRoundStatuses } }
       });
       if (existing) return existing;
 
@@ -1231,17 +1236,30 @@ export async function deleteSpecialRoundAction(
   const id = idSchema.safeParse(specialRoundId);
   if (!id.success) return { message: "Rodada invalida.", ok: false };
   const round = await prisma.specialRound.findUnique({
-    include: { _count: { select: { entries: true } } },
+    include: {
+      entries: {
+        select: { paymentStatus: true, transactionId: true }
+      }
+    },
     where: { id: id.data }
   });
-  if (!round || round._count.entries > 0) {
+  if (!round || !canDeleteSpecialRoundEntries(round.entries)) {
     return {
       message:
-        "Rodadas com inscricoes nao podem ser excluidas. Cancele a rodada para preservar pagamentos e auditoria.",
+        "Esta rodada possui pagamento confirmado ou transacao no Mercado Pago. Cancele a rodada para preservar a auditoria.",
       ok: false
     };
   }
   await prisma.$transaction(async (tx) => {
+    await tx.specialRoundScore.deleteMany({
+      where: { entry: { specialRoundId: round.id } }
+    });
+    await tx.specialRoundPrediction.deleteMany({
+      where: { entry: { specialRoundId: round.id } }
+    });
+    await tx.specialRoundPrize.deleteMany({ where: { specialRoundId: round.id } });
+    await tx.specialRoundStanding.deleteMany({ where: { specialRoundId: round.id } });
+    await tx.specialRoundEntry.deleteMany({ where: { specialRoundId: round.id } });
     await tx.specialRoundResult.deleteMany({
       where: { market: { specialRoundId: round.id } }
     });

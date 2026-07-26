@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminSpecialRoundDeleteButton } from "@/features/special-rounds/components/admin-round-delete-button";
 import { SpecialRoundStatusBadge } from "@/features/special-rounds/components/status-badge";
 import { getAdminSpecialRounds } from "@/features/special-rounds/data/special-round-data";
+import { canDeleteSpecialRoundEntries } from "@/features/special-rounds/services/state-service";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
 
@@ -33,6 +34,7 @@ export default async function AdminSpecialRoundsPage() {
         {rounds.map((round) => {
           const paid = round.entries.filter((entry) => entry.paymentStatus === "APPROVED");
           const collected = paid.reduce((total, entry) => total + Number(entry.amount), 0);
+          const canDelete = canDeleteSpecialRoundEntries(round.entries);
           return (
             <Card key={round.id}>
               <CardHeader>
@@ -58,7 +60,7 @@ export default async function AdminSpecialRoundsPage() {
                   >
                     Gerenciar
                   </Link>
-                  {round._count.entries === 0 ? (
+                  {canDelete ? (
                     <AdminSpecialRoundDeleteButton name={round.name} specialRoundId={round.id} />
                   ) : null}
                 </div>

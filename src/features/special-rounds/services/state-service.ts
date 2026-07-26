@@ -1,5 +1,22 @@
 import type { SpecialRoundStatus } from "@prisma/client";
 
+export const blockingSpecialRoundStatuses: SpecialRoundStatus[] = [
+  "DRAFT",
+  "REGISTRATION_OPEN",
+  "PREDICTIONS_OPEN",
+  "PREDICTIONS_CLOSED",
+  "AWAITING_RESULT",
+  "CALCULATING"
+];
+
+export function canDeleteSpecialRoundEntries(
+  entries: { paymentStatus: string; transactionId: string | null }[]
+) {
+  return entries.every(
+    (entry) => !["APPROVED", "REFUNDED"].includes(entry.paymentStatus) && !entry.transactionId
+  );
+}
+
 const transitions: Record<SpecialRoundStatus, SpecialRoundStatus[]> = {
   DRAFT: ["REGISTRATION_OPEN", "CANCELLED"],
   REGISTRATION_OPEN: ["PREDICTIONS_OPEN", "CANCELLED"],

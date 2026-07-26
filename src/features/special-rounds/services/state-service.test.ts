@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { canTransitionSpecialRound, isPredictionWindowOpen } from "./state-service";
+import {
+  blockingSpecialRoundStatuses,
+  canDeleteSpecialRoundEntries,
+  canTransitionSpecialRound,
+  isPredictionWindowOpen
+} from "./state-service";
 
 describe("special round state", () => {
   it("allows the expected lifecycle and blocks shortcuts", () => {
@@ -18,6 +23,23 @@ describe("special round state", () => {
         opensAt: new Date("2026-07-26T10:00:00Z"),
         status: "PREDICTIONS_OPEN"
       })
+    ).toBe(false);
+  });
+
+  it("does not treat finalized or cancelled rounds as active duplicates", () => {
+    expect(blockingSpecialRoundStatuses).not.toContain("FINALIZED");
+    expect(blockingSpecialRoundStatuses).not.toContain("CANCELLED");
+  });
+
+  it("only deletes entries without real payment transactions", () => {
+    expect(canDeleteSpecialRoundEntries([{ paymentStatus: "PENDING", transactionId: null }])).toBe(
+      true
+    );
+    expect(
+      canDeleteSpecialRoundEntries([{ paymentStatus: "APPROVED", transactionId: "payment-1" }])
+    ).toBe(false);
+    expect(
+      canDeleteSpecialRoundEntries([{ paymentStatus: "PENDING", transactionId: "payment-2" }])
     ).toBe(false);
   });
 });

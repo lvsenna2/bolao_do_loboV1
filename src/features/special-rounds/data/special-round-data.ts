@@ -145,7 +145,7 @@ export function getAdminSpecialRounds(status?: SpecialRoundStatus) {
   return prisma.specialRound.findMany({
     include: {
       _count: { select: { entries: true, markets: true } },
-      entries: { select: { amount: true, paymentStatus: true } }
+      entries: { select: { amount: true, paymentStatus: true, transactionId: true } }
     },
     orderBy: { createdAt: "desc" },
     where: status ? { status } : undefined
