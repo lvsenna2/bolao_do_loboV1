@@ -119,7 +119,7 @@ export function AdminSpecialRoundWorkspace({
           >
             Duplicar
           </LoadingButton>
-          {entries.length === 0 && status !== "FINALIZED" ? (
+          {(status === "CANCELLED" || (entries.length === 0 && status !== "FINALIZED")) ? (
             <LoadingButton
               className="h-10 rounded-button bg-red-600 px-3 text-sm font-semibold text-white"
               disabled={pending}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   blockingSpecialRoundStatuses,
+  canDeleteCancelledSpecialRoundEntries,
   canDeleteSpecialRoundEntries,
   canTransitionSpecialRound,
   isPredictionWindowOpen
@@ -40,6 +41,25 @@ describe("special round state", () => {
     ).toBe(false);
     expect(
       canDeleteSpecialRoundEntries([{ paymentStatus: "PENDING", transactionId: "payment-2" }])
+    ).toBe(false);
+  });
+
+  it("deletes cancelled rounds only after financial entries are settled", () => {
+    expect(
+      canDeleteCancelledSpecialRoundEntries([
+        { paymentStatus: "REFUNDED", transactionId: "payment-refunded" },
+        { paymentStatus: "FAILED", transactionId: "payment-failed" }
+      ])
+    ).toBe(true);
+    expect(
+      canDeleteCancelledSpecialRoundEntries([
+        { paymentStatus: "APPROVED", transactionId: "payment-approved" }
+      ])
+    ).toBe(false);
+    expect(
+      canDeleteCancelledSpecialRoundEntries([
+        { paymentStatus: "PENDING", transactionId: "payment-pending" }
+      ])
     ).toBe(false);
   });
 });

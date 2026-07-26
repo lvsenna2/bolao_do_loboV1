@@ -6,6 +6,7 @@ import Link from "next/link";
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { JoinSpecialRound } from "@/features/special-rounds/components/join-special-round";
+import type { SpecialRoundPaymentView } from "@/features/special-rounds/components/join-special-round";
 import { SpecialRoundPredictionForm } from "@/features/special-rounds/components/prediction-form";
 import { SpecialRoundCountdown } from "@/features/special-rounds/components/countdown";
 import { SpecialRoundStatusBadge } from "@/features/special-rounds/components/status-badge";
@@ -40,6 +41,26 @@ export default async function SpecialRoundDetailPage({
     ])
   );
   const paidParticipants = round._count.entries;
+  const pendingPayment: SpecialRoundPaymentView | null =
+    entry?.paymentStatus === "PENDING" &&
+    entry.qrCode &&
+    entry.qrCodeBase64 &&
+    entry.transactionId
+      ? {
+          amountLabel: Number(entry.amount).toLocaleString("pt-BR", {
+            currency: "BRL",
+            style: "currency"
+          }),
+          expiresAtLabel: entry.paymentExpiresAt
+            ? formatDateTimeInSaoPaulo(entry.paymentExpiresAt)
+            : undefined,
+          paymentId: entry.id,
+          pixCode: entry.qrCode,
+          qrCodeDataUri: `data:image/png;base64,${entry.qrCodeBase64}`,
+          ticketUrl: entry.ticketUrl,
+          transactionId: entry.transactionId
+        }
+      : null;
   const estimatedPrize =
     round.prizeMode === "FIXED"
       ? Number(round.fixedPrize ?? 0)
@@ -177,8 +198,13 @@ export default async function SpecialRoundDetailPage({
               <SpecialRoundCountdown closesAt={round.predictionsCloseAt.toISOString()} />
             </CardContent>
           </Card>
-          {!entry && ["REGISTRATION_OPEN", "PREDICTIONS_OPEN"].includes(round.status) ? (
-            <JoinSpecialRound name={round.name} specialRoundId={round.id} />
+          {(!entry || entry.paymentStatus === "PENDING") &&
+          ["REGISTRATION_OPEN", "PREDICTIONS_OPEN"].includes(round.status) ? (
+            <JoinSpecialRound
+              initialPayment={pendingPayment}
+              name={round.name}
+              specialRoundId={round.id}
+            />
           ) : null}
           {entry?.predictions.length ? (
             <Link

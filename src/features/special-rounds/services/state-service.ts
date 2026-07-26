@@ -17,6 +17,16 @@ export function canDeleteSpecialRoundEntries(
   );
 }
 
+export function canDeleteCancelledSpecialRoundEntries(
+  entries: { paymentStatus: string; transactionId: string | null }[]
+) {
+  return entries.every((entry) => {
+    if (entry.paymentStatus === "APPROVED") return false;
+    if (!entry.transactionId) return true;
+    return ["CANCELLED", "FAILED", "REFUNDED"].includes(entry.paymentStatus);
+  });
+}
+
 const transitions: Record<SpecialRoundStatus, SpecialRoundStatus[]> = {
   DRAFT: ["REGISTRATION_OPEN", "CANCELLED"],
   REGISTRATION_OPEN: ["PREDICTIONS_OPEN", "CANCELLED"],

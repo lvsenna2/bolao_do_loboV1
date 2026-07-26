@@ -83,7 +83,14 @@ export async function getSpecialRoundDetail(id: string, userId?: string) {
           user: { select: { avatarUrl: true, id: true, name: true, username: true } }
         },
         orderBy: { registeredAt: "asc" },
-        where: predictionsArePublic ? { paymentStatus: "APPROVED" } : { userId }
+        where: predictionsArePublic
+          ? {
+              OR: [
+                { paymentStatus: "APPROVED" },
+                ...(userId ? [{ userId }] : [])
+              ]
+            }
+          : { userId }
       },
       markets: {
         include: {
