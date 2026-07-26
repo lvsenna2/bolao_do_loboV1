@@ -8,6 +8,7 @@ import { useState, useTransition } from "react";
 import { LoadingButton } from "@/components/ui/loading-button";
 import {
   calculateSpecialRoundAction,
+  cancelSpecialRoundAction,
   confirmSpecialRoundEntryAction,
   deleteSpecialRoundAction,
   duplicateSpecialRoundAction,
@@ -47,12 +48,12 @@ type Standing = {
 };
 
 const nextStatuses: Partial<Record<SpecialRoundStatus, SpecialRoundStatus[]>> = {
-  AWAITING_RESULT: ["CALCULATING", "CANCELLED"],
-  CALCULATING: ["AWAITING_RESULT", "FINALIZED", "CANCELLED"],
-  DRAFT: ["REGISTRATION_OPEN", "CANCELLED"],
-  PREDICTIONS_CLOSED: ["AWAITING_RESULT", "CANCELLED"],
-  PREDICTIONS_OPEN: ["PREDICTIONS_CLOSED", "CANCELLED"],
-  REGISTRATION_OPEN: ["PREDICTIONS_OPEN", "CANCELLED"]
+  AWAITING_RESULT: ["CALCULATING"],
+  CALCULATING: ["AWAITING_RESULT", "FINALIZED"],
+  DRAFT: ["REGISTRATION_OPEN"],
+  PREDICTIONS_CLOSED: ["AWAITING_RESULT"],
+  PREDICTIONS_OPEN: ["PREDICTIONS_CLOSED"],
+  REGISTRATION_OPEN: ["PREDICTIONS_OPEN"]
 };
 
 export function AdminSpecialRoundWorkspace({
@@ -118,17 +119,38 @@ export function AdminSpecialRoundWorkspace({
           >
             Duplicar
           </LoadingButton>
-          {status === "DRAFT" ? (
+          {entries.length === 0 && status !== "FINALIZED" ? (
             <LoadingButton
               className="h-10 rounded-button bg-red-600 px-3 text-sm font-semibold text-white"
               disabled={pending}
               onClick={() =>
-                window.confirm("Excluir este rascunho?")
-                  ? run(() => deleteSpecialRoundAction(specialRoundId))
+                window.confirm(
+                  "Excluir definitivamente esta rodada? Mercados e configuracoes tambem serao removidos."
+                )
+                  ? run(async () => {
+                      const result = await deleteSpecialRoundAction(specialRoundId);
+                      if (result.ok) router.push("/admin/rodadas-especiais" as Route);
+                      return result;
+                    })
                   : undefined
               }
             >
-              Excluir rascunho
+              Excluir rodada
+            </LoadingButton>
+          ) : null}
+          {entries.length > 0 && !["CANCELLED", "FINALIZED"].includes(status) ? (
+            <LoadingButton
+              className="h-10 rounded-button bg-red-600 px-3 text-sm font-semibold text-white"
+              disabled={pending}
+              onClick={() =>
+                window.confirm(
+                  "Cancelar esta rodada? Os dados financeiros serao preservados e pagamentos aprovados poderao ser reembolsados."
+                )
+                  ? run(() => cancelSpecialRoundAction(specialRoundId))
+                  : undefined
+              }
+            >
+              Cancelar rodada
             </LoadingButton>
           ) : null}
           <a

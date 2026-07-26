@@ -14,6 +14,11 @@ const percent = z.coerce.number().min(0).max(100);
 
 export const idSchema = z.string().uuid();
 
+export const automaticSpecialRoundSchema = z.object({
+  entryFee: money,
+  matchId: idSchema
+});
+
 export const specialRoundSchema = z
   .object({
     adminFeePercent: percent.default(0),

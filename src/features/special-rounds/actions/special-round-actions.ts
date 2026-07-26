@@ -17,6 +17,7 @@ import { buildAutomaticSpecialRoundMarkets } from "../services/default-markets";
 import { evaluateSpecialRoundAnswer, rankSpecialRoundEntries } from "../services/scoring-service";
 import { assertSpecialRoundTransition, isPredictionWindowOpen } from "../services/state-service";
 import {
+  automaticSpecialRoundSchema,
   idSchema,
   predictionBatchSchema,
   resultBatchSchema,
@@ -98,11 +99,17 @@ export async function createSpecialRoundAction(
 }
 
 export async function createAutomaticSpecialRoundAction(
-  matchId: string
+  input: unknown
 ): Promise<SpecialRoundActionResult<{ id: string }>> {
   const admin = await requireAdmin();
-  const parsed = idSchema.safeParse(matchId);
-  if (!parsed.success) return { message: "Selecione uma partida valida.", ok: false };
+  const parsed = automaticSpecialRoundSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      fieldErrors: fieldErrors(parsed.error),
+      message: "Selecione uma partida e informe um valor de inscricao valido.",
+      ok: false
+    };
+  }
 
   try {
     const round = await prisma.$transaction(async (tx) => {
@@ -122,7 +129,7 @@ export async function createAutomaticSpecialRoundAction(
             }
           }
         },
-        where: { deletedAt: null, id: parsed.data }
+        where: { deletedAt: null, id: parsed.data.matchId }
       });
       if (!match) throw new Error("MATCH_NOT_FOUND");
 
@@ -159,7 +166,7 @@ export async function createAutomaticSpecialRoundAction(
           awayTeamName: match.awayTeam.name,
           createdById: admin.id,
           description: `${championship}: ${match.homeTeam.name} x ${match.awayTeam.name}.`,
-          entryFee: 10,
+          entryFee: parsed.data.entryFee,
           homeTeamLogo: match.homeTeam.logo,
           homeTeamName: match.homeTeam.name,
           matchId: match.id,
@@ -1227,13 +1234,17 @@ export async function deleteSpecialRoundAction(
     include: { _count: { select: { entries: true } } },
     where: { id: id.data }
   });
-  if (!round || round.status !== "DRAFT" || round._count.entries > 0) {
+  if (!round || round.status === "FINALIZED" || round._count.entries > 0) {
     return {
-      message: "Somente rascunhos sem inscricoes podem ser excluidos. Cancele a rodada em uso.",
+      message:
+        "Rodadas finalizadas ou com inscricoes nao podem ser excluidas. Cancele a rodada para preservar pagamentos e auditoria.",
       ok: false
     };
   }
   await prisma.$transaction(async (tx) => {
+    await tx.specialRoundResult.deleteMany({
+      where: { market: { specialRoundId: round.id } }
+    });
     await tx.specialRoundMarketOption.deleteMany({
       where: { market: { specialRoundId: round.id } }
     });
@@ -1242,7 +1253,7 @@ export async function deleteSpecialRoundAction(
     await tx.specialRound.delete({ where: { id: round.id } });
   }, serializable);
   revalidateSpecialRounds();
-  return { message: "Rascunho excluido.", ok: true };
+  return { message: "Rodada excluida.", ok: true };
 }
 
 export async function cancelSpecialRoundAction(

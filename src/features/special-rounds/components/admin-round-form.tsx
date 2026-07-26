@@ -70,7 +70,10 @@ export function AdminSpecialRoundForm({
 
   function createAutomatic(formData: FormData) {
     startTransition(async () => {
-      const result = await createAutomaticSpecialRoundAction(String(formData.get("matchId")));
+      const result = await createAutomaticSpecialRoundAction({
+        entryFee: formData.get("entryFee"),
+        matchId: formData.get("matchId")
+      });
       setMessage(result.message);
       if (result.ok && result.data) {
         router.push(`/admin/rodadas-especiais/${result.data.id}` as Route);
@@ -157,6 +160,22 @@ export function AdminSpecialRoundForm({
               </option>
             ))}
           </select>
+        </label>
+        <label className="block">
+          Valor da inscricao
+          <input
+            className={inputClass}
+            defaultValue="10.00"
+            inputMode="decimal"
+            min="0"
+            name="entryFee"
+            required
+            step="0.01"
+            type="number"
+          />
+          <span className="mt-1 block text-xs text-app-muted">
+            Use zero para uma rodada gratuita. Valores pagos geram PIX pelo Mercado Pago.
+          </span>
         </label>
         {matches.length ? null : (
           <p className="rounded-control border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
