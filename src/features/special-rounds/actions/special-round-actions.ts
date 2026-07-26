@@ -117,143 +117,165 @@ export async function createAutomaticSpecialRoundAction(
   }
 
   try {
-    const round = await prisma.$transaction(async (tx) => {
-      const match = await tx.match.findFirst({
-        include: {
-          awayTeam: true,
-          homeTeam: true,
-          lineups: {
-            include: {
-              players: { include: { player: true } }
+    const match = await prisma.match.findFirst({
+      include: {
+        awayTeam: true,
+        homeTeam: true,
+        lineups: {
+          include: {
+            players: { include: { player: true } }
+          }
+        },
+        playerStatistics: { include: { player: true } },
+        round: {
+          include: {
+            season: { include: { championship: true } }
+          }
+        }
+      },
+      where: { deletedAt: null, id: parsed.data.matchId }
+    });
+    if (!match) throw new Error("MATCH_NOT_FOUND");
+
+    const now = serverNow();
+    if (match.kickoff <= now || ["FINISHED", "CANCELLED"].includes(match.status)) {
+      throw new Error("MATCH_ALREADY_STARTED");
+    }
+
+    const players = [
+      ...match.lineups.flatMap((lineup) =>
+        lineup.players.map((item) => ({ id: item.player.id, name: item.player.name }))
+      ),
+      ...match.playerStatistics.map((item) => ({
+        id: item.player.id,
+        name: item.player.name
+      }))
+    ];
+    const markets = buildAutomaticSpecialRoundMarkets(
+      match.homeTeam.name,
+      match.awayTeam.name,
+      players
+    );
+    const championship = match.round.season.championship.name;
+    const round = await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.specialRound.findFirst({
+          select: { id: true, name: true },
+          where: { matchId: match.id, status: { in: blockingSpecialRoundStatuses } }
+        });
+        if (existing) return { ...existing, created: false };
+
+        const created = await tx.specialRound.create({
+          data: {
+            adminFeePercent: 10,
+            awayTeamLogo: match.awayTeam.logo,
+            awayTeamName: match.awayTeam.name,
+            createdById: admin.id,
+            description: `${championship}: ${match.homeTeam.name} x ${match.awayTeam.name}.`,
+            entryFee: parsed.data.entryFee,
+            homeTeamLogo: match.homeTeam.logo,
+            homeTeamName: match.homeTeam.name,
+            matchId: match.id,
+            matchStartsAt: match.kickoff,
+            name: `${match.homeTeam.name} x ${match.awayTeam.name} - Rodada Especial`,
+            predictionsCloseAt: match.kickoff,
+            predictionsOpenAt: now,
+            prizeDistribution: json([{ percent: 100, position: 1 }]),
+            prizeMode: "POOL",
+            prizePoolPercent: 90,
+            registrationClosesAt: match.kickoff,
+            registrationOpensAt: now,
+            rules:
+              "Uma inscricao por participante. Os oito mercados sao apurados com os dados oficiais da partida catalogada. Em caso de empate, valem os criterios publicados da Rodada Especial.",
+            status: "PREDICTIONS_OPEN",
+            winnerCount: 1,
+            markets: {
+              create: markets.map((market) => ({
+                active: market.active,
+                answerType: market.answerType,
+                description: market.description,
+                kind: market.kind,
+                line: market.line,
+                options: {
+                  create: market.options.map((option, index) => ({
+                    ...option,
+                    sortOrder: index
+                  }))
+                },
+                points: market.points,
+                required: market.required,
+                sortOrder: market.sortOrder,
+                title: market.title
+              }))
             }
           },
-          playerStatistics: { include: { player: true } },
-          round: {
-            include: {
-              season: { include: { championship: true } }
-            }
-          }
-        },
-        where: { deletedAt: null, id: parsed.data.matchId }
-      });
-      if (!match) throw new Error("MATCH_NOT_FOUND");
+          select: { id: true, name: true }
+        });
 
-      const now = serverNow();
-      if (match.kickoff <= now || ["FINISHED", "CANCELLED"].includes(match.status)) {
-        throw new Error("MATCH_ALREADY_STARTED");
+        await tx.specialRoundAuditLog.create({
+          data: {
+            action: "special_round.created_from_catalog",
+            actorId: admin.id,
+            entity: "SpecialRound",
+            entityId: created.id,
+            metadata: json({ matchId: match.id, markets: markets.length }),
+            specialRoundId: created.id
+          }
+        });
+        return { ...created, created: true };
+      },
+      { isolationLevel: "Serializable", maxWait: 5_000, timeout: 20_000 }
+    );
+
+    if (round.created) {
+      try {
+        const users = await prisma.user.findMany({
+          select: { id: true },
+          where: { deletedAt: null, status: "ACTIVE" }
+        });
+        await prisma.notification.createMany({
+          data: users.map((user) => ({
+            body: `${round.name} esta aberta para inscricoes e palpites.`,
+            icon: "special-round",
+            message: `${round.name} esta aberta para inscricoes e palpites.`,
+            relatedEntityId: round.id,
+            title: "Nova rodada especial",
+            type: "SPECIAL_ROUND" as const,
+            uniqueKey: `special-round:opened:${round.id}:${user.id}`,
+            userId: user.id
+          })),
+          skipDuplicates: true
+        });
+      } catch (notificationError) {
+        console.error("Special round creation notification failed", {
+          error: notificationError,
+          specialRoundId: round.id
+        });
       }
-
-      const existing = await tx.specialRound.findFirst({
-        select: { id: true },
-        where: { matchId: match.id, status: { in: blockingSpecialRoundStatuses } }
-      });
-      if (existing) return existing;
-
-      const players = [
-        ...match.lineups.flatMap((lineup) =>
-          lineup.players.map((item) => ({ id: item.player.id, name: item.player.name }))
-        ),
-        ...match.playerStatistics.map((item) => ({
-          id: item.player.id,
-          name: item.player.name
-        }))
-      ];
-      const markets = buildAutomaticSpecialRoundMarkets(
-        match.homeTeam.name,
-        match.awayTeam.name,
-        players
-      );
-      const championship = match.round.season.championship.name;
-      const created = await tx.specialRound.create({
-        data: {
-          adminFeePercent: 10,
-          awayTeamLogo: match.awayTeam.logo,
-          awayTeamName: match.awayTeam.name,
-          createdById: admin.id,
-          description: `${championship}: ${match.homeTeam.name} x ${match.awayTeam.name}.`,
-          entryFee: parsed.data.entryFee,
-          homeTeamLogo: match.homeTeam.logo,
-          homeTeamName: match.homeTeam.name,
-          matchId: match.id,
-          matchStartsAt: match.kickoff,
-          name: `${match.homeTeam.name} x ${match.awayTeam.name} - Rodada Especial`,
-          predictionsCloseAt: match.kickoff,
-          predictionsOpenAt: now,
-          prizeDistribution: json([{ percent: 100, position: 1 }]),
-          prizeMode: "POOL",
-          prizePoolPercent: 90,
-          registrationClosesAt: match.kickoff,
-          registrationOpensAt: now,
-          rules:
-            "Uma inscricao por participante. Os oito mercados sao apurados com os dados oficiais da partida catalogada. Em caso de empate, valem os criterios publicados da Rodada Especial.",
-          status: "PREDICTIONS_OPEN",
-          winnerCount: 1,
-          markets: {
-            create: markets.map((market) => ({
-              active: market.active,
-              answerType: market.answerType,
-              description: market.description,
-              kind: market.kind,
-              line: market.line,
-              options: {
-                create: market.options.map((option, index) => ({
-                  ...option,
-                  sortOrder: index
-                }))
-              },
-              points: market.points,
-              required: market.required,
-              sortOrder: market.sortOrder,
-              title: market.title
-            }))
-          }
-        },
-        select: { id: true, name: true }
-      });
-
-      await tx.specialRoundAuditLog.create({
-        data: {
-          action: "special_round.created_from_catalog",
-          actorId: admin.id,
-          entity: "SpecialRound",
-          entityId: created.id,
-          metadata: json({ matchId: match.id, markets: markets.length }),
-          specialRoundId: created.id
-        }
-      });
-      const users = await tx.user.findMany({
-        select: { id: true },
-        where: { deletedAt: null, status: "ACTIVE" }
-      });
-      await tx.notification.createMany({
-        data: users.map((user) => ({
-          body: `${created.name} esta aberta para inscricoes e palpites.`,
-          icon: "special-round",
-          message: `${created.name} esta aberta para inscricoes e palpites.`,
-          relatedEntityId: created.id,
-          title: "Nova rodada especial",
-          type: "SPECIAL_ROUND" as const,
-          uniqueKey: `special-round:opened:${created.id}:${user.id}`,
-          userId: user.id
-        })),
-        skipDuplicates: true
-      });
-      return created;
-    }, serializable);
+    }
 
     revalidateSpecialRounds(round.id);
     return {
       data: { id: round.id },
-      message: "Rodada aberta com os oito mercados automaticos.",
+      message: round.created
+        ? "Rodada aberta com os oito mercados automaticos."
+        : "Esta partida ja possui uma Rodada Especial ativa.",
       ok: true
     };
   } catch (error) {
+    console.error("Automatic special round creation failed", {
+      code: typeof error === "object" && error && "code" in error ? String(error.code) : undefined,
+      error,
+      matchId: parsed.data.matchId
+    });
     const message =
       error instanceof Error && error.message === "MATCH_ALREADY_STARTED"
         ? "Escolha uma partida que ainda nao comecou."
         : error instanceof Error && error.message === "MATCH_NOT_FOUND"
           ? "A partida nao foi encontrada no catalogo."
-          : "Nao foi possivel criar a rodada automaticamente.";
+          : typeof error === "object" && error && "code" in error && error.code === "P2028"
+            ? "O banco demorou para criar a rodada. Tente novamente; nenhuma duplicata sera criada."
+            : "Nao foi possivel criar a rodada automaticamente.";
     return { message, ok: false };
   }
 }
