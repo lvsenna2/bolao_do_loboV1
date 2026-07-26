@@ -9,7 +9,7 @@ export default async function NewSpecialRoundPage() {
   const matches = await getSpecialRoundMatchOptions();
   return (
     <PageShell
-      description="Defina partida, prazos, entrada e premiacao."
+      description="Selecione uma partida catalogada; toda a rodada sera configurada automaticamente."
       title="Nova Rodada Especial"
     >
       <Card>

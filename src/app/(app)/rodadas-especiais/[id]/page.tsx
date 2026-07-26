@@ -175,7 +175,7 @@ export default async function SpecialRoundDetailPage({
               <SpecialRoundCountdown closesAt={round.predictionsCloseAt.toISOString()} />
             </CardContent>
           </Card>
-          {!entry && round.status === "REGISTRATION_OPEN" ? (
+          {!entry && ["REGISTRATION_OPEN", "PREDICTIONS_OPEN"].includes(round.status) ? (
             <JoinSpecialRound name={round.name} specialRoundId={round.id} />
           ) : null}
           {round.rules ? (

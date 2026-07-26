@@ -12,6 +12,8 @@ import {
   calculateSpecialRoundPrizePool,
   distributeSpecialRoundPrize
 } from "../services/prize-service";
+import { deriveCatalogResults } from "../services/catalog-result-service";
+import { buildAutomaticSpecialRoundMarkets } from "../services/default-markets";
 import { evaluateSpecialRoundAnswer, rankSpecialRoundEntries } from "../services/scoring-service";
 import { assertSpecialRoundTransition, isPredictionWindowOpen } from "../services/state-service";
 import {
@@ -93,6 +95,155 @@ export async function createSpecialRoundAction(
   }, serializable);
   revalidateSpecialRounds(round.id);
   return { data: { id: round.id }, message: "Rodada especial criada.", ok: true };
+}
+
+export async function createAutomaticSpecialRoundAction(
+  matchId: string
+): Promise<SpecialRoundActionResult<{ id: string }>> {
+  const admin = await requireAdmin();
+  const parsed = idSchema.safeParse(matchId);
+  if (!parsed.success) return { message: "Selecione uma partida valida.", ok: false };
+
+  try {
+    const round = await prisma.$transaction(async (tx) => {
+      const match = await tx.match.findFirst({
+        include: {
+          awayTeam: true,
+          homeTeam: true,
+          lineups: {
+            include: {
+              players: { include: { player: true } }
+            }
+          },
+          playerStatistics: { include: { player: true } },
+          round: {
+            include: {
+              season: { include: { championship: true } }
+            }
+          }
+        },
+        where: { deletedAt: null, id: parsed.data }
+      });
+      if (!match) throw new Error("MATCH_NOT_FOUND");
+
+      const now = serverNow();
+      if (match.kickoff <= now || ["FINISHED", "CANCELLED"].includes(match.status)) {
+        throw new Error("MATCH_ALREADY_STARTED");
+      }
+
+      const existing = await tx.specialRound.findFirst({
+        select: { id: true },
+        where: { matchId: match.id, status: { not: "CANCELLED" } }
+      });
+      if (existing) return existing;
+
+      const players = [
+        ...match.lineups.flatMap((lineup) =>
+          lineup.players.map((item) => ({ id: item.player.id, name: item.player.name }))
+        ),
+        ...match.playerStatistics.map((item) => ({
+          id: item.player.id,
+          name: item.player.name
+        }))
+      ];
+      const markets = buildAutomaticSpecialRoundMarkets(
+        match.homeTeam.name,
+        match.awayTeam.name,
+        players
+      );
+      const championship = match.round.season.championship.name;
+      const created = await tx.specialRound.create({
+        data: {
+          adminFeePercent: 10,
+          awayTeamLogo: match.awayTeam.logo,
+          awayTeamName: match.awayTeam.name,
+          createdById: admin.id,
+          description: `${championship}: ${match.homeTeam.name} x ${match.awayTeam.name}.`,
+          entryFee: 10,
+          homeTeamLogo: match.homeTeam.logo,
+          homeTeamName: match.homeTeam.name,
+          matchId: match.id,
+          matchStartsAt: match.kickoff,
+          name: `${match.homeTeam.name} x ${match.awayTeam.name} - Rodada Especial`,
+          predictionsCloseAt: match.kickoff,
+          predictionsOpenAt: now,
+          prizeDistribution: json([{ percent: 100, position: 1 }]),
+          prizeMode: "POOL",
+          prizePoolPercent: 90,
+          registrationClosesAt: match.kickoff,
+          registrationOpensAt: now,
+          rules:
+            "Uma inscricao por participante. Os oito mercados sao apurados com os dados oficiais da partida catalogada. Em caso de empate, valem os criterios publicados da Rodada Especial.",
+          status: "PREDICTIONS_OPEN",
+          winnerCount: 1,
+          markets: {
+            create: markets.map((market) => ({
+              active: market.active,
+              answerType: market.answerType,
+              description: market.description,
+              kind: market.kind,
+              line: market.line,
+              options: {
+                create: market.options.map((option, index) => ({
+                  ...option,
+                  sortOrder: index
+                }))
+              },
+              points: market.points,
+              required: market.required,
+              sortOrder: market.sortOrder,
+              title: market.title
+            }))
+          }
+        },
+        select: { id: true, name: true }
+      });
+
+      await tx.specialRoundAuditLog.create({
+        data: {
+          action: "special_round.created_from_catalog",
+          actorId: admin.id,
+          entity: "SpecialRound",
+          entityId: created.id,
+          metadata: json({ matchId: match.id, markets: markets.length }),
+          specialRoundId: created.id
+        }
+      });
+      const users = await tx.user.findMany({
+        select: { id: true },
+        where: { deletedAt: null, status: "ACTIVE" }
+      });
+      await tx.notification.createMany({
+        data: users.map((user) => ({
+          body: `${created.name} esta aberta para inscricoes e palpites.`,
+          icon: "special-round",
+          message: `${created.name} esta aberta para inscricoes e palpites.`,
+          relatedEntityId: created.id,
+          title: "Nova rodada especial",
+          type: "SPECIAL_ROUND" as const,
+          uniqueKey: `special-round:opened:${created.id}:${user.id}`,
+          userId: user.id
+        })),
+        skipDuplicates: true
+      });
+      return created;
+    }, serializable);
+
+    revalidateSpecialRounds(round.id);
+    return {
+      data: { id: round.id },
+      message: "Rodada aberta com os oito mercados automaticos.",
+      ok: true
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message === "MATCH_ALREADY_STARTED"
+        ? "Escolha uma partida que ainda nao comecou."
+        : error instanceof Error && error.message === "MATCH_NOT_FOUND"
+          ? "A partida nao foi encontrada no catalogo."
+          : "Nao foi possivel criar a rodada automaticamente.";
+    return { message, ok: false };
+  }
 }
 
 export async function updateSpecialRoundAction(
@@ -358,7 +509,7 @@ export async function joinSpecialRoundAction(
   const round = await prisma.specialRound.findUnique({ where: { id: id.data } });
   if (
     !round ||
-    round.status !== "REGISTRATION_OPEN" ||
+    !["REGISTRATION_OPEN", "PREDICTIONS_OPEN"].includes(round.status) ||
     now < round.registrationOpensAt ||
     now >= round.registrationClosesAt
   ) {
@@ -671,6 +822,104 @@ export async function saveSpecialRoundResultsAction(
   }
   revalidateSpecialRounds(parsed.data.specialRoundId);
   return { message: "Resultados oficiais salvos.", ok: true };
+}
+
+export async function homologateSpecialRoundFromCatalogAction(
+  specialRoundId: string
+): Promise<SpecialRoundActionResult<{ missing: string[] }>> {
+  const admin = await requireAdmin();
+  const id = idSchema.safeParse(specialRoundId);
+  if (!id.success) return { message: "Rodada invalida.", ok: false };
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const round = await tx.specialRound.findUnique({
+        include: {
+          markets: {
+            include: { options: { select: { value: true } } },
+            where: { active: true }
+          },
+          match: {
+            include: {
+              events: {
+                include: { player: { select: { id: true, name: true } } }
+              },
+              statistics: { select: { type: true, value: true } }
+            }
+          }
+        },
+        where: { id: id.data }
+      });
+      if (!round?.match) throw new Error("MATCH_NOT_LINKED");
+
+      const derived = deriveCatalogResults(
+        {
+          awayScore: round.match.awayScore,
+          awayTeamId: round.match.awayTeamId,
+          events: round.match.events,
+          homeScore: round.match.homeScore,
+          homeTeamId: round.match.homeTeamId,
+          statistics: round.match.statistics,
+          status: round.match.status
+        },
+        round.markets
+      );
+      if (derived.missing.length) {
+        return { missing: derived.missing, saved: false };
+      }
+
+      for (const market of round.markets) {
+        const answer = derived.answers[market.id];
+        await tx.specialRoundResult.upsert({
+          create: { answer: json(answer), enteredById: admin.id, marketId: market.id },
+          update: { answer: json(answer), enteredById: admin.id },
+          where: { marketId: market.id }
+        });
+      }
+      await tx.specialRound.update({
+        data: { status: "AWAITING_RESULT" },
+        where: { id: round.id }
+      });
+      await tx.specialRoundAuditLog.create({
+        data: {
+          action: "special_round.homologated_from_catalog",
+          actorId: admin.id,
+          entity: "SpecialRound",
+          entityId: round.id,
+          metadata: json({ matchId: round.match.id, markets: round.markets.length }),
+          specialRoundId: round.id
+        }
+      });
+      return { missing: [], saved: true };
+    }, serializable);
+
+    if (!result.saved) {
+      return {
+        data: { missing: result.missing },
+        message: `O catalogo ainda nao possui: ${result.missing.join(", ")}.`,
+        ok: false
+      };
+    }
+
+    const calculation = await calculateSpecialRoundAction(id.data);
+    if (!calculation.ok) {
+      return { data: { missing: [] }, message: calculation.message, ok: false };
+    }
+    revalidateSpecialRounds(id.data);
+    return {
+      data: { missing: [] },
+      message: "Resultados homologados e classificacao calculada.",
+      ok: true
+    };
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error && error.message === "MATCH_NOT_LINKED"
+          ? "Esta rodada nao esta vinculada a uma partida do catalogo."
+          : "Nao foi possivel homologar os dados da partida.",
+      ok: false
+    };
+  }
 }
 
 export async function calculateSpecialRoundAction(

@@ -1,11 +1,6 @@
 "use client";
 
-import type {
-  PaymentStatus,
-  SpecialRoundAnswerType,
-  SpecialRoundMarketKind,
-  SpecialRoundStatus
-} from "@prisma/client";
+import type { PaymentStatus, SpecialRoundStatus } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useState, useTransition } from "react";
@@ -14,12 +9,11 @@ import { LoadingButton } from "@/components/ui/loading-button";
 import {
   calculateSpecialRoundAction,
   confirmSpecialRoundEntryAction,
-  createSpecialRoundMarketAction,
   deleteSpecialRoundAction,
   duplicateSpecialRoundAction,
+  homologateSpecialRoundFromCatalogAction,
   markSpecialRoundPrizePaidAction,
   refundSpecialRoundEntryAction,
-  saveSpecialRoundResultsAction,
   toggleSpecialRoundEntryBlockAction,
   updateSpecialRoundTieBreakAction,
   updateSpecialRoundStatusAction
@@ -27,14 +21,8 @@ import {
 import { specialRoundStatusLabels } from "./status-badge";
 
 type Market = {
-  answerType: SpecialRoundAnswerType;
   id: string;
-  kind: SpecialRoundMarketKind;
-  line: number | null;
-  options: { label: string; value: string }[];
   points: number;
-  required: boolean;
-  result: { answer: unknown } | null;
   sortOrder: number;
   title: string;
 };
@@ -67,9 +55,6 @@ const nextStatuses: Partial<Record<SpecialRoundStatus, SpecialRoundStatus[]>> = 
   REGISTRATION_OPEN: ["PREDICTIONS_OPEN", "CANCELLED"]
 };
 
-const inputClass =
-  "h-10 w-full rounded-control border border-app-border bg-app-elevated px-3 text-sm";
-
 export function AdminSpecialRoundWorkspace({
   entries,
   markets,
@@ -92,56 +77,6 @@ export function AdminSpecialRoundWorkspace({
       setMessage(result.message);
       if (result.ok) router.refresh();
     });
-
-  function createMarket(formData: FormData) {
-    const options = String(formData.get("options") ?? "")
-      .split(",")
-      .map((option) => option.trim())
-      .filter(Boolean)
-      .map((option) => ({ label: option, value: option.toUpperCase().replace(/\s+/g, "_") }));
-    run(() =>
-      createSpecialRoundMarketAction({
-        active: true,
-        answerType: formData.get("answerType"),
-        description: formData.get("description"),
-        kind: formData.get("kind"),
-        line: formData.get("line") ? Number(formData.get("line")) : undefined,
-        options,
-        points: formData.get("points"),
-        required: formData.get("required") === "on",
-        sortOrder: formData.get("sortOrder"),
-        specialRoundId,
-        title: formData.get("title")
-      })
-    );
-  }
-
-  function saveResults(formData: FormData) {
-    const answers = Object.fromEntries(
-      markets.map((market) => {
-        const raw = String(formData.get(`result-${market.id}`) ?? "").trim();
-        if (market.kind === "EXACT_SCORE") {
-          const [home, away] = raw.split(/[xX-]/).map(Number);
-          return [market.id, { away, home }];
-        }
-        if (["TOTAL_GOALS", "TOTAL_CORNERS", "TOTAL_CARDS"].includes(market.kind)) {
-          return [market.id, Number(raw)];
-        }
-        if (market.kind === "BOTH_TEAMS_SCORE") return [market.id, raw === "true"];
-        return [market.id, raw];
-      })
-    );
-    run(() => saveSpecialRoundResultsAction({ answers, specialRoundId }));
-  }
-
-  function formatOfficialAnswer(market: Market) {
-    const answer = market.result?.answer;
-    if (market.kind === "EXACT_SCORE" && answer && typeof answer === "object") {
-      const score = answer as { away?: number; home?: number };
-      return `${score.home ?? 0}x${score.away ?? 0}`;
-    }
-    return answer === null || answer === undefined ? "" : String(answer);
-  }
 
   return (
     <div className="space-y-6">
@@ -218,75 +153,11 @@ export function AdminSpecialRoundWorkspace({
       </section>
 
       <section className="rounded-card border border-app-border bg-app-surface p-5" id="mercados">
-        <h2 className="text-lg font-semibold">Mercados</h2>
-        <form action={createMarket} className="mt-4 grid gap-3 md:grid-cols-4">
-          <input className={inputClass} name="title" placeholder="Titulo" required />
-          <select className={inputClass} name="kind">
-            {[
-              "EXACT_SCORE",
-              "MATCH_RESULT",
-              "TOTAL_GOALS",
-              "TOTAL_CORNERS",
-              "BOTH_TEAMS_SCORE",
-              "TOTAL_CARDS",
-              "FIRST_TEAM_TO_SCORE",
-              "GOAL_SCORER",
-              "CUSTOM"
-            ].map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
-          <select className={inputClass} name="answerType">
-            {["SINGLE_CHOICE", "INTEGER", "SCORE", "BOOLEAN", "SHORT_TEXT", "OPTION_LIST"].map(
-              (value) => (
-                <option key={value}>{value}</option>
-              )
-            )}
-          </select>
-          <input
-            className={inputClass}
-            min="0"
-            name="points"
-            placeholder="Pontos"
-            required
-            type="number"
-          />
-          <input
-            className={inputClass}
-            name="line"
-            placeholder="Linha (ex.: 2.5)"
-            step="0.1"
-            type="number"
-          />
-          <input
-            className={inputClass}
-            name="sortOrder"
-            placeholder="Ordem"
-            type="number"
-            defaultValue="0"
-          />
-          <input
-            className={`${inputClass} md:col-span-2`}
-            name="options"
-            placeholder="Opcoes separadas por virgula"
-          />
-          <input
-            className={`${inputClass} md:col-span-3`}
-            name="description"
-            placeholder="Descricao"
-          />
-          <label className="flex items-center gap-2 text-sm">
-            <input defaultChecked name="required" type="checkbox" /> Obrigatorio
-          </label>
-          <LoadingButton
-            className="h-11 rounded-button bg-brand-gold px-4 font-semibold text-black md:col-span-4"
-            isLoading={pending}
-            loadingLabel="Criando..."
-            type="submit"
-          >
-            Adicionar mercado
-          </LoadingButton>
-        </form>
+        <h2 className="text-lg font-semibold">Mercados automaticos</h2>
+        <p className="mt-1 text-sm text-app-muted">
+          Estes mercados foram criados com a rodada e serao homologados pelos dados da partida
+          catalogada.
+        </p>
         <div className="mt-4 space-y-2">
           {markets.map((market) => (
             <div
@@ -423,44 +294,29 @@ export function AdminSpecialRoundWorkspace({
 
       <section className="rounded-card border border-app-border bg-app-surface p-5" id="resultados">
         <h2 className="text-lg font-semibold">Resultados e apuracao</h2>
-        <form action={saveResults} className="mt-4 space-y-3">
-          {markets.map((market) => (
-            <label
-              className="grid gap-1 text-sm sm:grid-cols-[1fr_16rem] sm:items-center"
-              key={market.id}
-            >
-              <span>{market.title}</span>
-              <input
-                className={inputClass}
-                defaultValue={formatOfficialAnswer(market)}
-                name={`result-${market.id}`}
-                placeholder={
-                  market.kind === "EXACT_SCORE"
-                    ? "2x1"
-                    : ["TOTAL_GOALS", "TOTAL_CORNERS", "TOTAL_CARDS"].includes(market.kind)
-                      ? "Total numerico"
-                      : "Resultado oficial"
-                }
-                required
-              />
-            </label>
-          ))}
+        <p className="mt-1 text-sm text-app-muted">
+          Depois do encerramento, o sistema usa placar, eventos e estatisticas ja salvos no banco.
+          Nenhuma chamada nova e feita a API.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
           <LoadingButton
-            className="h-11 rounded-button border border-brand-gold/40 px-4 font-semibold text-brand-gold"
+            className="h-11 rounded-button bg-brand-gold px-4 font-semibold text-black"
             isLoading={pending}
-            loadingLabel="Salvando..."
-            type="submit"
+            loadingLabel="Homologando..."
+            onClick={() => run(() => homologateSpecialRoundFromCatalogAction(specialRoundId))}
           >
-            Salvar resultados
+            Homologar pelo catalogo
           </LoadingButton>
-          <LoadingButton
-            className="ml-2 h-11 rounded-button bg-brand-gold px-4 font-semibold text-black"
-            disabled={pending}
-            onClick={() => run(() => calculateSpecialRoundAction(specialRoundId))}
-          >
-            Calcular ou recalcular
-          </LoadingButton>
-        </form>
+          {["AWAITING_RESULT", "CALCULATING"].includes(status) ? (
+            <LoadingButton
+              className="h-11 rounded-button border border-brand-gold/40 px-4 font-semibold text-brand-gold"
+              disabled={pending}
+              onClick={() => run(() => calculateSpecialRoundAction(specialRoundId))}
+            >
+              Recalcular classificacao
+            </LoadingButton>
+          ) : null}
+        </div>
       </section>
 
       <section

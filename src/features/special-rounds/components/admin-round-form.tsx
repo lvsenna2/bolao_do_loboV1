@@ -8,6 +8,7 @@ import { useMemo, useState, useTransition } from "react";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { formatDateTimeLocalForSaoPaulo } from "@/lib/date-time";
 import {
+  createAutomaticSpecialRoundAction,
   createSpecialRoundAction,
   updateSpecialRoundAction
 } from "../actions/special-round-actions";
@@ -16,6 +17,11 @@ type MatchOption = {
   awayTeam: { logo: string | null; name: string };
   homeTeam: { logo: string | null; name: string };
   id: string;
+  round: {
+    name: string | null;
+    number: number;
+    season: { championship: { name: string }; name: string | null };
+  };
   startsAt: Date;
 };
 
@@ -61,6 +67,17 @@ export function AdminSpecialRoundForm({
       ? value.map((item) => String((item as { percent: number }).percent)).join(",")
       : "100";
   }, [initial]);
+
+  function createAutomatic(formData: FormData) {
+    startTransition(async () => {
+      const result = await createAutomaticSpecialRoundAction(String(formData.get("matchId")));
+      setMessage(result.message);
+      if (result.ok && result.data) {
+        router.push(`/admin/rodadas-especiais/${result.data.id}` as Route);
+        router.refresh();
+      }
+    });
+  }
 
   function submit(formData: FormData) {
     const percents = String(formData.get("distribution"))
@@ -115,6 +132,56 @@ export function AdminSpecialRoundForm({
   }
 
   const dateDefault = (date?: Date) => (date ? formatDateTimeLocalForSaoPaulo(date) : "");
+  if (!initial) {
+    return (
+      <form action={createAutomatic} className="space-y-5">
+        <div className="rounded-control border border-brand-gold/30 bg-brand-gold/5 p-4">
+          <h2 className="font-semibold text-brand-gold">Criacao automatica</h2>
+          <p className="mt-1 text-sm text-app-muted">
+            Escolha uma partida ja catalogada. Times, escudos, horario, inscricao, premiacao e os
+            oito mercados serao configurados automaticamente.
+          </p>
+        </div>
+        <label className="block">
+          Partida do catalogo
+          <select className={inputClass} defaultValue="" name="matchId" required>
+            <option disabled value="">
+              Selecione uma partida
+            </option>
+            {matches.map((match) => (
+              <option key={match.id} value={match.id}>
+                {match.round.season.championship.name} |{" "}
+                {match.round.name ?? `Rodada ${match.round.number}`} | {match.homeTeam.name} x{" "}
+                {match.awayTeam.name} |{" "}
+                {formatDateTimeLocalForSaoPaulo(match.startsAt).replace("T", " ")}
+              </option>
+            ))}
+          </select>
+        </label>
+        {matches.length ? null : (
+          <p className="rounded-control border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
+            Nenhuma partida futura foi encontrada no catalogo. Sincronize o campeonato antes de
+            criar a rodada.
+          </p>
+        )}
+        <LoadingButton
+          className="h-12 w-full rounded-button bg-brand-gold px-4 font-semibold text-black"
+          disabled={!matches.length}
+          isLoading={pending}
+          loadingLabel="Criando rodada..."
+          type="submit"
+        >
+          Criar e abrir Rodada Especial
+        </LoadingButton>
+        {message ? (
+          <p aria-live="polite" className="text-sm text-app-muted">
+            {message}
+          </p>
+        ) : null}
+      </form>
+    );
+  }
+
   return (
     <form action={submit} className="grid gap-4 md:grid-cols-2">
       <label className="md:col-span-2">

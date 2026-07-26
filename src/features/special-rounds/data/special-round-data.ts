@@ -153,15 +153,28 @@ export function getAdminSpecialRounds(status?: SpecialRoundStatus) {
 }
 
 export async function getSpecialRoundMatchOptions() {
+  const now = serverNow();
   const matches = await prisma.match.findMany({
-    orderBy: { kickoff: "desc" },
+    orderBy: { kickoff: "asc" },
     select: {
       awayTeam: { select: { id: true, logo: true, name: true } },
       homeTeam: { select: { id: true, logo: true, name: true } },
       id: true,
-      kickoff: true
+      kickoff: true,
+      round: {
+        select: {
+          name: true,
+          number: true,
+          season: { select: { championship: { select: { name: true } }, name: true } }
+        }
+      }
     },
-    take: 200
+    take: 300,
+    where: {
+      deletedAt: null,
+      kickoff: { gt: now },
+      status: { in: ["SCHEDULED", "POSTPONED"] }
+    }
   });
   return matches.map(({ kickoff, ...match }) => ({ ...match, startsAt: kickoff }));
 }
