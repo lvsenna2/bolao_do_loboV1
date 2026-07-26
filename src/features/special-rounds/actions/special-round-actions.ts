@@ -19,7 +19,6 @@ import { evaluateSpecialRoundAnswer, rankSpecialRoundEntries } from "../services
 import {
   assertSpecialRoundTransition,
   blockingSpecialRoundStatuses,
-  canDeleteCancelledSpecialRoundEntries,
   canDeleteSpecialRoundEntries,
   isPredictionWindowOpen
 } from "../services/state-service";
@@ -1356,15 +1355,11 @@ export async function deleteSpecialRoundAction(
     return { message: "Rodada nao encontrada.", ok: false };
   }
   const canDelete =
-    round.status === "CANCELLED"
-      ? canDeleteCancelledSpecialRoundEntries(round.entries)
-      : canDeleteSpecialRoundEntries(round.entries);
+    round.status === "CANCELLED" || canDeleteSpecialRoundEntries(round.entries);
   if (!canDelete) {
     return {
       message:
-        round.status === "CANCELLED"
-          ? "Ainda existe pagamento aprovado ou PIX pendente. Reembolse os aprovados e aguarde o cancelamento dos pendentes antes de excluir."
-          : "Esta rodada possui pagamento confirmado ou transacao no Mercado Pago. Cancele a rodada para preservar a auditoria.",
+        "Esta rodada possui pagamento confirmado ou transacao no Mercado Pago. Cancele a rodada antes de excluir.",
       ok: false
     };
   }
