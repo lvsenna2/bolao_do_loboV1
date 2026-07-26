@@ -1234,10 +1234,10 @@ export async function deleteSpecialRoundAction(
     include: { _count: { select: { entries: true } } },
     where: { id: id.data }
   });
-  if (!round || round.status === "FINALIZED" || round._count.entries > 0) {
+  if (!round || round._count.entries > 0) {
     return {
       message:
-        "Rodadas finalizadas ou com inscricoes nao podem ser excluidas. Cancele a rodada para preservar pagamentos e auditoria.",
+        "Rodadas com inscricoes nao podem ser excluidas. Cancele a rodada para preservar pagamentos e auditoria.",
       ok: false
     };
   }

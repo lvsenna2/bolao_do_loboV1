@@ -4,6 +4,7 @@ import type { Route } from "next";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AdminSpecialRoundDeleteButton } from "@/features/special-rounds/components/admin-round-delete-button";
 import { SpecialRoundStatusBadge } from "@/features/special-rounds/components/status-badge";
 import { getAdminSpecialRounds } from "@/features/special-rounds/data/special-round-data";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
@@ -50,12 +51,17 @@ export default async function AdminSpecialRoundsPage() {
                   {collected.toLocaleString("pt-BR", { currency: "BRL", style: "currency" })}{" "}
                   arrecadados
                 </p>
-                <Link
-                  className="mt-4 inline-flex h-10 items-center rounded-button border border-brand-gold/40 px-4 text-sm font-semibold text-brand-gold"
-                  href={`/admin/rodadas-especiais/${round.id}` as Route}
-                >
-                  Gerenciar
-                </Link>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    className="inline-flex h-10 items-center rounded-button border border-brand-gold/40 px-4 text-sm font-semibold text-brand-gold"
+                    href={`/admin/rodadas-especiais/${round.id}` as Route}
+                  >
+                    Gerenciar
+                  </Link>
+                  {round._count.entries === 0 ? (
+                    <AdminSpecialRoundDeleteButton name={round.name} specialRoundId={round.id} />
+                  ) : null}
+                </div>
               </CardContent>
             </Card>
           );
