@@ -40,6 +40,11 @@ const filters = [
   { href: "/notificacoes", label: "Todas", value: "all" },
   { href: "/notificacoes?filter=unread", label: "Nao lidas", value: "unread" },
   { href: "/notificacoes?filter=xp", label: "XP", value: "xp" },
+  {
+    href: "/notificacoes?filter=special-round",
+    label: "Rodadas Especiais",
+    value: "special-round"
+  },
   { href: "/notificacoes?filter=system", label: "Sistema", value: "system" },
   { href: "/notificacoes?filter=payment", label: "Pagamentos", value: "payment" }
 ];

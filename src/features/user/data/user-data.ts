@@ -923,7 +923,8 @@ export async function getUserNotifications(
       ...(filter === "unread" ? { isRead: false } : {}),
       ...(filter === "system" ? { type: "SYSTEM" as const } : {}),
       ...(filter === "payment" ? { type: "PAYMENT" as const } : {}),
-      ...(filter === "xp" ? { type: "XP" as const } : {})
+      ...(filter === "xp" ? { type: "XP" as const } : {}),
+      ...(filter === "special-round" ? { type: "SPECIAL_ROUND" as const } : {})
     };
 
     const [items, unread, filterUnread, total] = await prisma.$transaction([

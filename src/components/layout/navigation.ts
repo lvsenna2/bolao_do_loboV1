@@ -11,6 +11,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Swords,
   Trophy,
   UserRound,
   Users,
@@ -46,6 +47,11 @@ export const mainNavigationItems: NavigationItem[] = [
     label: "Palpites"
   },
   {
+    href: "/rodadas-especiais",
+    icon: Swords,
+    label: "Rodada Especial"
+  },
+  {
     href: "/comparar-palpites",
     icon: GitCompareArrows,
     label: "Comparar"
@@ -72,7 +78,8 @@ export const mobileNavigationItems: NavigationItem[] = [
   mainNavigationItems[1],
   mainNavigationItems[3],
   mainNavigationItems[4],
-  mainNavigationItems[7]
+  mainNavigationItems[5],
+  mainNavigationItems[8]
 ];
 
 export const adminNavigationItems: NavigationItem[] = [
@@ -105,6 +112,11 @@ export const adminNavigationItems: NavigationItem[] = [
     href: "/admin/rodadas",
     icon: CalendarDays,
     label: "Rodadas"
+  },
+  {
+    href: "/admin/rodadas-especiais",
+    icon: Swords,
+    label: "Rodadas Especiais"
   },
   {
     href: "/admin/ligas",

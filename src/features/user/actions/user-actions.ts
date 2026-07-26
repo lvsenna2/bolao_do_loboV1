@@ -219,6 +219,7 @@ export async function markAllNotificationsReadAction(formData: FormData): Promis
   await prisma.notification.updateMany({
     where: {
       ...(filter === "xp" ? { type: "XP" as const } : {}),
+      ...(filter === "special-round" ? { type: "SPECIAL_ROUND" as const } : {}),
       isRead: false,
       userId: sessionUser.id
     },

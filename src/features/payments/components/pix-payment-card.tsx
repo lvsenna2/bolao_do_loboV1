@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { checkMercadoPagoPaymentAction } from "@/features/payments/actions/payment-actions";
+import { checkSpecialRoundPaymentAction } from "@/features/special-rounds/actions/special-round-actions";
 
 type PixPaymentCardProps = {
   amountLabel: string;
@@ -21,6 +22,7 @@ type PixPaymentCardProps = {
   qrCodeDataUri: string;
   ticketUrl?: string | null;
   transactionId: string;
+  variant?: "league" | "special-round";
 };
 
 export function PixPaymentCard({
@@ -37,7 +39,8 @@ export function PixPaymentCard({
   pixCode,
   qrCodeDataUri,
   ticketUrl,
-  transactionId
+  transactionId,
+  variant = "league"
 }: PixPaymentCardProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
@@ -54,9 +57,17 @@ export function PixPaymentCard({
     setIsChecking(true);
 
     try {
-      const result = await checkMercadoPagoPaymentAction(paymentId);
+      const result =
+        variant === "special-round"
+          ? await checkSpecialRoundPaymentAction(paymentId)
+          : await checkMercadoPagoPaymentAction(paymentId);
+      const status = result.ok
+        ? "status" in result
+          ? result.status
+          : result.data?.status
+        : undefined;
 
-      if (result.ok && result.status === "APPROVED") {
+      if (result.ok && status === "APPROVED") {
         setPaymentApproved(true);
         router.refresh();
       }
@@ -64,7 +75,7 @@ export function PixPaymentCard({
       checkingRef.current = false;
       setIsChecking(false);
     }
-  }, [paymentApproved, paymentId, router]);
+  }, [paymentApproved, paymentId, router, variant]);
 
   useEffect(() => {
     void checkPayment();
@@ -95,8 +106,9 @@ export function PixPaymentCard({
             </span>
             <h3 className="mt-4 text-xl font-bold text-white">{leagueName}</h3>
             <p className="mt-2 max-w-xl text-sm leading-6 text-amber-50/80">
-              Cobranca dinamica protegida pelo Mercado Pago. A liga sera liberada automaticamente
-              depois que o PIX for confirmado.
+              Cobranca dinamica protegida pelo Mercado Pago.{" "}
+              {variant === "special-round" ? "A participacao" : "A liga"} sera liberada
+              automaticamente depois que o PIX for confirmado.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -146,7 +158,7 @@ export function PixPaymentCard({
 
           <div className="rounded-card border border-white/15 bg-white p-3 text-slate-950 shadow-soft">
             <div
-              aria-label={`QR Code Pix da liga ${leagueName}`}
+              aria-label={`QR Code Pix de ${leagueName}`}
               className="h-48 w-48 bg-contain bg-center bg-no-repeat"
               role="img"
               style={{ backgroundImage: `url("${qrCodeDataUri}")` }}

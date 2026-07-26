@@ -233,6 +233,17 @@ export function getMercadoPagoPayment(providerPaymentId: string) {
   );
 }
 
+export function refundMercadoPagoPayment(providerPaymentId: string, idempotencyKey: string) {
+  if (!/^\d+$/.test(providerPaymentId)) {
+    throw new MercadoPagoApiError("Identificador de pagamento invalido.", 400);
+  }
+  return mercadoPagoRequest<MercadoPagoPayment>(
+    `/v1/payments/${encodeURIComponent(providerPaymentId)}/refunds`,
+    { method: "POST" },
+    idempotencyKey
+  );
+}
+
 export function getMercadoPagoPixData(payment: MercadoPagoPayment) {
   const data = payment.point_of_interaction?.transaction_data;
 

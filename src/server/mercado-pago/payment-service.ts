@@ -13,6 +13,7 @@ import {
   getMercadoPagoPixData,
   type MercadoPagoPayment
 } from "./client";
+import { reconcileSpecialRoundPayment } from "@/features/special-rounds/services/payment-service";
 
 const PIX_EXPIRATION_HOURS = 24;
 
@@ -112,8 +113,11 @@ export async function reconcileMercadoPagoPayment(providerPayment: MercadoPagoPa
     }
   });
 
+  if (!payment) {
+    return reconcileSpecialRoundPayment(providerPayment);
+  }
+
   if (
-    !payment ||
     externalReference !== payment.id ||
     !amountsMatch(providerPayment.transaction_amount, payment.amount)
   ) {

@@ -127,6 +127,51 @@ enum NotificationType {
   PAYMENT
   RANKING
   XP
+  SPECIAL_ROUND
+}
+
+enum SpecialRoundStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  PREDICTIONS_OPEN
+  PREDICTIONS_CLOSED
+  AWAITING_RESULT
+  CALCULATING
+  FINALIZED
+  CANCELLED
+}
+
+enum SpecialRoundMarketKind {
+  EXACT_SCORE
+  MATCH_RESULT
+  TOTAL_GOALS
+  TOTAL_CORNERS
+  BOTH_TEAMS_SCORE
+  TOTAL_CARDS
+  FIRST_TEAM_TO_SCORE
+  GOAL_SCORER
+  CUSTOM
+}
+
+enum SpecialRoundAnswerType {
+  SINGLE_CHOICE
+  INTEGER
+  SCORE
+  BOOLEAN
+  SHORT_TEXT
+  OPTION_LIST
+}
+
+enum SpecialRoundPrizeMode {
+  FIXED
+  POOL
+}
+
+enum SpecialRoundPrizeStatus {
+  PENDING
+  CONFIRMED
+  PAID
+  CANCELLED
 }
 
 enum BadgeRarity {
@@ -174,23 +219,28 @@ model User {
 
   accounts               Account[]
   sessions               Session[]
-  ownedLeagues           League[]              @relation("LeagueOwner")
+  ownedLeagues           League[]               @relation("LeagueOwner")
   memberships            LeagueMember[]
   guesses                Guess[]
   scores                 Score[]
   rankings               Ranking[]
-  rankingAdjustments     RankingAdjustment[]   @relation("RankingAdjustmentUser")
-  rankingAdjustmentsMade RankingAdjustment[]   @relation("RankingAdjustmentAdmin")
+  rankingAdjustments     RankingAdjustment[]    @relation("RankingAdjustmentUser")
+  rankingAdjustmentsMade RankingAdjustment[]    @relation("RankingAdjustmentAdmin")
   payments               Payment[]
   notifications          Notification[]
   achievements           Achievement[]
-  leagueBadgeAwards      LeagueBadgeAward[]    @relation("LeagueBadgeAwardUser")
-  leagueBadgeAwardsMade  LeagueBadgeAward[]    @relation("LeagueBadgeAwardAdmin")
-  xpEvents               XpEvent[]             @relation("XpEventUser")
-  xpEventsGranted        XpEvent[]             @relation("XpEventAdmin")
+  leagueBadgeAwards      LeagueBadgeAward[]     @relation("LeagueBadgeAwardUser")
+  leagueBadgeAwardsMade  LeagueBadgeAward[]     @relation("LeagueBadgeAwardAdmin")
+  xpEvents               XpEvent[]              @relation("XpEventUser")
+  xpEventsGranted        XpEvent[]              @relation("XpEventAdmin")
   xpStreak               UserStreak?
   missionProgress        UserMissionProgress[]
   auditLogs              AuditLog[]
+  specialRoundsCreated   SpecialRound[]         @relation("SpecialRoundCreator")
+  specialRoundEntries    SpecialRoundEntry[]
+  specialRoundPredictions SpecialRoundPrediction[]
+  specialRoundResults    SpecialRoundResult[]   @relation("SpecialRoundResultAdmin")
+  specialRoundAudits     SpecialRoundAuditLog[] @relation("SpecialRoundAuditActor")
 
   @@index([email])
   @@index([phone])
@@ -455,6 +505,7 @@ model Match {
   statistics       MatchStatistic[]
   playerStatistics MatchPlayerStatistic[]
   insight          MatchInsight?
+  specialRounds    SpecialRound[]
 
   @@index([roundId])
   @@index([homeTeamId])
@@ -985,6 +1036,249 @@ model AuditLog {
   @@index([entity])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model SpecialRound {
+  id                   String                @id @default(uuid()) @db.Uuid
+  createdById          String                @map("created_by_id") @db.Uuid
+  matchId              String?               @map("match_id") @db.Uuid
+  name                 String                @db.VarChar(140)
+  description          String?
+  rules                String?
+  homeTeamName         String                @map("home_team_name") @db.VarChar(120)
+  awayTeamName         String                @map("away_team_name") @db.VarChar(120)
+  homeTeamLogo         String?               @map("home_team_logo")
+  awayTeamLogo         String?               @map("away_team_logo")
+  matchStartsAt        DateTime              @map("match_starts_at")
+  registrationOpensAt  DateTime              @map("registration_opens_at")
+  registrationClosesAt DateTime              @map("registration_closes_at")
+  predictionsOpenAt    DateTime              @map("predictions_open_at")
+  predictionsCloseAt   DateTime              @map("predictions_close_at")
+  entryFee             Decimal               @default(0) @map("entry_fee") @db.Decimal(10, 2)
+  prizeMode            SpecialRoundPrizeMode @default(POOL) @map("prize_mode")
+  fixedPrize           Decimal?              @map("fixed_prize") @db.Decimal(10, 2)
+  prizePoolPercent     Decimal               @default(100) @map("prize_pool_percent") @db.Decimal(5, 2)
+  adminFeePercent      Decimal               @default(0) @map("admin_fee_percent") @db.Decimal(5, 2)
+  winnerCount          Int                   @default(1) @map("winner_count")
+  prizeDistribution    Json                  @map("prize_distribution")
+  finalPrize           Decimal?              @map("final_prize") @db.Decimal(10, 2)
+  status               SpecialRoundStatus    @default(DRAFT)
+  rankingPublishedAt   DateTime?             @map("ranking_published_at")
+  finalizedAt          DateTime?             @map("finalized_at")
+  cancelledAt          DateTime?             @map("cancelled_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  createdBy User                   @relation("SpecialRoundCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  match     Match?                 @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  entries   SpecialRoundEntry[]
+  markets   SpecialRoundMarket[]
+  standings SpecialRoundStanding[]
+  prizes    SpecialRoundPrize[]
+  audits    SpecialRoundAuditLog[]
+
+  @@index([status, predictionsCloseAt])
+  @@index([matchStartsAt])
+  @@index([createdById])
+  @@index([matchId])
+  @@map("special_rounds")
+}
+
+model SpecialRoundEntry {
+  id                   String         @id @default(uuid()) @db.Uuid
+  specialRoundId       String         @map("special_round_id") @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  amount               Decimal        @db.Decimal(10, 2)
+  paymentStatus        PaymentStatus  @default(PENDING) @map("payment_status")
+  paymentGateway       PaymentGateway @default(MERCADO_PAGO) @map("payment_gateway")
+  transactionId        String?        @unique @map("transaction_id")
+  checkoutKey          String?        @unique @map("checkout_key") @db.VarChar(180)
+  qrCode               String?        @map("qr_code")
+  qrCodeBase64         String?        @map("qr_code_base64")
+  ticketUrl            String?        @map("ticket_url")
+  providerStatus       String?        @map("provider_status") @db.VarChar(80)
+  providerStatusDetail String?        @map("provider_status_detail") @db.VarChar(120)
+  paymentExpiresAt     DateTime?      @map("payment_expires_at")
+  lastWebhookAt        DateTime?      @map("last_webhook_at")
+  registeredAt         DateTime       @default(now()) @map("registered_at")
+  confirmedAt          DateTime?      @map("confirmed_at")
+  refundedAt           DateTime?      @map("refunded_at")
+  blockedAt            DateTime?      @map("blocked_at")
+  blockedReason        String?        @map("blocked_reason") @db.VarChar(240)
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  specialRound SpecialRound             @relation(fields: [specialRoundId], references: [id], onDelete: Restrict)
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  predictions  SpecialRoundPrediction[]
+  scores       SpecialRoundScore[]
+  standing     SpecialRoundStanding?
+  prize        SpecialRoundPrize?
+
+  @@unique([specialRoundId, userId])
+  @@index([userId])
+  @@index([specialRoundId, paymentStatus])
+  @@index([registeredAt])
+  @@map("special_round_entries")
+}
+
+model SpecialRoundMarket {
+  id             String                 @id @default(uuid()) @db.Uuid
+  specialRoundId String                 @map("special_round_id") @db.Uuid
+  title          String                 @db.VarChar(160)
+  description    String?
+  kind           SpecialRoundMarketKind
+  answerType     SpecialRoundAnswerType @map("answer_type")
+  line           Decimal?               @db.Decimal(8, 2)
+  points         Int
+  required       Boolean                @default(true)
+  sortOrder      Int                    @default(0) @map("sort_order")
+  active         Boolean                @default(true)
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+
+  specialRound SpecialRound               @relation(fields: [specialRoundId], references: [id], onDelete: Restrict)
+  options      SpecialRoundMarketOption[]
+  predictions  SpecialRoundPrediction[]
+  result       SpecialRoundResult?
+  scores       SpecialRoundScore[]
+
+  @@index([specialRoundId, active, sortOrder])
+  @@map("special_round_markets")
+}
+
+model SpecialRoundMarketOption {
+  id        String   @id @default(uuid()) @db.Uuid
+  marketId  String   @map("market_id") @db.Uuid
+  label     String   @db.VarChar(120)
+  value     String   @db.VarChar(120)
+  sortOrder Int      @default(0) @map("sort_order")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  market SpecialRoundMarket @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([marketId, value])
+  @@index([marketId, sortOrder])
+  @@map("special_round_market_options")
+}
+
+model SpecialRoundPrediction {
+  id          String    @id @default(uuid()) @db.Uuid
+  entryId     String    @map("entry_id") @db.Uuid
+  marketId    String    @map("market_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  answer      Json
+  submittedAt DateTime  @default(now()) @map("submitted_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  adminEditAt DateTime? @map("admin_edit_at")
+
+  entry  SpecialRoundEntry  @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  market SpecialRoundMarket @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  user   User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([entryId, marketId])
+  @@index([userId])
+  @@index([marketId])
+  @@index([submittedAt])
+  @@map("special_round_predictions")
+}
+
+model SpecialRoundResult {
+  id          String   @id @default(uuid()) @db.Uuid
+  marketId    String   @unique @map("market_id") @db.Uuid
+  enteredById String   @map("entered_by_id") @db.Uuid
+  answer      Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  market    SpecialRoundMarket @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  enteredBy User               @relation("SpecialRoundResultAdmin", fields: [enteredById], references: [id], onDelete: Restrict)
+
+  @@index([enteredById])
+  @@map("special_round_results")
+}
+
+model SpecialRoundScore {
+  id            String   @id @default(uuid()) @db.Uuid
+  entryId       String   @map("entry_id") @db.Uuid
+  marketId      String   @map("market_id") @db.Uuid
+  points        Int      @default(0)
+  hit           Boolean  @default(false)
+  maxPointsHit  Boolean  @default(false) @map("max_points_hit")
+  exactScoreHit Boolean  @default(false) @map("exact_score_hit")
+  calculatedAt  DateTime @default(now()) @map("calculated_at")
+
+  entry  SpecialRoundEntry  @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  market SpecialRoundMarket @relation(fields: [marketId], references: [id], onDelete: Restrict)
+
+  @@unique([entryId, marketId])
+  @@index([entryId, points])
+  @@index([marketId])
+  @@map("special_round_scores")
+}
+
+model SpecialRoundStanding {
+  id               String    @id @default(uuid()) @db.Uuid
+  specialRoundId   String    @map("special_round_id") @db.Uuid
+  entryId          String    @unique @map("entry_id") @db.Uuid
+  position         Int?
+  totalPoints      Int       @default(0) @map("total_points")
+  hits             Int       @default(0)
+  maxPointsHits    Int       @default(0) @map("max_points_hits")
+  exactScoreHits   Int       @default(0) @map("exact_score_hits")
+  firstSubmittedAt DateTime? @map("first_submitted_at")
+  manualTieBreak   Int       @default(0) @map("manual_tie_break")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  specialRound SpecialRound      @relation(fields: [specialRoundId], references: [id], onDelete: Restrict)
+  entry        SpecialRoundEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
+
+  @@unique([specialRoundId, position])
+  @@index([specialRoundId, totalPoints(sort: Desc), hits(sort: Desc)])
+  @@map("special_round_standings")
+}
+
+model SpecialRoundPrize {
+  id             String                  @id @default(uuid()) @db.Uuid
+  specialRoundId String                  @map("special_round_id") @db.Uuid
+  entryId        String                  @unique @map("entry_id") @db.Uuid
+  position       Int
+  percentage     Decimal                 @db.Decimal(5, 2)
+  amount         Decimal                 @db.Decimal(10, 2)
+  status         SpecialRoundPrizeStatus @default(PENDING)
+  confirmedAt    DateTime?               @map("confirmed_at")
+  paidAt         DateTime?               @map("paid_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  specialRound SpecialRound      @relation(fields: [specialRoundId], references: [id], onDelete: Restrict)
+  entry        SpecialRoundEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
+
+  @@unique([specialRoundId, position])
+  @@index([specialRoundId, status])
+  @@map("special_round_prizes")
+}
+
+model SpecialRoundAuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  specialRoundId String   @map("special_round_id") @db.Uuid
+  actorId        String?  @map("actor_id") @db.Uuid
+  action         String   @db.VarChar(120)
+  entity         String   @db.VarChar(100)
+  entityId       String?  @map("entity_id") @db.VarChar(80)
+  oldValue       Json?    @map("old_value")
+  newValue       Json?    @map("new_value")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  specialRound SpecialRound @relation(fields: [specialRoundId], references: [id], onDelete: Restrict)
+  actor        User?        @relation("SpecialRoundAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([specialRoundId, createdAt])
+  @@index([actorId])
+  @@index([action])
+  @@map("special_round_audit_logs")
 }
 
 model Setting {
