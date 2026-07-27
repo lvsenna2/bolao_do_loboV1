@@ -116,4 +116,42 @@ describe("catalog special round results", () => {
       expect.arrayContaining(["Escanteios", "Cartoes", "Primeiro time", "Artilheiro"])
     );
   });
+
+  it("counts card events when aggregated statistics are unavailable", () => {
+    const result = deriveCatalogResults(
+      {
+        awayScore: 1,
+        awayTeamId: "away",
+        events: [
+          {
+            detail: "Yellow Card",
+            elapsed: 20,
+            extra: null,
+            player: null,
+            teamId: "home",
+            type: "Card"
+          },
+          {
+            detail: "Yellow Card",
+            elapsed: 45,
+            extra: 2,
+            player: null,
+            teamId: "away",
+            type: "Card"
+          }
+        ],
+        homeScore: 2,
+        homeTeamId: "home",
+        statistics: [
+          { type: "Yellow Cards", value: null },
+          { type: "Red Cards", value: null }
+        ],
+        status: "FINISHED"
+      },
+      [markets.find((market) => market.kind === "TOTAL_CARDS")!]
+    );
+
+    expect(result.answers.cards).toBe(2);
+    expect(result.missing).toEqual([]);
+  });
 });

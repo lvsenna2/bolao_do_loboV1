@@ -3,6 +3,7 @@ import type { SpecialRoundMarketKind } from "@prisma/client";
 import type { SpecialRoundAnswer } from "../types";
 
 type CatalogEvent = {
+  detail?: string | null;
   elapsed: number;
   extra: number | null;
   player: { id: string; name: string } | null;
@@ -64,8 +65,11 @@ export function deriveCatalogResults(match: CatalogMatch, markets: readonly Resu
   const corners = numericStatistic(match.statistics, "Corner Kicks");
   const yellowCards = numericStatistic(match.statistics, "Yellow Cards");
   const redCards = numericStatistic(match.statistics, "Red Cards");
+  const cardEvents = match.events.filter((event) => event.type.toLowerCase() === "card");
   const cards =
-    yellowCards === null && redCards === null ? null : (yellowCards ?? 0) + (redCards ?? 0);
+    yellowCards === null && redCards === null
+      ? cardEvents.length || null
+      : (yellowCards ?? 0) + (redCards ?? 0);
 
   for (const market of markets) {
     let answer: SpecialRoundAnswer | undefined;
