@@ -1065,6 +1065,14 @@ export async function calculateSpecialRoundAction(
       if (round.markets.some((market) => !market.result)) throw new Error("MISSING_RESULTS");
       await tx.specialRound.update({ data: { status: "CALCULATING" }, where: { id: round.id } });
       const candidates = [];
+      const scoreRows: {
+        entryId: string;
+        exactScoreHit: boolean;
+        hit: boolean;
+        marketId: string;
+        maxPointsHit: boolean;
+        points: number;
+      }[] = [];
       for (const entry of round.entries) {
         let totalPoints = 0,
           hits = 0,
@@ -1087,11 +1095,7 @@ export async function calculateSpecialRoundAction(
           hits += Number(evaluation.hit);
           maxPointsHits += Number(evaluation.maxPointsHit);
           exactScoreHits += Number(evaluation.exactScoreHit);
-          await tx.specialRoundScore.upsert({
-            create: { ...evaluation, entryId: entry.id, marketId: market.id },
-            update: { ...evaluation, calculatedAt: serverNow() },
-            where: { entryId_marketId: { entryId: entry.id, marketId: market.id } }
-          });
+          scoreRows.push({ ...evaluation, entryId: entry.id, marketId: market.id });
         }
         candidates.push({
           entryId: entry.id,
@@ -1107,16 +1111,17 @@ export async function calculateSpecialRoundAction(
           totalPoints
         });
       }
-      const ranked = rankSpecialRoundEntries(candidates);
-      await tx.specialRoundStanding.updateMany({
-        data: { position: null },
-        where: { specialRoundId: round.id }
+      await tx.specialRoundScore.deleteMany({
+        where: { entry: { specialRoundId: round.id } }
       });
-      for (const standing of ranked) {
-        await tx.specialRoundStanding.upsert({
-          create: { ...standing, specialRoundId: round.id },
-          update: standing,
-          where: { entryId: standing.entryId }
+      if (scoreRows.length) {
+        await tx.specialRoundScore.createMany({ data: scoreRows });
+      }
+      const ranked = rankSpecialRoundEntries(candidates);
+      await tx.specialRoundStanding.deleteMany({ where: { specialRoundId: round.id } });
+      if (ranked.length) {
+        await tx.specialRoundStanding.createMany({
+          data: ranked.map((standing) => ({ ...standing, specialRoundId: round.id }))
         });
       }
       const paidAmounts = round.entries.map((entry) => Number(entry.amount));
@@ -1154,14 +1159,24 @@ export async function calculateSpecialRoundAction(
           specialRoundId: round.id
         }
       });
-    }, serializable);
+    }, {
+      isolationLevel: "Serializable",
+      maxWait: 5_000,
+      timeout: 20_000
+    });
   } catch (error) {
+    console.error("Special round calculation failed", {
+      error,
+      specialRoundId: id.data
+    });
     return {
       message:
         error instanceof Error && error.message === "MISSING_RESULTS"
           ? "Preencha todos os resultados oficiais antes da apuracao."
           : error instanceof Error && error.message === "PRIZE_ALREADY_PAID"
             ? "Nao e permitido recalcular depois que um premio foi marcado como pago."
+            : error instanceof Error && error.message === "INVALID_STATUS"
+              ? "A rodada precisa estar aguardando resultado antes da apuracao."
             : "Nao foi possivel calcular a rodada.",
       ok: false
     };
