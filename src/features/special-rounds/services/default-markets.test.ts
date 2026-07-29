@@ -42,8 +42,9 @@ describe("automatic special round markets", () => {
     const markets = buildAutomaticSpecialRoundMarkets("Casa", "Visitante", []);
 
     expect(markets[7]).toMatchObject({
-      answerType: "SHORT_TEXT",
+      answerType: "OPTION_LIST",
       kind: "GOAL_SCORER",
+      options: [{ label: "Nenhum jogador (sem gols)", value: "NO_GOAL" }],
       required: true
     });
   });

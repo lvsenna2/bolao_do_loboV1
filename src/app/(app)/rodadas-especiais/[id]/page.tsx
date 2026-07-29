@@ -62,6 +62,25 @@ export default async function SpecialRoundDetailPage({
     round.prizeMode === "FIXED"
       ? Number(round.fixedPrize ?? 0)
       : paidParticipants * Number(round.entryFee) * (Number(round.prizePoolPercent) / 100);
+  const playerTeamByOption = new Map<string, string>(
+    (round.match?.lineups ?? []).flatMap((lineup) =>
+      lineup.players.map((item) => [`PLAYER:${item.playerId}`, lineup.team.name] as const)
+    )
+  );
+  const predictionMarkets = round.markets.map((market) => ({
+    answerType: market.answerType,
+    description: market.description,
+    id: market.id,
+    kind: market.kind,
+    options: market.options.map((option) => ({
+      group: playerTeamByOption.get(option.value) ?? null,
+      label: option.label,
+      value: option.value
+    })),
+    points: market.points,
+    required: market.required,
+    title: market.title
+  }));
 
   return (
     <PageShell
@@ -79,8 +98,10 @@ export default async function SpecialRoundDetailPage({
             <CardContent>
               {predictionsOpen ? (
                 <SpecialRoundPredictionForm
+                  awayTeamName={round.awayTeamName}
+                  homeTeamName={round.homeTeamName}
                   initialAnswers={initialAnswers}
-                  markets={round.markets}
+                  markets={predictionMarkets}
                   specialRoundId={round.id}
                 />
               ) : (

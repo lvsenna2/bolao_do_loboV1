@@ -85,10 +85,7 @@ export async function getSpecialRoundDetail(id: string, userId?: string) {
         orderBy: { registeredAt: "asc" },
         where: predictionsArePublic
           ? {
-              OR: [
-                { paymentStatus: "APPROVED" },
-                ...(userId ? [{ userId }] : [])
-              ]
+              OR: [{ paymentStatus: "APPROVED" }, ...(userId ? [{ userId }] : [])]
             }
           : { userId }
       },
@@ -99,6 +96,16 @@ export async function getSpecialRoundDetail(id: string, userId?: string) {
         },
         orderBy: { sortOrder: "asc" },
         where: { active: true }
+      },
+      match: {
+        select: {
+          lineups: {
+            select: {
+              players: { select: { playerId: true } },
+              team: { select: { name: true } }
+            }
+          }
+        }
       },
       standings: {
         include: {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { SpecialRoundAnswerType } from "@prisma/client";
+import type { SpecialRoundAnswerType, SpecialRoundMarketKind } from "@prisma/client";
 import { Save } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -14,17 +14,22 @@ type Market = {
   answerType: SpecialRoundAnswerType;
   description: string | null;
   id: string;
-  options: { label: string; value: string }[];
+  kind: SpecialRoundMarketKind;
+  options: { group?: string | null; label: string; value: string }[];
   points: number;
   required: boolean;
   title: string;
 };
 
 export function SpecialRoundPredictionForm({
+  awayTeamName,
+  homeTeamName,
   initialAnswers,
   markets,
   specialRoundId
 }: {
+  awayTeamName: string;
+  homeTeamName: string;
   initialAnswers: Record<string, SpecialRoundAnswer>;
   markets: Market[];
   specialRoundId: string;
@@ -54,6 +59,19 @@ export function SpecialRoundPredictionForm({
       <div className="grid gap-4 xl:grid-cols-2">
         {markets.map((market) => {
           const answer = answers[market.id];
+          const isGoalScorer = market.kind === "GOAL_SCORER";
+          const goalScorerTeams = [homeTeamName, awayTeamName].map((teamName) => ({
+            name: teamName,
+            options: market.options.filter(
+              (option) => option.value.startsWith("PLAYER:") && option.group === teamName
+            )
+          }));
+          const ungroupedGoalScorers = market.options.filter(
+            (option) =>
+              option.value.startsWith("PLAYER:") &&
+              !goalScorerTeams.some((team) => team.options.includes(option))
+          );
+          const noGoalOption = market.options.find((option) => option.value === "NO_GOAL");
           return (
             <section
               className="flex min-w-0 flex-col rounded-card border border-app-border bg-app-surface p-4"
@@ -71,7 +89,50 @@ export function SpecialRoundPredictionForm({
                 </span>
               </div>
               <div className="mt-auto pt-4">
-                {market.answerType === "SCORE" ? (
+                {isGoalScorer ? (
+                  <div className="space-y-2">
+                    <select
+                      aria-label="Primeiro jogador a marcar"
+                      className="h-12 w-full rounded-control border border-app-border bg-app-elevated px-3"
+                      onChange={(event) => setAnswer(market.id, event.target.value)}
+                      value={typeof answer === "string" ? answer : ""}
+                    >
+                      <option value="">Selecione o jogador</option>
+                      {goalScorerTeams.map((team) => (
+                        <optgroup key={team.name} label={team.name}>
+                          {team.options.length ? (
+                            team.options.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))
+                          ) : (
+                            <option disabled value="">
+                              Aguardando escalacao
+                            </option>
+                          )}
+                        </optgroup>
+                      ))}
+                      {ungroupedGoalScorers.length ? (
+                        <optgroup label="Outros jogadores">
+                          {ungroupedGoalScorers.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                      {noGoalOption ? (
+                        <option value={noGoalOption.value}>{noGoalOption.label}</option>
+                      ) : null}
+                    </select>
+                    {!market.options.some((option) => option.value.startsWith("PLAYER:")) ? (
+                      <p className="text-xs text-app-muted">
+                        Os jogadores aparecerao aqui assim que a escalacao for sincronizada.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : market.answerType === "SCORE" ? (
                   <div className="flex items-center justify-center gap-3">
                     <input
                       aria-label="Gols do time da casa"

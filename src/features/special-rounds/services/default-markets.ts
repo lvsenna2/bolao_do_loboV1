@@ -151,13 +151,13 @@ export function buildAutomaticSpecialRoundMarkets(
     },
     {
       active: true,
-      answerType: players.length ? "OPTION_LIST" : "SHORT_TEXT",
+      answerType: "OPTION_LIST",
       description: players.length
         ? "Escolha quem marcará o primeiro gol da partida."
-        : "Informe quem marcará o primeiro gol ou digite NO_GOAL.",
+        : "A lista de jogadores sera preenchida quando a escalacao for sincronizada.",
       kind: "GOAL_SCORER",
       line: null,
-      options: players.length ? playerOptions : [],
+      options: playerOptions,
       points: 3,
       required: true,
       sortOrder: 8,
