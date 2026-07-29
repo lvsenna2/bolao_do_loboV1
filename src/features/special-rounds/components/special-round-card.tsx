@@ -39,14 +39,14 @@ function Team({ logo, name }: { logo: string | null; name: string }) {
 
 export function SpecialRoundCard(props: Props) {
   return (
-    <Card className="overflow-hidden border-brand-gold/25">
+    <Card className="flex h-full min-w-0 flex-col overflow-hidden border-brand-gold/25">
       <CardHeader className="border-b border-app-border bg-black/10">
         <div className="flex items-start justify-between gap-3">
-          <CardTitle>{props.name}</CardTitle>
+          <CardTitle className="break-words">{props.name}</CardTitle>
           <SpecialRoundStatusBadge status={props.status} />
         </div>
       </CardHeader>
-      <CardContent className="pt-5">
+      <CardContent className="flex flex-1 flex-col pt-5">
         <div className="flex items-center gap-4">
           <Team logo={props.homeTeamLogo} name={props.homeTeamName} />
           <Swords aria-hidden className="h-6 w-6 shrink-0 text-brand-gold" />
@@ -73,12 +73,14 @@ export function SpecialRoundCard(props: Props) {
             {props.estimatedPrize.toLocaleString("pt-BR", { currency: "BRL", style: "currency" })}
           </div>
         </dl>
-        <Link
-          className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-button bg-brand-gold px-4 font-semibold text-black transition hover:bg-amber-300"
-          href={`/rodadas-especiais/${props.id}` as Route}
-        >
-          Ver rodada
-        </Link>
+        <div className="mt-auto pt-5">
+          <Link
+            className="inline-flex h-11 w-full items-center justify-center rounded-button bg-brand-gold px-4 font-semibold text-black transition hover:bg-amber-300"
+            href={`/rodadas-especiais/${props.id}` as Route}
+          >
+            Ver rodada
+          </Link>
+        </div>
       </CardContent>
     </Card>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import type { PaymentStatus, SpecialRoundStatus } from "@prisma/client";
+import type { PaymentStatus, SpecialRoundMarketKind, SpecialRoundStatus } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useState, useTransition } from "react";
@@ -14,6 +14,7 @@ import {
   duplicateSpecialRoundAction,
   markSpecialRoundPrizePaidAction,
   refundSpecialRoundEntryAction,
+  syncSpecialRoundLineupAction,
   syncAndHomologateSpecialRoundAction,
   toggleSpecialRoundEntryBlockAction,
   updateSpecialRoundTieBreakAction,
@@ -23,6 +24,8 @@ import { specialRoundStatusLabels } from "./status-badge";
 
 type Market = {
   id: string;
+  kind: SpecialRoundMarketKind;
+  options: { active: boolean; value: string }[];
   points: number;
   sortOrder: number;
   title: string;
@@ -72,6 +75,10 @@ export function AdminSpecialRoundWorkspace({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
+  const scorerMarket = markets.find((market) => market.kind === "GOAL_SCORER");
+  const lineupPlayerCount =
+    scorerMarket?.options.filter((option) => option.active && option.value.startsWith("PLAYER:"))
+      .length ?? 0;
   const run = (action: () => Promise<{ message: string; ok: boolean }>) =>
     startTransition(async () => {
       const result = await action();
@@ -119,7 +126,7 @@ export function AdminSpecialRoundWorkspace({
           >
             Duplicar
           </LoadingButton>
-          {(status === "CANCELLED" || (entries.length === 0 && status !== "FINALIZED")) ? (
+          {status === "CANCELLED" || (entries.length === 0 && status !== "FINALIZED") ? (
             <LoadingButton
               className="h-10 rounded-button bg-red-600 px-3 text-sm font-semibold text-white"
               disabled={pending}
@@ -180,6 +187,25 @@ export function AdminSpecialRoundWorkspace({
           Estes mercados foram criados com a rodada e serao homologados pelos dados da partida
           catalogada.
         </p>
+        <div className="mt-4 flex flex-col gap-3 rounded-control border border-brand-gold/30 bg-brand-gold/5 p-4 md:flex-row md:items-center">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold">Escalacao para o mercado de jogador</h3>
+            <p className="mt-1 text-sm text-app-muted">
+              {lineupPlayerCount > 0
+                ? `${lineupPlayerCount} jogadores disponiveis. Uma nova consulta verifica alteracoes quando a ultima atualizacao tiver mais de cinco minutos.`
+                : "Busque aproximadamente uma hora antes da partida, quando a API normalmente publica titulares e reservas."}
+            </p>
+          </div>
+          <LoadingButton
+            className="h-11 shrink-0 rounded-button bg-brand-gold px-4 font-semibold text-black"
+            disabled={pending}
+            isLoading={pending}
+            loadingLabel="Buscando..."
+            onClick={() => run(() => syncSpecialRoundLineupAction(specialRoundId))}
+          >
+            Buscar escalacao
+          </LoadingButton>
+        </div>
         <div className="mt-4 space-y-2">
           {markets.map((market) => (
             <div

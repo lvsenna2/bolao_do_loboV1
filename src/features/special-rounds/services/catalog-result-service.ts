@@ -12,6 +12,7 @@ type CatalogEvent = {
 };
 
 type CatalogStatistic = {
+  teamId?: string;
   type: string;
   value: string | null;
 };
@@ -43,6 +44,25 @@ function numericStatistic(statistics: CatalogStatistic[], type: string) {
     : null;
 }
 
+function numericTeamStatistic(statistics: CatalogStatistic[], type: string, teamId: string) {
+  const row = statistics.find(
+    (statistic) =>
+      statistic.teamId === teamId && statistic.type.toLowerCase() === type.toLowerCase()
+  );
+  if (!row || row.value === null) return null;
+  const value = Number.parseFloat(String(row.value).replace("%", ""));
+  return Number.isFinite(value) ? value : null;
+}
+
+function compareTeams(home: number | null, away: number | null) {
+  if (home === null || away === null) return undefined;
+  return home === away ? "DRAW" : home > away ? "HOME" : "AWAY";
+}
+
+function sumAvailable(left: number | null, right: number | null) {
+  return left === null && right === null ? null : (left ?? 0) + (right ?? 0);
+}
+
 function firstGoal(events: CatalogEvent[]) {
   return [...events]
     .filter((event) => event.type.toLowerCase() === "goal")
@@ -70,6 +90,29 @@ export function deriveCatalogResults(match: CatalogMatch, markets: readonly Resu
     yellowCards === null && redCards === null
       ? cardEvents.length || null
       : (yellowCards ?? 0) + (redCards ?? 0);
+  const homeShotsOnGoal = numericTeamStatistic(match.statistics, "Shots on Goal", match.homeTeamId);
+  const awayShotsOnGoal = numericTeamStatistic(match.statistics, "Shots on Goal", match.awayTeamId);
+  const homeCorners = numericTeamStatistic(match.statistics, "Corner Kicks", match.homeTeamId);
+  const awayCorners = numericTeamStatistic(match.statistics, "Corner Kicks", match.awayTeamId);
+  const homeShots = numericTeamStatistic(match.statistics, "Total Shots", match.homeTeamId);
+  const awayShots = numericTeamStatistic(match.statistics, "Total Shots", match.awayTeamId);
+  let homeCards = sumAvailable(
+    numericTeamStatistic(match.statistics, "Yellow Cards", match.homeTeamId),
+    numericTeamStatistic(match.statistics, "Red Cards", match.homeTeamId)
+  );
+  let awayCards = sumAvailable(
+    numericTeamStatistic(match.statistics, "Yellow Cards", match.awayTeamId),
+    numericTeamStatistic(match.statistics, "Red Cards", match.awayTeamId)
+  );
+  const cardEventsHaveTeams =
+    cardEvents.length > 0 &&
+    cardEvents.every(
+      (event) => event.teamId === match.homeTeamId || event.teamId === match.awayTeamId
+    );
+  if ((homeCards === null || awayCards === null) && cardEventsHaveTeams) {
+    homeCards = cardEvents.filter((event) => event.teamId === match.homeTeamId).length;
+    awayCards = cardEvents.filter((event) => event.teamId === match.awayTeamId).length;
+  }
 
   for (const market of markets) {
     let answer: SpecialRoundAnswer | undefined;
@@ -111,6 +154,18 @@ export function deriveCatalogResults(match: CatalogMatch, markets: readonly Resu
             ? playerValue
             : goal.player.name;
         }
+        break;
+      case "TEAM_MOST_SHOTS_ON_GOAL":
+        answer = compareTeams(homeShotsOnGoal, awayShotsOnGoal);
+        break;
+      case "TEAM_MOST_CORNERS":
+        answer = compareTeams(homeCorners, awayCorners);
+        break;
+      case "TEAM_MOST_CARDS":
+        answer = compareTeams(homeCards, awayCards);
+        break;
+      case "TEAM_MOST_SHOTS":
+        answer = compareTeams(homeShots, awayShots);
         break;
       default:
         break;

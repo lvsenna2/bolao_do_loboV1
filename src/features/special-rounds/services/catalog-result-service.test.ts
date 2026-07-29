@@ -154,4 +154,88 @@ describe("catalog special round results", () => {
     expect(result.answers.cards).toBe(2);
     expect(result.missing).toEqual([]);
   });
+
+  it("derives team comparison markets from per-team statistics", () => {
+    const teamMarkets = [
+      {
+        answerType: "SINGLE_CHOICE",
+        id: "shots-on-goal",
+        kind: "TEAM_MOST_SHOTS_ON_GOAL",
+        options: [],
+        title: "Chutes no gol"
+      },
+      {
+        answerType: "SINGLE_CHOICE",
+        id: "team-corners",
+        kind: "TEAM_MOST_CORNERS",
+        options: [],
+        title: "Escanteios por time"
+      },
+      {
+        answerType: "SINGLE_CHOICE",
+        id: "team-cards",
+        kind: "TEAM_MOST_CARDS",
+        options: [],
+        title: "Cartoes por time"
+      },
+      {
+        answerType: "SINGLE_CHOICE",
+        id: "shots",
+        kind: "TEAM_MOST_SHOTS",
+        options: [],
+        title: "Finalizacoes"
+      }
+    ] as const;
+    const result = deriveCatalogResults(
+      {
+        awayScore: 1,
+        awayTeamId: "away",
+        events: [
+          {
+            elapsed: 20,
+            extra: null,
+            player: null,
+            teamId: "home",
+            type: "Card"
+          },
+          {
+            elapsed: 30,
+            extra: null,
+            player: null,
+            teamId: "away",
+            type: "Card"
+          },
+          {
+            elapsed: 40,
+            extra: null,
+            player: null,
+            teamId: "away",
+            type: "Card"
+          }
+        ],
+        homeScore: 2,
+        homeTeamId: "home",
+        statistics: [
+          { teamId: "home", type: "Shots on Goal", value: "5" },
+          { teamId: "away", type: "Shots on Goal", value: "3" },
+          { teamId: "home", type: "Corner Kicks", value: "4" },
+          { teamId: "away", type: "Corner Kicks", value: "4" },
+          { teamId: "home", type: "Total Shots", value: "9" },
+          { teamId: "away", type: "Total Shots", value: "12" },
+          { teamId: "home", type: "Yellow Cards", value: null },
+          { teamId: "away", type: "Yellow Cards", value: null }
+        ],
+        status: "FINISHED"
+      },
+      teamMarkets
+    );
+
+    expect(result.answers).toEqual({
+      shots: "AWAY",
+      "shots-on-goal": "HOME",
+      "team-cards": "AWAY",
+      "team-corners": "DRAW"
+    });
+    expect(result.missing).toEqual([]);
+  });
 });

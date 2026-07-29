@@ -42,10 +42,7 @@ export default async function SpecialRoundDetailPage({
   );
   const paidParticipants = round._count.entries;
   const pendingPayment: SpecialRoundPaymentView | null =
-    entry?.paymentStatus === "PENDING" &&
-    entry.qrCode &&
-    entry.qrCodeBase64 &&
-    entry.transactionId
+    entry?.paymentStatus === "PENDING" && entry.qrCode && entry.qrCodeBase64 && entry.transactionId
       ? {
           amountLabel: Number(entry.amount).toLocaleString("pt-BR", {
             currency: "BRL",
@@ -73,7 +70,7 @@ export default async function SpecialRoundDetailPage({
       eyebrow="Rodada Especial"
       title={round.name}
     >
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <main className="space-y-6">
           <Card className="border-brand-gold/30">
             <CardHeader>
@@ -174,7 +171,7 @@ export default async function SpecialRoundDetailPage({
           ) : null}
         </main>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-24 xl:self-start">
           <Card>
             <CardHeader>
               <CardTitle>Resumo</CardTitle>

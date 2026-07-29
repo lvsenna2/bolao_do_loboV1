@@ -139,7 +139,11 @@ export const specialRoundMarketSchema = z
         "TOTAL_GOALS",
         "TOTAL_CORNERS",
         "TOTAL_CARDS",
-        "FIRST_TEAM_TO_SCORE"
+        "FIRST_TEAM_TO_SCORE",
+        "TEAM_MOST_SHOTS_ON_GOAL",
+        "TEAM_MOST_CORNERS",
+        "TEAM_MOST_CARDS",
+        "TEAM_MOST_SHOTS"
       ].includes(value.kind) &&
       !["SINGLE_CHOICE", "OPTION_LIST"].includes(value.answerType)
     ) {

@@ -23,12 +23,8 @@ type PlayerOption = {
   name: string;
 };
 
-export function buildAutomaticSpecialRoundMarkets(
-  homeTeamName: string,
-  awayTeamName: string,
-  players: PlayerOption[]
-): AutomaticSpecialRoundMarket[] {
-  const playerOptions = [
+export function buildGoalScorerOptions(players: PlayerOption[]): AutomaticMarketOption[] {
+  return [
     ...players
       .filter(
         (player, index, list) => list.findIndex((candidate) => candidate.id === player.id) === index
@@ -36,6 +32,19 @@ export function buildAutomaticSpecialRoundMarkets(
       .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
       .map((player) => ({ label: player.name, value: `PLAYER:${player.id}` })),
     { label: "Nenhum jogador (sem gols)", value: "NO_GOAL" }
+  ];
+}
+
+export function buildAutomaticSpecialRoundMarkets(
+  homeTeamName: string,
+  awayTeamName: string,
+  players: PlayerOption[]
+): AutomaticSpecialRoundMarket[] {
+  const playerOptions = buildGoalScorerOptions(players);
+  const teamComparisonOptions = [
+    { label: homeTeamName, value: "HOME" },
+    { label: "Empate", value: "DRAW" },
+    { label: awayTeamName, value: "AWAY" }
   ];
 
   return [
@@ -153,6 +162,54 @@ export function buildAutomaticSpecialRoundMarkets(
       required: true,
       sortOrder: 8,
       title: "Primeiro jogador a marcar"
+    },
+    {
+      active: true,
+      answerType: "SINGLE_CHOICE",
+      description: "Qual time termina a partida com mais chutes no gol?",
+      kind: "TEAM_MOST_SHOTS_ON_GOAL",
+      line: null,
+      options: teamComparisonOptions,
+      points: 2,
+      required: true,
+      sortOrder: 9,
+      title: "Time com mais chutes no gol"
+    },
+    {
+      active: true,
+      answerType: "SINGLE_CHOICE",
+      description: "Qual time termina a partida com mais escanteios?",
+      kind: "TEAM_MOST_CORNERS",
+      line: null,
+      options: teamComparisonOptions,
+      points: 2,
+      required: true,
+      sortOrder: 10,
+      title: "Time com mais escanteios"
+    },
+    {
+      active: true,
+      answerType: "SINGLE_CHOICE",
+      description: "Qual time recebe mais cartoes amarelos e vermelhos?",
+      kind: "TEAM_MOST_CARDS",
+      line: null,
+      options: teamComparisonOptions,
+      points: 2,
+      required: true,
+      sortOrder: 11,
+      title: "Time com mais cartoes"
+    },
+    {
+      active: true,
+      answerType: "SINGLE_CHOICE",
+      description: "Qual time termina a partida com mais finalizacoes?",
+      kind: "TEAM_MOST_SHOTS",
+      line: null,
+      options: teamComparisonOptions,
+      points: 2,
+      required: true,
+      sortOrder: 12,
+      title: "Time com mais finalizacoes"
     }
   ];
 }

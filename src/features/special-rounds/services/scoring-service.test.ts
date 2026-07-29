@@ -24,6 +24,10 @@ describe("special round scoring", () => {
     ["BOTH_TEAMS_SCORE", true, true],
     ["FIRST_TEAM_TO_SCORE", "AWAY", "AWAY"],
     ["GOAL_SCORER", "PLAYER_10", "PLAYER_10"],
+    ["TEAM_MOST_SHOTS_ON_GOAL", "HOME", "HOME"],
+    ["TEAM_MOST_CORNERS", "DRAW", "DRAW"],
+    ["TEAM_MOST_CARDS", "AWAY", "AWAY"],
+    ["TEAM_MOST_SHOTS", "HOME", "HOME"],
     ["CUSTOM", "OPTION_A", "OPTION_A"]
   ] as const)("scores equality market %s", (kind, prediction, official) => {
     expect(evaluateSpecialRoundAnswer({ kind, points: 3 }, prediction, official).points).toBe(3);
