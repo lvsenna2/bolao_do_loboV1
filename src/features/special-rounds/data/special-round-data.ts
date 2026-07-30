@@ -214,6 +214,7 @@ export async function getSpecialRoundMatchOptions() {
     },
     take: 300,
     where: {
+      apiId: { not: null },
       deletedAt: null,
       kickoff: { gt: now },
       status: { in: ["SCHEDULED", "POSTPONED"] }

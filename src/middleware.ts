@@ -26,6 +26,7 @@ export const config = {
     "/ligas/:path*",
     "/minhas-ligas/:path*",
     "/palpites/:path*",
-    "/rodadas/:path*"
+    "/rodadas/:path*",
+    "/rodadas-especiais/:path*"
   ]
 };

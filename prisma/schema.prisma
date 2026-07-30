@@ -178,6 +178,20 @@ enum SpecialRoundPrizeStatus {
   CANCELLED
 }
 
+enum ElectionRoundStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  CLOSED
+  RESULT_PENDING
+  FINALIZED
+  CANCELLED
+}
+
+enum ElectionTurn {
+  FIRST
+  SECOND
+}
+
 enum BadgeRarity {
   COMMON
   RARE
@@ -221,30 +235,34 @@ model User {
   updatedAt       DateTime      @updatedAt @map("updated_at")
   deletedAt       DateTime?     @map("deleted_at")
 
-  accounts               Account[]
-  sessions               Session[]
-  ownedLeagues           League[]               @relation("LeagueOwner")
-  memberships            LeagueMember[]
-  guesses                Guess[]
-  scores                 Score[]
-  rankings               Ranking[]
-  rankingAdjustments     RankingAdjustment[]    @relation("RankingAdjustmentUser")
-  rankingAdjustmentsMade RankingAdjustment[]    @relation("RankingAdjustmentAdmin")
-  payments               Payment[]
-  notifications          Notification[]
-  achievements           Achievement[]
-  leagueBadgeAwards      LeagueBadgeAward[]     @relation("LeagueBadgeAwardUser")
-  leagueBadgeAwardsMade  LeagueBadgeAward[]     @relation("LeagueBadgeAwardAdmin")
-  xpEvents               XpEvent[]              @relation("XpEventUser")
-  xpEventsGranted        XpEvent[]              @relation("XpEventAdmin")
-  xpStreak               UserStreak?
-  missionProgress        UserMissionProgress[]
-  auditLogs              AuditLog[]
-  specialRoundsCreated   SpecialRound[]         @relation("SpecialRoundCreator")
-  specialRoundEntries    SpecialRoundEntry[]
+  accounts                Account[]
+  sessions                Session[]
+  ownedLeagues            League[]                 @relation("LeagueOwner")
+  memberships             LeagueMember[]
+  guesses                 Guess[]
+  scores                  Score[]
+  rankings                Ranking[]
+  rankingAdjustments      RankingAdjustment[]      @relation("RankingAdjustmentUser")
+  rankingAdjustmentsMade  RankingAdjustment[]      @relation("RankingAdjustmentAdmin")
+  payments                Payment[]
+  notifications           Notification[]
+  achievements            Achievement[]
+  leagueBadgeAwards       LeagueBadgeAward[]       @relation("LeagueBadgeAwardUser")
+  leagueBadgeAwardsMade   LeagueBadgeAward[]       @relation("LeagueBadgeAwardAdmin")
+  xpEvents                XpEvent[]                @relation("XpEventUser")
+  xpEventsGranted         XpEvent[]                @relation("XpEventAdmin")
+  xpStreak                UserStreak?
+  missionProgress         UserMissionProgress[]
+  auditLogs               AuditLog[]
+  specialRoundsCreated    SpecialRound[]           @relation("SpecialRoundCreator")
+  specialRoundEntries     SpecialRoundEntry[]
   specialRoundPredictions SpecialRoundPrediction[]
-  specialRoundResults    SpecialRoundResult[]   @relation("SpecialRoundResultAdmin")
-  specialRoundAudits     SpecialRoundAuditLog[] @relation("SpecialRoundAuditActor")
+  specialRoundResults     SpecialRoundResult[]     @relation("SpecialRoundResultAdmin")
+  specialRoundAudits      SpecialRoundAuditLog[]   @relation("SpecialRoundAuditActor")
+  electionRoundsCreated   ElectionRound[]          @relation("ElectionRoundCreator")
+  electionEntries         ElectionEntry[]
+  electionResultsEntered  ElectionResult[]         @relation("ElectionResultAdmin")
+  electionAudits          ElectionAuditLog[]       @relation("ElectionAuditActor")
 
   @@index([email])
   @@index([phone])
@@ -1283,6 +1301,166 @@ model SpecialRoundAuditLog {
   @@index([actorId])
   @@index([action])
   @@map("special_round_audit_logs")
+}
+
+model ElectionRound {
+  id                   String              @id @default(uuid()) @db.Uuid
+  createdById          String?             @map("created_by_id") @db.Uuid
+  name                 String              @db.VarChar(140)
+  description          String?
+  rules                String?
+  bannerUrl            String?             @map("banner_url")
+  entryFee             Decimal             @default(10) @map("entry_fee") @db.Decimal(10, 2)
+  registrationOpensAt  DateTime            @map("registration_opens_at")
+  registrationClosesAt DateTime            @map("registration_closes_at")
+  status               ElectionRoundStatus @default(DRAFT)
+  finalPrize           Decimal?            @map("final_prize") @db.Decimal(10, 2)
+  noWinnerDestination  String?             @map("no_winner_destination")
+  finalizedAt          DateTime?           @map("finalized_at")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  createdBy  User?               @relation("ElectionRoundCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  candidates ElectionCandidate[]
+  entries    ElectionEntry[]
+  result     ElectionResult?
+  winners    ElectionWinner[]
+  audits     ElectionAuditLog[]
+
+  @@index([status, registrationClosesAt])
+  @@index([createdById])
+  @@map("election_rounds")
+}
+
+model ElectionCandidate {
+  id        String   @id @default(uuid()) @db.Uuid
+  roundId   String   @map("round_id") @db.Uuid
+  name      String   @db.VarChar(140)
+  party     String   @db.VarChar(40)
+  sortOrder Int      @default(0) @map("sort_order")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  round                 ElectionRound        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  predictionsAsWinner   ElectionPrediction[] @relation("ElectionPredictionWinner")
+  predictionsAsRunnerUp ElectionPrediction[] @relation("ElectionPredictionRunnerUp")
+  resultsAsWinner       ElectionResult[]     @relation("ElectionResultWinner")
+  resultsAsRunnerUp     ElectionResult[]     @relation("ElectionResultRunnerUp")
+
+  @@unique([roundId, name])
+  @@index([roundId, active, sortOrder])
+  @@map("election_candidates")
+}
+
+model ElectionEntry {
+  id                   String         @id @default(uuid()) @db.Uuid
+  roundId              String         @map("round_id") @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  amount               Decimal        @db.Decimal(10, 2)
+  paymentStatus        PaymentStatus  @default(PENDING) @map("payment_status")
+  paymentGateway       PaymentGateway @default(MERCADO_PAGO) @map("payment_gateway")
+  transactionId        String?        @unique @map("transaction_id")
+  checkoutKey          String?        @unique @map("checkout_key") @db.VarChar(180)
+  qrCode               String?        @map("qr_code")
+  qrCodeBase64         String?        @map("qr_code_base64")
+  ticketUrl            String?        @map("ticket_url")
+  providerStatus       String?        @map("provider_status") @db.VarChar(80)
+  providerStatusDetail String?        @map("provider_status_detail") @db.VarChar(120)
+  paymentExpiresAt     DateTime?      @map("payment_expires_at")
+  lastWebhookAt        DateTime?      @map("last_webhook_at")
+  registeredAt         DateTime       @default(now()) @map("registered_at")
+  confirmedAt          DateTime?      @map("confirmed_at")
+  refundedAt           DateTime?      @map("refunded_at")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  round      ElectionRound       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user       User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  prediction ElectionPrediction?
+  winner     ElectionWinner?
+
+  @@unique([roundId, userId])
+  @@index([userId])
+  @@index([roundId, paymentStatus])
+  @@map("election_entries")
+}
+
+model ElectionPrediction {
+  id                  String       @id @default(uuid()) @db.Uuid
+  entryId             String       @unique @map("entry_id") @db.Uuid
+  winnerCandidateId   String       @map("winner_candidate_id") @db.Uuid
+  runnerUpCandidateId String       @map("runner_up_candidate_id") @db.Uuid
+  turn                ElectionTurn
+  winnerRange         String       @map("winner_range") @db.VarChar(40)
+  marginRange         String       @map("margin_range") @db.VarChar(40)
+  submittedAt         DateTime     @default(now()) @map("submitted_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  entry             ElectionEntry     @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  winnerCandidate   ElectionCandidate @relation("ElectionPredictionWinner", fields: [winnerCandidateId], references: [id], onDelete: Restrict)
+  runnerUpCandidate ElectionCandidate @relation("ElectionPredictionRunnerUp", fields: [runnerUpCandidateId], references: [id], onDelete: Restrict)
+
+  @@index([winnerCandidateId])
+  @@index([runnerUpCandidateId])
+  @@index([submittedAt])
+  @@map("election_predictions")
+}
+
+model ElectionResult {
+  id                  String       @id @default(uuid()) @db.Uuid
+  roundId             String       @unique @map("round_id") @db.Uuid
+  winnerCandidateId   String       @map("winner_candidate_id") @db.Uuid
+  runnerUpCandidateId String       @map("runner_up_candidate_id") @db.Uuid
+  enteredById         String       @map("entered_by_id") @db.Uuid
+  turn                ElectionTurn
+  winnerPercent       Decimal      @map("winner_percent") @db.Decimal(5, 2)
+  runnerUpPercent     Decimal      @map("runner_up_percent") @db.Decimal(5, 2)
+  winnerRange         String       @map("winner_range") @db.VarChar(40)
+  marginRange         String       @map("margin_range") @db.VarChar(40)
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  round             ElectionRound     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  winnerCandidate   ElectionCandidate @relation("ElectionResultWinner", fields: [winnerCandidateId], references: [id], onDelete: Restrict)
+  runnerUpCandidate ElectionCandidate @relation("ElectionResultRunnerUp", fields: [runnerUpCandidateId], references: [id], onDelete: Restrict)
+  enteredBy         User              @relation("ElectionResultAdmin", fields: [enteredById], references: [id], onDelete: Restrict)
+
+  @@index([enteredById])
+  @@map("election_results")
+}
+
+model ElectionWinner {
+  id           String   @id @default(uuid()) @db.Uuid
+  roundId      String   @map("round_id") @db.Uuid
+  entryId      String   @unique @map("entry_id") @db.Uuid
+  sharePercent Decimal  @map("share_percent") @db.Decimal(5, 2)
+  amount       Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  round ElectionRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  entry ElectionEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([roundId])
+  @@map("election_winners")
+}
+
+model ElectionAuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  roundId   String   @map("round_id") @db.Uuid
+  actorId   String?  @map("actor_id") @db.Uuid
+  action    String   @db.VarChar(120)
+  entity    String   @db.VarChar(100)
+  entityId  String?  @map("entity_id") @db.VarChar(80)
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  round ElectionRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  actor User?         @relation("ElectionAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([roundId, createdAt])
+  @@index([actorId])
+  @@map("election_audit_logs")
 }
 
 model Setting {

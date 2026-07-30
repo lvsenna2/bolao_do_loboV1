@@ -1,9 +1,10 @@
-import { Plus } from "lucide-react";
+import { Landmark, Plus } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getElectionRoundSummary } from "@/features/election-special-round/data";
 import { AdminSpecialRoundDeleteButton } from "@/features/special-rounds/components/admin-round-delete-button";
 import { SpecialRoundStatusBadge } from "@/features/special-rounds/components/status-badge";
 import { getAdminSpecialRounds } from "@/features/special-rounds/data/special-round-data";
@@ -15,7 +16,10 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminSpecialRoundsPage() {
   await requireAdmin();
-  const rounds = await getAdminSpecialRounds();
+  const [rounds, election] = await Promise.all([
+    getAdminSpecialRounds(),
+    getElectionRoundSummary()
+  ]);
   return (
     <PageShell
       actions={
@@ -30,6 +34,27 @@ export default async function AdminSpecialRoundsPage() {
       eyebrow="Administracao"
       title="Rodadas Especiais"
     >
+      {election ? (
+        <Card className="mb-6 border-brand-gold/40">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-gold">
+                <Landmark className="h-4 w-4" /> Módulo independente
+              </p>
+              <h2 className="mt-2 text-lg font-semibold">{election.name}</h2>
+              <p className="text-sm text-app-muted">
+                {election._count.entries} participantes pagos | Status: {election.status}
+              </p>
+            </div>
+            <Link
+              className="inline-flex h-10 items-center justify-center rounded-button bg-brand-gold px-4 text-sm font-semibold text-black"
+              href={"/admin/rodadas-especiais/eleicoes-2026" as Route}
+            >
+              Gerenciar eleições
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
         {rounds.map((round) => {
           const paid = round.entries.filter((entry) => entry.paymentStatus === "APPROVED");

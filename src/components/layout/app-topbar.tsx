@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { cn } from "@/lib/utils";
+import { AdminMobileMenu } from "./admin-mobile-menu";
 import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -34,11 +35,14 @@ export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: 
         {userMode ? (
           <BrandLogo />
         ) : (
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-gold">
-              Administracao
-            </p>
-            <p className="truncate text-sm font-medium text-app-muted">Gestao da plataforma</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <AdminMobileMenu />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-gold">
+                Administracao
+              </p>
+              <p className="truncate text-sm font-medium text-app-muted">Gestao da plataforma</p>
+            </div>
           </div>
         )}
 

@@ -5,12 +5,12 @@ import { prisma } from "@/server/db";
 import {
   createMercadoPagoPixPayment,
   getMercadoPagoPixData,
-  type MercadoPagoPayment as ProviderPayment
+  type MercadoPagoPayment
 } from "@/server/mercado-pago/client";
 
 const PIX_EXPIRATION_HOURS = 24;
 
-function mapSpecialPaymentStatus(status?: string | null): PaymentStatus {
+function mapStatus(status?: string | null): PaymentStatus {
   switch (status) {
     case "approved":
       return "APPROVED";
@@ -30,12 +30,12 @@ function amountMatches(remote: number | null | undefined, local: Prisma.Decimal)
   return typeof remote === "number" && Math.abs(remote - local.toNumber()) < 0.01;
 }
 
-export async function createSpecialRoundPix(input: {
+export async function createElectionPix(input: {
   entryId: string;
   payerEmail: string;
   roundName: string;
 }) {
-  const entry = await prisma.specialRoundEntry.findUniqueOrThrow({
+  const entry = await prisma.electionEntry.findUniqueOrThrow({
     select: { amount: true, id: true },
     where: { id: input.entryId }
   });
@@ -44,12 +44,12 @@ export async function createSpecialRoundPix(input: {
     amount: Number(entry.amount),
     description: `Rodada Especial: ${input.roundName}`,
     expiresAt,
-    idempotencyKey: entry.id,
+    idempotencyKey: `election:${entry.id}`,
     internalPaymentId: entry.id,
     payerEmail: input.payerEmail
   });
   const pix = getMercadoPagoPixData(provider);
-  const updated = await prisma.specialRoundEntry.update({
+  const updated = await prisma.electionEntry.update({
     data: {
       paymentExpiresAt: pix.expiresAt ?? expiresAt,
       providerStatus: pix.providerStatus,
@@ -66,7 +66,9 @@ export async function createSpecialRoundPix(input: {
     amountLabel: new Intl.NumberFormat("pt-BR", { currency: "BRL", style: "currency" }).format(
       Number(updated.amount)
     ),
-    expiresAtLabel: formatDateTimeInSaoPaulo(updated.paymentExpiresAt),
+    expiresAtLabel: updated.paymentExpiresAt
+      ? formatDateTimeInSaoPaulo(updated.paymentExpiresAt)
+      : undefined,
     paymentId: updated.id,
     pixCode: updated.qrCode!,
     qrCodeDataUri: `data:image/png;base64,${updated.qrCodeBase64}`,
@@ -75,34 +77,32 @@ export async function createSpecialRoundPix(input: {
   };
 }
 
-export async function reconcileSpecialRoundPayment(provider: ProviderPayment) {
+export async function reconcileElectionPayment(provider: MercadoPagoPayment) {
   const providerId = String(provider.id);
   const reference = provider.external_reference ?? "";
-  const isInternalId =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reference);
-  const entry = await prisma.specialRoundEntry.findFirst({
-    include: { specialRound: { select: { id: true, name: true } } },
+  const entry = await prisma.electionEntry.findFirst({
+    include: { round: { select: { id: true, name: true } } },
     where: {
-      OR: [{ transactionId: providerId }, ...(isInternalId ? [{ id: reference }] : [])]
+      OR: [{ transactionId: providerId }, ...(reference ? [{ id: reference }] : [])]
     }
   });
 
   if (!entry) return null;
   if (reference !== entry.id || !amountMatches(provider.transaction_amount, entry.amount)) {
-    throw new Error("MERCADO_PAGO_SPECIAL_ROUND_PAYMENT_MISMATCH");
+    throw new Error("MERCADO_PAGO_ELECTION_PAYMENT_MISMATCH");
   }
 
-  const status = mapSpecialPaymentStatus(provider.status);
+  const status = mapStatus(provider.status);
   const now = serverNow();
   await prisma.$transaction(async (tx) => {
-    await tx.specialRoundEntry.update({
+    await tx.electionEntry.update({
       data: {
         confirmedAt: status === "APPROVED" ? now : entry.confirmedAt,
         lastWebhookAt: now,
+        paymentStatus: status,
         providerStatus: provider.status ?? null,
         providerStatusDetail: provider.status_detail ?? null,
         refundedAt: status === "REFUNDED" ? now : entry.refundedAt,
-        paymentStatus: status,
         transactionId: providerId
       },
       where: { id: entry.id }
@@ -110,17 +110,17 @@ export async function reconcileSpecialRoundPayment(provider: ProviderPayment) {
     if (status === "APPROVED") {
       await tx.notification.upsert({
         create: {
-          body: `Sua inscricao em ${entry.specialRound.name} foi confirmada.`,
-          icon: "special-round-paid",
-          message: `Sua inscricao em ${entry.specialRound.name} foi confirmada.`,
-          relatedEntityId: entry.specialRound.id,
-          title: "Inscricao confirmada",
+          body: `Sua inscrição em ${entry.round.name} foi confirmada.`,
+          icon: "election-paid",
+          message: `Sua inscrição em ${entry.round.name} foi confirmada.`,
+          relatedEntityId: entry.round.id,
+          title: "Inscrição confirmada",
           type: "SPECIAL_ROUND",
-          uniqueKey: `special-round:entry-approved:${entry.id}`,
+          uniqueKey: `election:entry-approved:${entry.id}`,
           userId: entry.userId
         },
         update: {},
-        where: { uniqueKey: `special-round:entry-approved:${entry.id}` }
+        where: { uniqueKey: `election:entry-approved:${entry.id}` }
       });
     }
   });

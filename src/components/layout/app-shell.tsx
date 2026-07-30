@@ -43,7 +43,8 @@ export function AppShell({
         <AppSidebar mode={mode} user={user} />
         <div
           className={cn(
-            "flex min-w-0 flex-1 flex-col pb-20 lg:pb-0",
+            "flex min-w-0 flex-1 flex-col lg:pb-0",
+            mode === "user" ? "pb-20" : "pb-0",
             mode === "user" ? "min-h-screen" : ""
           )}
         >

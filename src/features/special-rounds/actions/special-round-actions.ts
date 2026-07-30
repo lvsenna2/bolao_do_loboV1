@@ -21,6 +21,7 @@ import {
   buildGoalScorerOptions
 } from "../services/default-markets";
 import { shouldReuseSpecialRoundLineup } from "../services/lineup-market-service";
+import { resolveApiBackedSpecialRoundMatch } from "../services/match-link-service";
 import { evaluateSpecialRoundAnswer, rankSpecialRoundEntries } from "../services/scoring-service";
 import {
   assertSpecialRoundTransition,
@@ -302,6 +303,7 @@ export async function syncSpecialRoundLineupAction(
   const admin = await requireAdmin();
   const id = idSchema.safeParse(specialRoundId);
   if (!id.success) return { message: "Rodada invalida.", ok: false };
+  await resolveApiBackedSpecialRoundMatch(id.data);
 
   const round = await prisma.specialRound.findUnique({
     include: {
@@ -862,6 +864,7 @@ export async function checkSpecialRoundPaymentAction(
   try {
     const provider = await getMercadoPagoPayment(entry.transactionId);
     const result = await reconcileSpecialRoundPayment(provider);
+    if (!result) throw new Error("SPECIAL_ROUND_PAYMENT_NOT_FOUND");
     revalidateSpecialRounds(entry.specialRoundId);
     return { data: { status: result.status }, message: "Status atualizado.", ok: true };
   } catch {
@@ -1213,27 +1216,18 @@ export async function syncAndHomologateSpecialRoundAction(
   const id = idSchema.safeParse(specialRoundId);
   if (!id.success) return { message: "Rodada invalida.", ok: false };
 
-  const round = await prisma.specialRound.findUnique({
-    select: {
-      match: {
-        select: {
-          apiId: true,
-          id: true
-        }
-      }
-    },
-    where: { id: id.data }
-  });
+  const match = await resolveApiBackedSpecialRoundMatch(id.data);
 
-  if (!round?.match) {
+  if (!match) {
     return {
       message: "Esta rodada nao esta vinculada a uma partida do catalogo.",
       ok: false
     };
   }
-  if (!round.match.apiId) {
+  if (!match.apiId) {
     return {
-      message: "A partida selecionada nao possui um fixtureId da API-Football.",
+      message:
+        "Nao foi encontrada uma copia desta partida importada pela API-Football. Atualize o catalogo da competicao e tente novamente.",
       ok: false
     };
   }
@@ -1242,7 +1236,7 @@ export async function syncAndHomologateSpecialRoundAction(
     fixtureLimit: 1,
     historyBudget: 0,
     includeCatalog: false,
-    matchId: round.match.id
+    matchId: match.id
   });
 
   if ("locked" in sync && sync.locked) {
@@ -1265,9 +1259,9 @@ export async function syncAndHomologateSpecialRoundAction(
       entity: "SpecialRound",
       entityId: id.data,
       metadata: json({
-        apiFixtureId: round.match.apiId,
+        apiFixtureId: match.apiId,
         callsUsed: sync.summary.callsUsed,
-        matchId: round.match.id,
+        matchId: match.id,
         syncRunId: sync.runId
       }),
       specialRoundId: id.data

@@ -4,6 +4,7 @@ import { Check, Clipboard, Clock3, ExternalLink, Loader2, QrCode, ShieldCheck } 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { checkElectionPaymentAction } from "@/features/election-special-round/actions";
 import { checkMercadoPagoPaymentAction } from "@/features/payments/actions/payment-actions";
 import { checkSpecialRoundPaymentAction } from "@/features/special-rounds/actions/special-round-actions";
 
@@ -22,7 +23,7 @@ type PixPaymentCardProps = {
   qrCodeDataUri: string;
   ticketUrl?: string | null;
   transactionId: string;
-  variant?: "league" | "special-round";
+  variant?: "election" | "league" | "special-round";
 };
 
 export function PixPaymentCard({
@@ -60,7 +61,9 @@ export function PixPaymentCard({
       const result =
         variant === "special-round"
           ? await checkSpecialRoundPaymentAction(paymentId)
-          : await checkMercadoPagoPaymentAction(paymentId);
+          : variant === "election"
+            ? await checkElectionPaymentAction(paymentId)
+            : await checkMercadoPagoPaymentAction(paymentId);
       const status = result.ok
         ? "status" in result
           ? result.status
@@ -107,8 +110,8 @@ export function PixPaymentCard({
             <h3 className="mt-4 text-xl font-bold text-white">{leagueName}</h3>
             <p className="mt-2 max-w-xl text-sm leading-6 text-amber-50/80">
               Cobranca dinamica protegida pelo Mercado Pago.{" "}
-              {variant === "special-round" ? "A participacao" : "A liga"} sera liberada
-              automaticamente depois que o PIX for confirmado.
+              {variant === "league" ? "A liga" : "A participacao"} sera liberada automaticamente
+              depois que o PIX for confirmado.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
