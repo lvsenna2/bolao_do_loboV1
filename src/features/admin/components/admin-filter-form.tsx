@@ -16,7 +16,7 @@ export function AdminFilterForm({
   query = ""
 }: AdminFilterFormProps) {
   return (
-    <form className="mb-5 flex flex-col gap-3 rounded-card border border-app-border bg-app-surface p-4 lg:flex-row lg:items-end">
+    <form className="mb-5 flex min-w-0 flex-col gap-3 rounded-card border border-app-border bg-app-surface p-3 sm:p-4 lg:flex-row lg:items-end">
       <label className="flex-1 space-y-2">
         <span className="text-sm font-medium text-app-foreground">Pesquisa</span>
         <div className="relative">
@@ -35,7 +35,7 @@ export function AdminFilterForm({
       </label>
       {children}
       <FormLoadingButton
-        className="inline-flex h-10 items-center justify-center rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
+        className="inline-flex h-11 w-full items-center justify-center rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 lg:h-10 lg:w-auto"
         pendingLabel="Carregando..."
         type="submit"
       >

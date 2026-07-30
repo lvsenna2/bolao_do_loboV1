@@ -35,13 +35,16 @@ export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: 
         {userMode ? (
           <BrandLogo />
         ) : (
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <AdminMobileMenu />
+            <span className="text-sm font-semibold sm:hidden">Admin</span>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-gold">
+              <p className="hidden text-xs font-semibold uppercase tracking-[0.16em] text-brand-gold sm:block">
                 Administracao
               </p>
-              <p className="truncate text-sm font-medium text-app-muted">Gestao da plataforma</p>
+              <p className="hidden truncate text-sm font-medium text-app-muted sm:block">
+                Gestao da plataforma
+              </p>
             </div>
           </div>
         )}
@@ -76,7 +79,11 @@ export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: 
               </span>
             ) : null}
           </Link>
-          {userMode ? null : <ThemeToggle />}
+          {userMode ? null : (
+            <span className="hidden sm:inline-flex">
+              <ThemeToggle />
+            </span>
+          )}
           <div
             className={cn(
               "hidden items-center gap-2 rounded-button border p-1 pr-2 md:flex",

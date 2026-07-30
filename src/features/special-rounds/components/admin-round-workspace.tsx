@@ -97,9 +97,9 @@ export function AdminSpecialRoundWorkspace({
         </p>
       ) : null}
 
-      <section className="rounded-card border border-app-border bg-app-surface p-5">
+      <section className="rounded-card border border-app-border bg-app-surface p-4 sm:p-5">
         <h2 className="text-lg font-semibold">Operacao</h2>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
           {(nextStatuses[status] ?? []).map((next) => (
             <LoadingButton
               className="h-10 rounded-button border border-brand-gold/40 px-3 text-sm font-semibold text-brand-gold"
@@ -181,7 +181,10 @@ export function AdminSpecialRoundWorkspace({
         </div>
       </section>
 
-      <section className="rounded-card border border-app-border bg-app-surface p-5" id="mercados">
+      <section
+        className="rounded-card border border-app-border bg-app-surface p-4 sm:p-5"
+        id="mercados"
+      >
         <h2 className="text-lg font-semibold">Mercados automaticos</h2>
         <p className="mt-1 text-sm text-app-muted">
           Estes mercados foram criados com a rodada e serao homologados pelos dados da partida
@@ -197,7 +200,7 @@ export function AdminSpecialRoundWorkspace({
             </p>
           </div>
           <LoadingButton
-            className="h-11 shrink-0 rounded-button bg-brand-gold px-4 font-semibold text-black"
+            className="h-11 w-full shrink-0 rounded-button bg-brand-gold px-4 font-semibold text-black md:w-auto"
             disabled={pending}
             isLoading={pending}
             loadingLabel="Buscando..."
@@ -222,7 +225,7 @@ export function AdminSpecialRoundWorkspace({
       </section>
 
       <section
-        className="rounded-card border border-app-border bg-app-surface p-5"
+        className="rounded-card border border-app-border bg-app-surface p-4 sm:p-5"
         id="participantes"
       >
         <h2 className="text-lg font-semibold">Participantes</h2>
@@ -241,7 +244,7 @@ export function AdminSpecialRoundWorkspace({
                 </div>
                 {entry.paymentStatus !== "APPROVED" ? (
                   <LoadingButton
-                    className="h-9 rounded-button bg-emerald-600 px-3 text-xs font-semibold text-white"
+                    className="h-10 w-full rounded-button bg-emerald-600 px-3 text-xs font-semibold text-white sm:h-9 sm:w-auto"
                     disabled={pending}
                     onClick={() => run(() => confirmSpecialRoundEntryAction(entry.id))}
                   >
@@ -250,7 +253,7 @@ export function AdminSpecialRoundWorkspace({
                 ) : null}
                 {entry.paymentStatus === "APPROVED" ? (
                   <LoadingButton
-                    className="h-9 rounded-button border border-red-500/40 px-3 text-xs text-red-400"
+                    className="h-10 w-full rounded-button border border-red-500/40 px-3 text-xs text-red-400 sm:h-9 sm:w-auto"
                     disabled={pending}
                     onClick={() =>
                       window.confirm("Solicitar reembolso integral no Mercado Pago?")
@@ -262,7 +265,7 @@ export function AdminSpecialRoundWorkspace({
                   </LoadingButton>
                 ) : null}
                 <LoadingButton
-                  className="h-9 rounded-button border border-app-border px-3 text-xs"
+                  className="h-10 w-full rounded-button border border-app-border px-3 text-xs sm:h-9 sm:w-auto"
                   disabled={pending}
                   onClick={() =>
                     run(() => toggleSpecialRoundEntryBlockAction(entry.id, !entry.blockedAt))
@@ -314,7 +317,10 @@ export function AdminSpecialRoundWorkspace({
         </div>
       </section>
 
-      <section className="rounded-card border border-app-border bg-app-surface p-5" id="palpites">
+      <section
+        className="rounded-card border border-app-border bg-app-surface p-4 sm:p-5"
+        id="palpites"
+      >
         <h2 className="text-lg font-semibold">Todos os palpites</h2>
         <div className="mt-4 space-y-2">
           {entries.map((entry) => (
@@ -326,7 +332,7 @@ export function AdminSpecialRoundWorkspace({
                 {markets.map((market) => {
                   const prediction = entry.predictions.find((item) => item.marketId === market.id);
                   return (
-                    <p className="flex justify-between gap-3" key={market.id}>
+                    <p className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-3" key={market.id}>
                       <span className="text-app-muted">{market.title}</span>
                       <strong>
                         {prediction ? JSON.stringify(prediction.answer) : "Nao informado"}
@@ -340,13 +346,16 @@ export function AdminSpecialRoundWorkspace({
         </div>
       </section>
 
-      <section className="rounded-card border border-app-border bg-app-surface p-5" id="resultados">
+      <section
+        className="rounded-card border border-app-border bg-app-surface p-4 sm:p-5"
+        id="resultados"
+      >
         <h2 className="text-lg font-semibold">Resultados e apuracao</h2>
         <p className="mt-1 text-sm text-app-muted">
           O sistema consulta na API-Football somente a partida vinculada a esta rodada, atualiza
           placar, eventos e estatisticas no banco e depois realiza a apuracao.
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
           <LoadingButton
             className="h-11 rounded-button bg-brand-gold px-4 font-semibold text-black"
             isLoading={pending}
@@ -368,7 +377,7 @@ export function AdminSpecialRoundWorkspace({
       </section>
 
       <section
-        className="rounded-card border border-app-border bg-app-surface p-5"
+        className="rounded-card border border-app-border bg-app-surface p-4 sm:p-5"
         id="classificacao"
       >
         <h2 className="text-lg font-semibold">Classificacao</h2>

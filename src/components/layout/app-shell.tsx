@@ -49,7 +49,7 @@ export function AppShell({
           )}
         >
           <AppTopbar mode={mode} unreadNotificationCount={unreadNotificationCount} user={user} />
-          <main className="flex-1">{children}</main>
+          <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
         </div>
       </div>
       {mode === "user" ? <XpNotificationToast /> : null}

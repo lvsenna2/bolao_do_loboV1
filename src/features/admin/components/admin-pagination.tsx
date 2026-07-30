@@ -48,11 +48,12 @@ export function AdminPagination({
       <span>
         Pagina {page} de {totalPages} | {total} registros
       </span>
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
         <Link
           aria-disabled={page <= 1}
           className={cn(
             buttonVariants({ size: "sm", variant: "secondary" }),
+            "justify-center",
             page <= 1 ? "pointer-events-none opacity-50" : ""
           )}
           href={buildHref(pathname, searchParams, previousPage) as Route}
@@ -63,6 +64,7 @@ export function AdminPagination({
           aria-disabled={page >= totalPages}
           className={cn(
             buttonVariants({ size: "sm", variant: "secondary" }),
+            "justify-center",
             page >= totalPages ? "pointer-events-none opacity-50" : ""
           )}
           href={buildHref(pathname, searchParams, nextPage) as Route}
