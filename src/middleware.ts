@@ -21,6 +21,7 @@ export default withAuth({
 export const config = {
   matcher: [
     "/admin/:path*",
+    "/apoie-a-api/:path*",
     "/comparar-palpites/:path*",
     "/dashboard/:path*",
     "/ligas/:path*",

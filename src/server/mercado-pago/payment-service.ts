@@ -6,6 +6,7 @@ import {
   syncActiveLeagueMissionProgress
 } from "@/features/xp/services/xp-service";
 import { reconcileElectionPayment } from "@/features/election-special-round/payment-service";
+import { reconcileApiFundingPayment } from "@/features/api-funding/payment-service";
 import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import {
@@ -119,6 +120,8 @@ export async function reconcileMercadoPagoPayment(providerPayment: MercadoPagoPa
     if (specialRoundPayment) return specialRoundPayment;
     const electionPayment = await reconcileElectionPayment(providerPayment);
     if (electionPayment) return electionPayment;
+    const apiFundingPayment = await reconcileApiFundingPayment(providerPayment);
+    if (apiFundingPayment) return apiFundingPayment;
     throw new Error("MERCADO_PAGO_PAYMENT_NOT_FOUND");
   }
 

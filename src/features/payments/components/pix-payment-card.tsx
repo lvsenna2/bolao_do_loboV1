@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { checkElectionPaymentAction } from "@/features/election-special-round/actions";
+import { checkApiFundingPaymentAction } from "@/features/api-funding/actions";
 import { checkMercadoPagoPaymentAction } from "@/features/payments/actions/payment-actions";
 import { checkSpecialRoundPaymentAction } from "@/features/special-rounds/actions/special-round-actions";
 
@@ -17,13 +18,14 @@ type PixPaymentCardProps = {
   leagueName: string;
   levelName?: string;
   minimumAmountLabel?: string;
+  onApproved?: () => void;
   originalAmountLabel?: string;
   paymentId: string;
   pixCode: string;
   qrCodeDataUri: string;
   ticketUrl?: string | null;
   transactionId: string;
-  variant?: "election" | "league" | "special-round";
+  variant?: "api-funding" | "election" | "league" | "special-round";
 };
 
 export function PixPaymentCard({
@@ -35,6 +37,7 @@ export function PixPaymentCard({
   leagueName,
   levelName,
   minimumAmountLabel,
+  onApproved,
   originalAmountLabel,
   paymentId,
   pixCode,
@@ -63,7 +66,9 @@ export function PixPaymentCard({
           ? await checkSpecialRoundPaymentAction(paymentId)
           : variant === "election"
             ? await checkElectionPaymentAction(paymentId)
-            : await checkMercadoPagoPaymentAction(paymentId);
+            : variant === "api-funding"
+              ? await checkApiFundingPaymentAction(paymentId)
+              : await checkMercadoPagoPaymentAction(paymentId);
       const status = result.ok
         ? "status" in result
           ? result.status
@@ -72,13 +77,14 @@ export function PixPaymentCard({
 
       if (result.ok && status === "APPROVED") {
         setPaymentApproved(true);
+        onApproved?.();
         router.refresh();
       }
     } finally {
       checkingRef.current = false;
       setIsChecking(false);
     }
-  }, [paymentApproved, paymentId, router, variant]);
+  }, [onApproved, paymentApproved, paymentId, router, variant]);
 
   useEffect(() => {
     void checkPayment();
@@ -110,8 +116,9 @@ export function PixPaymentCard({
             <h3 className="mt-4 text-xl font-bold text-white">{leagueName}</h3>
             <p className="mt-2 max-w-xl text-sm leading-6 text-amber-50/80">
               Cobranca dinamica protegida pelo Mercado Pago.{" "}
-              {variant === "league" ? "A liga" : "A participacao"} sera liberada automaticamente
-              depois que o PIX for confirmado.
+              {variant === "api-funding"
+                ? "A contribuicao sera contabilizada automaticamente depois que o PIX for confirmado."
+                : `${variant === "league" ? "A liga" : "A participacao"} sera liberada automaticamente depois que o PIX for confirmado.`}
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -218,7 +225,9 @@ export function PixPaymentCard({
               <ShieldCheck aria-hidden className="h-4 w-4" />
             )}
             {paymentApproved
-              ? "Entrada liberada"
+              ? variant === "api-funding"
+                ? "Contribuicao confirmada"
+                : "Entrada liberada"
               : isChecking
                 ? "Verificando..."
                 : "Verificar pagamento"}

@@ -4,6 +4,7 @@ import {
   FileText,
   Flag,
   GitCompareArrows,
+  HandCoins,
   History,
   LayoutDashboard,
   Medal,
@@ -70,6 +71,11 @@ export const mainNavigationItems: NavigationItem[] = [
     href: "/perfil",
     icon: UserRound,
     label: "Perfil"
+  },
+  {
+    href: "/apoie-a-api",
+    icon: HandCoins,
+    label: "Apoiar API"
   }
 ];
 
@@ -79,7 +85,8 @@ export const mobileNavigationItems: NavigationItem[] = [
   mainNavigationItems[3],
   mainNavigationItems[4],
   mainNavigationItems[5],
-  mainNavigationItems[8]
+  mainNavigationItems[8],
+  mainNavigationItems[9]
 ];
 
 export const adminNavigationItems: NavigationItem[] = [

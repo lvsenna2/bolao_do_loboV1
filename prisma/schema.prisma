@@ -245,6 +245,7 @@ model User {
   rankingAdjustments      RankingAdjustment[]      @relation("RankingAdjustmentUser")
   rankingAdjustmentsMade  RankingAdjustment[]      @relation("RankingAdjustmentAdmin")
   payments                Payment[]
+  apiFundingContributions ApiFundingContribution[]
   notifications           Notification[]
   achievements            Achievement[]
   leagueBadgeAwards       LeagueBadgeAward[]       @relation("LeagueBadgeAwardUser")
@@ -944,6 +945,34 @@ model Payment {
   @@index([status])
   @@index([createdAt])
   @@map("payments")
+}
+
+model ApiFundingContribution {
+  id                   String         @id @default(uuid()) @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  gateway              PaymentGateway @default(MERCADO_PAGO)
+  transactionId        String?        @unique @map("transaction_id")
+  checkoutKey          String         @unique @map("checkout_key") @db.VarChar(180)
+  amount               Decimal        @db.Decimal(10, 2)
+  status               PaymentStatus  @default(PENDING)
+  qrCode               String?        @map("qr_code")
+  qrCodeBase64         String?        @map("qr_code_base64")
+  ticketUrl            String?        @map("ticket_url")
+  providerStatus       String?        @map("provider_status") @db.VarChar(80)
+  providerStatusDetail String?        @map("provider_status_detail") @db.VarChar(120)
+  paymentExpiresAt     DateTime?      @map("payment_expires_at")
+  lastWebhookAt        DateTime?      @map("last_webhook_at")
+  paidAt               DateTime?      @map("paid_at")
+  refundedAt           DateTime?      @map("refunded_at")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([status, paidAt])
+  @@index([createdAt])
+  @@map("api_funding_contributions")
 }
 
 model Notification {
