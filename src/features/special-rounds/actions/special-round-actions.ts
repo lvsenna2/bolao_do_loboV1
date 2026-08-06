@@ -445,13 +445,13 @@ export async function syncSpecialRoundLineupAction(
   ];
 
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.specialRoundMarketOption.updateMany({
+    const operations: Prisma.PrismaPromise<unknown>[] = [
+      prisma.specialRoundMarketOption.updateMany({
         data: { active: false },
         where: { marketId: scorerMarket.id }
-      });
-      for (const [sortOrder, option] of availableOptions.entries()) {
-        await tx.specialRoundMarketOption.upsert({
+      }),
+      ...availableOptions.map((option, sortOrder) =>
+        prisma.specialRoundMarketOption.upsert({
           create: {
             active: true,
             label: option.label,
@@ -466,22 +466,22 @@ export async function syncSpecialRoundLineupAction(
               value: option.value
             }
           }
-        });
-      }
-      for (const [predictionId, answer] of migratedAnswers) {
-        await tx.specialRoundPrediction.update({
+        })
+      ),
+      ...Array.from(migratedAnswers, ([predictionId, answer]) =>
+        prisma.specialRoundPrediction.update({
           data: { answer: json(answer) },
           where: { id: predictionId }
-        });
-      }
-      await tx.specialRoundMarket.update({
+        })
+      ),
+      prisma.specialRoundMarket.update({
         data: {
           answerType: "OPTION_LIST",
           description: "Escolha na escalacao quem marcara o primeiro gol da partida."
         },
         where: { id: scorerMarket.id }
-      });
-      await tx.specialRoundAuditLog.create({
+      }),
+      prisma.specialRoundAuditLog.create({
         data: {
           action: "special_round.lineup_synced",
           actorId: admin.id,
@@ -495,10 +495,13 @@ export async function syncSpecialRoundLineupAction(
           }),
           specialRoundId: round.id
         }
-      });
-    }, serializable);
+      })
+    ];
+
+    await prisma.$transaction(operations, serializable);
   } catch (error) {
     console.error("Special round lineup market update failed", {
+      code: typeof error === "object" && error && "code" in error ? String(error.code) : undefined,
       error,
       fixtureId: match.apiId,
       specialRoundId: round.id
