@@ -50,7 +50,13 @@ export async function checkMercadoPagoPaymentAction(
       revalidatePath("/rodadas");
     }
 
-    return { ok: true, status: result.status };
+    const legacyStatus = ["APPROVED", "PENDING", "FAILED", "REFUNDED", "CANCELLED"].includes(
+      result.status
+    )
+      ? (result.status as Exclude<PaymentStatusResult, { ok: false }>["status"])
+      : "PENDING";
+
+    return { ok: true, status: legacyStatus };
   } catch (error) {
     console.error("Mercado Pago payment status check failed", {
       message: error instanceof Error ? error.message : "unknown",

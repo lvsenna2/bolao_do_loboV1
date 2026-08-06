@@ -7,9 +7,9 @@ import { revalidatePath } from "next/cache";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import {
   evaluateAchievementsForUser,
-  getUserPaidLeaguePricing,
   syncActiveLeagueMissionProgress
 } from "@/features/xp/services/xp-service";
+import { getPaidLeaguePricingForUser } from "@/features/subscriptions/pricing-service";
 import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
@@ -198,7 +198,7 @@ type PendingPixPayment = {
   transactionId: string;
 };
 
-type PaidLeaguePricing = Awaited<ReturnType<typeof getUserPaidLeaguePricing>>;
+type PaidLeaguePricing = Awaited<ReturnType<typeof getPaidLeaguePricingForUser>>;
 
 function getMoneyNumber(value: Prisma.Decimal | number | string) {
   return Number(typeof value === "object" ? value.toString() : value);
@@ -374,7 +374,7 @@ async function joinLeagueForUser(
 
   if (requiresPixPayment(league)) {
     const [pricing, payer] = await Promise.all([
-      getUserPaidLeaguePricing(userId, getMoneyNumber(league.entryFee)),
+      getPaidLeaguePricingForUser(userId, getMoneyNumber(league.entryFee)),
       prisma.user.findUnique({
         select: { email: true },
         where: { id: userId }
@@ -383,6 +383,36 @@ async function joinLeagueForUser(
 
     if (!payer) {
       return { ok: false, message: "Usuario nao encontrado." };
+    }
+
+    if (pricing.finalAmount <= 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.leagueMember.upsert({
+          create: { leagueId: league.id, role: "MEMBER", status: "ACTIVE", userId },
+          update: { joinedAt: serverNow(), leftAt: null, role: "MEMBER", status: "ACTIVE" },
+          where: { leagueId_userId: { leagueId: league.id, userId } }
+        });
+        await tx.auditLog.create({
+          data: {
+            action: `${auditAction}.subscription_benefit`,
+            entity: "League",
+            entityId: league.id,
+            newValue: {
+              discountPercent: pricing.discountPercent,
+              leagueId: league.id,
+              leagueName: league.name,
+              plan: pricing.level.name
+            },
+            userId
+          }
+        });
+      });
+      await Promise.all([
+        syncActiveLeagueMissionProgress(userId),
+        evaluateAchievementsForUser(userId)
+      ]);
+      revalidateLeaguePaths();
+      return { ok: true, message: `Entrada gratuita liberada pelo ${pricing.level.name}.` };
     }
 
     const paymentRecord = await prisma.$transaction(async (tx) => {

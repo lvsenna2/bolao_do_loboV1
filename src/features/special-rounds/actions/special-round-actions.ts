@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 
 import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
+import { canAccessAdmin } from "@/server/auth/rbac";
+import { canCreateSpecialRound } from "@/features/subscriptions/service";
 import { prisma } from "@/server/db";
 import { runFootballAutomation } from "@/server/football-api/automation-service";
 import { fetchApiFootballLineups } from "@/server/football-api/client";
@@ -115,7 +117,10 @@ export async function createSpecialRoundAction(
 export async function createAutomaticSpecialRoundAction(
   input: unknown
 ): Promise<SpecialRoundActionResult<{ id: string }>> {
-  const admin = await requireAdmin();
+  const admin = await requireUser();
+  if (!canAccessAdmin(admin.role) && !(await canCreateSpecialRound(admin.id))) {
+    return { message: "A criacao de Rodadas Especiais exige o plano Platinum.", ok: false };
+  }
   const parsed = automaticSpecialRoundSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -378,10 +383,10 @@ export async function syncSpecialRoundLineupAction(
     },
     where: { matchId: match.id }
   });
-  const completeLineups =
-    storedLineups.length >= 2 &&
-    storedLineups.every((lineup) => lineup.complete && lineup.players.length > 0);
-  if (!completeLineups) {
+  const usableLineups =
+    storedLineups.length >= 2 && storedLineups.every((lineup) => lineup.players.length > 0);
+  const completeLineups = usableLineups && storedLineups.every((lineup) => lineup.complete);
+  if (!usableLineups) {
     return {
       message:
         "A API-Football ainda nao publicou a escalacao completa dos dois times. Os dados parciais foram salvos; tente novamente em alguns minutos.",
@@ -507,7 +512,7 @@ export async function syncSpecialRoundLineupAction(
   revalidateSpecialRounds(round.id);
   return {
     data: { playerCount: playerOptions.length - 1 },
-    message: `Escalacao atualizada. ${playerOptions.length - 1} jogadores estao disponiveis para palpite.`,
+    message: `${completeLineups ? "Escalacao atualizada" : "Escalacao parcial atualizada"}. ${playerOptions.length - 1} jogadores estao disponiveis para palpite.`,
     ok: true
   };
 }

@@ -19,6 +19,32 @@ export type MercadoPagoPayment = {
   transaction_amount?: number | null;
 };
 
+export type MercadoPagoPreapproval = {
+  auto_recurring?: {
+    currency_id?: string | null;
+    transaction_amount?: number | string | null;
+  } | null;
+  external_reference?: string | null;
+  id: string;
+  init_point?: string | null;
+  next_payment_date?: string | null;
+  payer_id?: number | string | null;
+  status?: string | null;
+};
+
+export type MercadoPagoAuthorizedPayment = {
+  external_reference?: string | null;
+  id: number | string;
+  payment?: {
+    id?: number | string | null;
+    status?: string | null;
+    status_detail?: string | null;
+  } | null;
+  preapproval_id?: string | null;
+  status?: string | null;
+  transaction_amount?: number | string | null;
+};
+
 type CreatePixPaymentInput = {
   amount: number;
   description: string;
@@ -94,6 +120,24 @@ function getNotificationUrl() {
   }
 
   return undefined;
+}
+
+function getSubscriptionBackUrl() {
+  const configured = process.env.MERCADO_PAGO_SUBSCRIPTION_BACK_URL?.trim();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() ?? process.env.NEXTAUTH_URL?.trim() ?? "";
+  const candidate = configured || (appUrl ? `${appUrl.replace(/\/$/, "")}/planos` : "");
+  try {
+    const url = new URL(candidate);
+    if (url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "localhost")) {
+      return url.toString();
+    }
+  } catch {
+    // The public configuration error is reported without exposing environment values.
+  }
+  throw new MercadoPagoApiError(
+    "Configure NEXT_PUBLIC_APP_URL ou MERCADO_PAGO_SUBSCRIPTION_BACK_URL para assinar.",
+    503
+  );
 }
 
 export function getMercadoPagoErrorDescription(details: unknown) {
@@ -219,6 +263,65 @@ export async function createMercadoPagoPixPayment(input: CreatePixPaymentInput) 
       method: "POST"
     },
     input.idempotencyKey
+  );
+}
+
+export function createMercadoPagoSubscription(input: {
+  amount: number;
+  description: string;
+  idempotencyKey: string;
+  internalSubscriptionId: string;
+  payerEmail: string;
+}) {
+  return mercadoPagoRequest<MercadoPagoPreapproval>(
+    "/preapproval",
+    {
+      body: JSON.stringify({
+        auto_recurring: {
+          currency_id: "BRL",
+          frequency: 1,
+          frequency_type: "months",
+          transaction_amount: Number(input.amount.toFixed(2))
+        },
+        back_url: getSubscriptionBackUrl(),
+        external_reference: input.internalSubscriptionId,
+        payer_email: input.payerEmail.trim().toLowerCase(),
+        reason: input.description.slice(0, 120),
+        status: "pending"
+      }),
+      method: "POST"
+    },
+    input.idempotencyKey
+  );
+}
+
+export function getMercadoPagoSubscription(providerSubscriptionId: string) {
+  if (!/^[A-Za-z0-9-]+$/.test(providerSubscriptionId)) {
+    throw new MercadoPagoApiError("Identificador de assinatura invalido.", 400);
+  }
+  return mercadoPagoRequest<MercadoPagoPreapproval>(
+    `/preapproval/${encodeURIComponent(providerSubscriptionId)}`,
+    { method: "GET" }
+  );
+}
+
+export function cancelMercadoPagoSubscription(providerSubscriptionId: string) {
+  if (!/^[A-Za-z0-9-]+$/.test(providerSubscriptionId)) {
+    throw new MercadoPagoApiError("Identificador de assinatura invalido.", 400);
+  }
+  return mercadoPagoRequest<MercadoPagoPreapproval>(
+    `/preapproval/${encodeURIComponent(providerSubscriptionId)}`,
+    { body: JSON.stringify({ status: "canceled" }), method: "PUT" }
+  );
+}
+
+export function getMercadoPagoAuthorizedPayment(authorizedPaymentId: string) {
+  if (!/^\d+$/.test(authorizedPaymentId)) {
+    throw new MercadoPagoApiError("Identificador de fatura invalido.", 400);
+  }
+  return mercadoPagoRequest<MercadoPagoAuthorizedPayment>(
+    `/authorized_payments/${encodeURIComponent(authorizedPaymentId)}`,
+    { method: "GET" }
   );
 }
 

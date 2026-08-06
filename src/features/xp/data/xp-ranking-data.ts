@@ -1,3 +1,5 @@
+import type { SubscriptionPlan } from "@prisma/client";
+
 import { prisma } from "@/server/db";
 import type { LeagueEmblemView } from "@/features/xp/components/league-emblem";
 import { getActiveXpLevels, getLevelForXp, type XpLevelView } from "../services/xp-service";
@@ -8,6 +10,7 @@ export type XpRankingRow = {
   emblems: LeagueEmblemView[];
   level: XpLevelView;
   position: number;
+  subscriptionPlan: SubscriptionPlan | null;
   user: {
     avatarUrl: string | null;
     id: string;
@@ -79,6 +82,7 @@ function buildRows(
     .map((user) => ({
       emblems: [],
       level: getLevelForXp(user.xp, levels),
+      subscriptionPlan: null,
       user,
       xp: xpByUser.get(user.id) ?? 0
     }))
@@ -309,31 +313,44 @@ export async function getXpRankingData(
           : scope === "season"
             ? options.seasons.find((season) => season.id === selectedSeasonId)?.championshipId
             : undefined;
-      const emblemAwards = await prisma.leagueBadgeAward.findMany({
-        include: {
-          badge: { select: { title: true } },
-          championship: { select: { name: true } }
-        },
-        orderBy: { createdAt: "desc" },
-        where: {
-          ...(selectedChampionshipId
-            ? {
-                OR: [{ championshipId: selectedChampionshipId }, { isUniversal: true }]
-              }
-            : {}),
-          userId: { in: rows.map((row) => row.user.id) }
-        }
-      });
+      const [emblemAwards, subscriptions] = await prisma.$transaction([
+        prisma.leagueBadgeAward.findMany({
+          include: {
+            badge: { select: { title: true } },
+            championship: { select: { name: true } }
+          },
+          orderBy: { createdAt: "desc" },
+          where: {
+            ...(selectedChampionshipId
+              ? {
+                  OR: [{ championshipId: selectedChampionshipId }, { isUniversal: true }]
+                }
+              : {}),
+            userId: { in: rows.map((row) => row.user.id) }
+          }
+        }),
+        prisma.subscription.findMany({
+          orderBy: { currentPeriodEnd: "desc" },
+          select: { plan: true, userId: true },
+          where: {
+            currentPeriodEnd: { gt: new Date() },
+            status: { in: ["ACTIVE", "CANCELED"] },
+            userId: { in: rows.map((row) => row.user.id) }
+          }
+        })
+      ]);
       const emblemsByUser = emblemAwards.reduce<Map<string, LeagueEmblemView[]>>((map, award) => {
         const current = map.get(award.userId) ?? [];
         current.push(award);
         map.set(award.userId, current);
         return map;
       }, new Map());
+      const subscriptionByUser = new Map(subscriptions.map((item) => [item.userId, item.plan]));
 
       rows = rows.map((row) => ({
         ...row,
-        emblems: emblemsByUser.get(row.user.id) ?? []
+        emblems: emblemsByUser.get(row.user.id) ?? [],
+        subscriptionPlan: subscriptionByUser.get(row.user.id) ?? null
       }));
     }
 

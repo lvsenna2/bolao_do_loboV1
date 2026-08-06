@@ -1,10 +1,10 @@
 import {
   CalendarDays,
   ClipboardList,
+  Crown,
   FileText,
   Flag,
   GitCompareArrows,
-  HandCoins,
   History,
   LayoutDashboard,
   Medal,
@@ -73,9 +73,9 @@ export const mainNavigationItems: NavigationItem[] = [
     label: "Perfil"
   },
   {
-    href: "/apoie-a-api",
-    icon: HandCoins,
-    label: "Apoiar API"
+    href: "/planos",
+    icon: Crown,
+    label: "Planos"
   }
 ];
 

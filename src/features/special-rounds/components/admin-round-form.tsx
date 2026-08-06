@@ -53,10 +53,12 @@ const inputClass =
 
 export function AdminSpecialRoundForm({
   initial,
-  matches
+  matches,
+  redirectBase = "/admin/rodadas-especiais"
 }: {
   initial?: InitialRound;
   matches: MatchOption[];
+  redirectBase?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -76,7 +78,7 @@ export function AdminSpecialRoundForm({
       });
       setMessage(result.message);
       if (result.ok && result.data) {
-        router.push(`/admin/rodadas-especiais/${result.data.id}` as Route);
+        router.push(`${redirectBase}/${result.data.id}` as Route);
         router.refresh();
       }
     });

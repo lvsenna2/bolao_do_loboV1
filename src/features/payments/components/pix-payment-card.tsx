@@ -8,6 +8,7 @@ import { checkElectionPaymentAction } from "@/features/election-special-round/ac
 import { checkApiFundingPaymentAction } from "@/features/api-funding/actions";
 import { checkMercadoPagoPaymentAction } from "@/features/payments/actions/payment-actions";
 import { checkSpecialRoundPaymentAction } from "@/features/special-rounds/actions/special-round-actions";
+import { checkSubscriptionPaymentAction } from "@/features/subscriptions/actions";
 
 type PixPaymentCardProps = {
   amountLabel: string;
@@ -25,7 +26,7 @@ type PixPaymentCardProps = {
   qrCodeDataUri: string;
   ticketUrl?: string | null;
   transactionId: string;
-  variant?: "api-funding" | "election" | "league" | "special-round";
+  variant?: "api-funding" | "election" | "league" | "special-round" | "subscription";
 };
 
 export function PixPaymentCard({
@@ -68,14 +69,16 @@ export function PixPaymentCard({
             ? await checkElectionPaymentAction(paymentId)
             : variant === "api-funding"
               ? await checkApiFundingPaymentAction(paymentId)
-              : await checkMercadoPagoPaymentAction(paymentId);
+              : variant === "subscription"
+                ? await checkSubscriptionPaymentAction(paymentId)
+                : await checkMercadoPagoPaymentAction(paymentId);
       const status = result.ok
         ? "status" in result
           ? result.status
           : result.data?.status
         : undefined;
 
-      if (result.ok && status === "APPROVED") {
+      if (result.ok && (status === "APPROVED" || status === "ACTIVE")) {
         setPaymentApproved(true);
         onApproved?.();
         router.refresh();
@@ -118,7 +121,9 @@ export function PixPaymentCard({
               Cobranca dinamica protegida pelo Mercado Pago.{" "}
               {variant === "api-funding"
                 ? "A contribuicao sera contabilizada automaticamente depois que o PIX for confirmado."
-                : `${variant === "league" ? "A liga" : "A participacao"} sera liberada automaticamente depois que o PIX for confirmado.`}
+                : variant === "subscription"
+                  ? "Os beneficios do plano serao liberados automaticamente depois que o PIX for confirmado."
+                  : `${variant === "league" ? "A liga" : "A participacao"} sera liberada automaticamente depois que o PIX for confirmado.`}
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">

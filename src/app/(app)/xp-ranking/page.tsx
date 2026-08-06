@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FormLoadingButton } from "@/components/ui/loading-button";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { UserStatCard } from "@/features/user/components/user-stat-card";
+import { SubscriptionBadge } from "@/features/subscriptions/components/subscription-badge";
 import { getXpRankingData } from "@/features/xp/data/xp-ranking-data";
 import { LeagueEmblemList } from "@/features/xp/components/league-emblem";
 import { requireUser } from "@/server/auth/session";
@@ -128,6 +129,7 @@ export default async function XpRankingPage({ searchParams }: XpRankingPageProps
                   <div>
                     <p className="font-semibold text-app-foreground">{row.user.name}</p>
                     <p className="text-xs text-app-muted">@{row.user.username}</p>
+                    <SubscriptionBadge plan={row.subscriptionPlan} />
                     <LeagueEmblemList emblems={row.emblems} />
                   </div>
                 </div>

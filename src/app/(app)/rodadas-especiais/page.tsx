@@ -1,4 +1,4 @@
-import { Landmark } from "lucide-react";
+import { Landmark, Plus } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
@@ -8,14 +8,16 @@ import { getElectionRoundSummary } from "@/features/election-special-round/data"
 import { getSpecialRoundsForUser } from "@/features/special-rounds/data/special-round-data";
 import { SpecialRoundCard } from "@/features/special-rounds/components/special-round-card";
 import { requireUser } from "@/server/auth/session";
+import { canCreateSpecialRound } from "@/features/subscriptions/service";
 
 export const dynamic = "force-dynamic";
 
 export default async function SpecialRoundsPage() {
   const user = await requireUser();
-  const [rounds, election] = await Promise.all([
+  const [rounds, election, canCreate] = await Promise.all([
     getSpecialRoundsForUser(user.id),
-    getElectionRoundSummary()
+    getElectionRoundSummary(),
+    canCreateSpecialRound(user.id)
   ]);
   const active = rounds.filter((round) => !["FINALIZED", "CANCELLED"].includes(round.status));
   const closed = rounds.filter((round) => ["FINALIZED", "CANCELLED"].includes(round.status));
@@ -26,6 +28,16 @@ export default async function SpecialRoundsPage() {
       eyebrow="Competicao especial"
       title="Rodadas Especiais"
     >
+      {canCreate ? (
+        <div className="mb-6 flex justify-end">
+          <Link
+            className="inline-flex h-11 items-center gap-2 rounded-button bg-brand-gold px-5 font-semibold text-black"
+            href={"/rodadas-especiais/nova" as Route}
+          >
+            <Plus className="h-4 w-4" /> Criar Rodada Especial
+          </Link>
+        </div>
+      ) : null}
       {election && election.status !== "CANCELLED" ? (
         <Card className="mb-8 overflow-hidden border-brand-gold/40 bg-black text-white">
           <CardContent className="relative p-5 sm:p-6">

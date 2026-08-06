@@ -117,6 +117,26 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum SubscriptionPlan {
+  PRATA
+  OURO
+  PLATINUM
+}
+
+enum SubscriptionPaymentMethod {
+  PIX
+  CARD
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+  REFUNDED
+}
+
 enum NotificationType {
   INFO
   SUCCESS
@@ -246,6 +266,7 @@ model User {
   rankingAdjustmentsMade  RankingAdjustment[]      @relation("RankingAdjustmentAdmin")
   payments                Payment[]
   apiFundingContributions ApiFundingContribution[]
+  subscriptions           Subscription[]
   notifications           Notification[]
   achievements            Achievement[]
   leagueBadgeAwards       LeagueBadgeAward[]       @relation("LeagueBadgeAwardUser")
@@ -973,6 +994,60 @@ model ApiFundingContribution {
   @@index([status, paidAt])
   @@index([createdAt])
   @@map("api_funding_contributions")
+}
+
+model Subscription {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  userId                 String                    @map("user_id") @db.Uuid
+  plan                   SubscriptionPlan
+  paymentMethod          SubscriptionPaymentMethod @map("payment_method")
+  provider               PaymentGateway            @default(MERCADO_PAGO)
+  providerCustomerId     String?                   @map("provider_customer_id") @db.VarChar(120)
+  providerSubscriptionId String?                   @unique @map("provider_subscription_id") @db.VarChar(120)
+  providerPaymentId      String?                   @unique @map("provider_payment_id") @db.VarChar(120)
+  checkoutKey            String?                   @unique @map("checkout_key") @db.VarChar(180)
+  checkoutUrl            String?                   @map("checkout_url")
+  amount                 Decimal                   @db.Decimal(10, 2)
+  status                 SubscriptionStatus        @default(PENDING)
+  providerStatus         String?                   @map("provider_status") @db.VarChar(80)
+  providerStatusDetail   String?                   @map("provider_status_detail") @db.VarChar(120)
+  qrCode                 String?                   @map("qr_code")
+  qrCodeBase64           String?                   @map("qr_code_base64")
+  ticketUrl              String?                   @map("ticket_url")
+  paymentExpiresAt       DateTime?                 @map("payment_expires_at")
+  startedAt              DateTime?                 @map("started_at")
+  currentPeriodStart     DateTime?                 @map("current_period_start")
+  currentPeriodEnd       DateTime?                 @map("current_period_end")
+  canceledAt             DateTime?                 @map("canceled_at")
+  lastWebhookAt          DateTime?                 @map("last_webhook_at")
+  createdAt              DateTime                  @default(now()) @map("created_at")
+  updatedAt              DateTime                  @updatedAt @map("updated_at")
+
+  user   User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  events SubscriptionEvent[]
+
+  @@index([status, currentPeriodEnd])
+  @@index([userId, createdAt])
+  @@index([providerPaymentId])
+  @@index([plan])
+  @@map("subscriptions")
+}
+
+model SubscriptionEvent {
+  id                 String             @id @default(uuid()) @db.Uuid
+  subscriptionId     String             @map("subscription_id") @db.Uuid
+  type               String             @db.VarChar(80)
+  status             SubscriptionStatus?
+  providerResourceId String?            @map("provider_resource_id") @db.VarChar(120)
+  uniqueKey          String             @unique @map("unique_key") @db.VarChar(220)
+  metadata           Json?
+  createdAt          DateTime           @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt])
+  @@index([providerResourceId])
+  @@map("subscription_events")
 }
 
 model Notification {

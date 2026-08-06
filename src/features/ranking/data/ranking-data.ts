@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, SubscriptionPlan } from "@prisma/client";
 
 import type { LeagueEmblemView } from "@/features/xp/components/league-emblem";
 import { prisma } from "@/server/db";
@@ -15,6 +15,7 @@ export type RankingRowView = {
   losses: number;
   points: number;
   position: number | null;
+  subscriptionPlan: SubscriptionPlan | null;
   user: {
     avatarUrl: string | null;
     id: string;
@@ -87,7 +88,8 @@ function mapRankingRow(
       };
     };
   }>,
-  emblems: LeagueEmblemView[] = []
+  emblems: LeagueEmblemView[] = [],
+  subscriptionPlan: SubscriptionPlan | null = null
 ): RankingRowView {
   return {
     averageSubmitSeconds: row.averageSubmitSeconds,
@@ -99,6 +101,7 @@ function mapRankingRow(
     losses: row.losses,
     points: row.points,
     position: row.position,
+    subscriptionPlan,
     user: row.user,
     wins: row.wins
   };
@@ -198,7 +201,7 @@ export async function getRankingPageData(
       leagueId: selectedLeagueId,
       scope: "LEAGUE"
     };
-    const [rankingRows, myRanking, emblemAwards] = await prisma.$transaction([
+    const [rankingRows, myRanking, emblemAwards, subscriptions] = await prisma.$transaction([
       prisma.ranking.findMany({
         include: {
           user: {
@@ -255,6 +258,14 @@ export async function getRankingPageData(
             { isUniversal: true }
           ]
         }
+      }),
+      prisma.subscription.findMany({
+        orderBy: { currentPeriodEnd: "desc" },
+        select: { plan: true, userId: true },
+        where: {
+          currentPeriodEnd: { gt: new Date() },
+          status: { in: ["ACTIVE", "CANCELED"] }
+        }
       })
     ]);
 
@@ -264,9 +275,16 @@ export async function getRankingPageData(
       map.set(award.userId, current);
       return map;
     }, new Map());
-    const rankings = rankingRows.map((row) => mapRankingRow(row, emblemsByUser.get(row.userId)));
+    const subscriptionByUser = new Map(subscriptions.map((item) => [item.userId, item.plan]));
+    const rankings = rankingRows.map((row) =>
+      mapRankingRow(row, emblemsByUser.get(row.userId), subscriptionByUser.get(row.userId))
+    );
     const myRankingView = myRanking
-      ? mapRankingRow(myRanking, emblemsByUser.get(myRanking.userId))
+      ? mapRankingRow(
+          myRanking,
+          emblemsByUser.get(myRanking.userId),
+          subscriptionByUser.get(myRanking.userId)
+        )
       : null;
 
     return {
