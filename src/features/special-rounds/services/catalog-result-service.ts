@@ -59,8 +59,8 @@ function compareTeams(home: number | null, away: number | null) {
   return home === away ? "DRAW" : home > away ? "HOME" : "AWAY";
 }
 
-function sumAvailable(left: number | null, right: number | null) {
-  return left === null && right === null ? null : (left ?? 0) + (right ?? 0);
+function sumComplete(left: number | null, right: number | null) {
+  return left === null || right === null ? null : left + right;
 }
 
 function firstGoal(events: CatalogEvent[]) {
@@ -87,20 +87,18 @@ export function deriveCatalogResults(match: CatalogMatch, markets: readonly Resu
   const redCards = numericStatistic(match.statistics, "Red Cards");
   const cardEvents = match.events.filter((event) => event.type.toLowerCase() === "card");
   const cards =
-    yellowCards === null && redCards === null
-      ? cardEvents.length || null
-      : (yellowCards ?? 0) + (redCards ?? 0);
+    yellowCards !== null && redCards !== null ? yellowCards + redCards : cardEvents.length || null;
   const homeShotsOnGoal = numericTeamStatistic(match.statistics, "Shots on Goal", match.homeTeamId);
   const awayShotsOnGoal = numericTeamStatistic(match.statistics, "Shots on Goal", match.awayTeamId);
   const homeCorners = numericTeamStatistic(match.statistics, "Corner Kicks", match.homeTeamId);
   const awayCorners = numericTeamStatistic(match.statistics, "Corner Kicks", match.awayTeamId);
   const homeShots = numericTeamStatistic(match.statistics, "Total Shots", match.homeTeamId);
   const awayShots = numericTeamStatistic(match.statistics, "Total Shots", match.awayTeamId);
-  let homeCards = sumAvailable(
+  let homeCards = sumComplete(
     numericTeamStatistic(match.statistics, "Yellow Cards", match.homeTeamId),
     numericTeamStatistic(match.statistics, "Red Cards", match.homeTeamId)
   );
-  let awayCards = sumAvailable(
+  let awayCards = sumComplete(
     numericTeamStatistic(match.statistics, "Yellow Cards", match.awayTeamId),
     numericTeamStatistic(match.statistics, "Red Cards", match.awayTeamId)
   );

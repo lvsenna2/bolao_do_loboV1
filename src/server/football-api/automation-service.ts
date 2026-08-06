@@ -340,6 +340,19 @@ export function applyDetailMode(
   };
 }
 
+export function forceSelectedFixtureDetails(
+  decision: FixtureSyncDecision,
+  coverage: ExternalFootballCoverage | null
+): FixtureSyncDecision {
+  return {
+    ...decision,
+    events: coverage?.events !== false,
+    fixture: true,
+    reason: "Sincronizacao manual de uma partida.",
+    statistics: coverage?.statisticsFixtures !== false
+  };
+}
+
 function decisionForCandidate(
   candidate: Candidate,
   remaining: number | null,
@@ -373,10 +386,8 @@ function decisionForCandidate(
     now.getTime() - candidate.historySyncedAt.getTime() >= 12 * 60 * 60_000;
 
   return {
-    ...decision,
-    fixture: true,
-    history: candidate.status !== "CANCELLED" && historyExpired,
-    reason: "Sincronizacao manual de uma partida."
+    ...forceSelectedFixtureDetails(decision, parseCoverage(candidate.round.season.coverage)),
+    history: candidate.status !== "CANCELLED" && historyExpired
   };
 }
 

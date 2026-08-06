@@ -155,6 +155,54 @@ describe("catalog special round results", () => {
     expect(result.missing).toEqual([]);
   });
 
+  it("uses card events when only part of the card statistics is available", () => {
+    const result = deriveCatalogResults(
+      {
+        awayScore: 1,
+        awayTeamId: "away",
+        events: [
+          {
+            detail: "Yellow Card",
+            elapsed: 20,
+            extra: null,
+            player: null,
+            teamId: "home",
+            type: "Card"
+          },
+          {
+            detail: "Red Card",
+            elapsed: 70,
+            extra: null,
+            player: null,
+            teamId: "away",
+            type: "Card"
+          }
+        ],
+        homeScore: 2,
+        homeTeamId: "home",
+        statistics: [
+          { teamId: "home", type: "Yellow Cards", value: "1" },
+          { teamId: "away", type: "Yellow Cards", value: "0" }
+        ],
+        status: "FINISHED"
+      },
+      [
+        markets.find((market) => market.kind === "TOTAL_CARDS")!,
+        {
+          answerType: "SINGLE_CHOICE",
+          id: "team-cards",
+          kind: "TEAM_MOST_CARDS",
+          options: [],
+          title: "Cartoes por time"
+        }
+      ]
+    );
+
+    expect(result.answers.cards).toBe(2);
+    expect(result.answers["team-cards"]).toBe("DRAW");
+    expect(result.missing).toEqual([]);
+  });
+
   it("derives team comparison markets from per-team statistics", () => {
     const teamMarkets = [
       {

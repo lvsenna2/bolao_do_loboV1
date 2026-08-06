@@ -1127,74 +1127,78 @@ export async function homologateSpecialRoundFromCatalogAction(
   if (!id.success) return { message: "Rodada invalida.", ok: false };
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const round = await tx.specialRound.findUnique({
-        include: {
-          markets: {
-            include: { options: { select: { value: true } } },
-            where: { active: true }
-          },
-          match: {
-            include: {
-              events: {
-                include: { player: { select: { id: true, name: true } } }
-              },
-              statistics: { select: { teamId: true, type: true, value: true } }
-            }
+    const round = await prisma.specialRound.findUnique({
+      include: {
+        markets: {
+          include: { options: { select: { value: true } } },
+          where: { active: true }
+        },
+        match: {
+          include: {
+            events: {
+              include: { player: { select: { id: true, name: true } } }
+            },
+            statistics: { select: { teamId: true, type: true, value: true } }
           }
-        },
-        where: { id: id.data }
-      });
-      if (!round?.match) throw new Error("MATCH_NOT_LINKED");
-
-      const derived = deriveCatalogResults(
-        {
-          awayScore: round.match.awayScore,
-          awayTeamId: round.match.awayTeamId,
-          events: round.match.events,
-          homeScore: round.match.homeScore,
-          homeTeamId: round.match.homeTeamId,
-          statistics: round.match.statistics,
-          status: round.match.status
-        },
-        round.markets
-      );
-      if (derived.missing.length) {
-        return { missing: derived.missing, saved: false };
-      }
-
-      for (const market of round.markets) {
-        const answer = derived.answers[market.id];
-        await tx.specialRoundResult.upsert({
-          create: { answer: json(answer), enteredById: admin.id, marketId: market.id },
-          update: { answer: json(answer), enteredById: admin.id },
-          where: { marketId: market.id }
-        });
-      }
-      await tx.specialRound.update({
-        data: { status: "AWAITING_RESULT" },
-        where: { id: round.id }
-      });
-      await tx.specialRoundAuditLog.create({
-        data: {
-          action: "special_round.homologated_from_match_data",
-          actorId: admin.id,
-          entity: "SpecialRound",
-          entityId: round.id,
-          metadata: json({ matchId: round.match.id, markets: round.markets.length }),
-          specialRoundId: round.id
         }
-      });
-      return { missing: [], saved: true };
-    }, serializable);
+      },
+      where: { id: id.data }
+    });
+    if (!round?.match) throw new Error("MATCH_NOT_LINKED");
 
-    if (!result.saved) {
+    const derived = deriveCatalogResults(
+      {
+        awayScore: round.match.awayScore,
+        awayTeamId: round.match.awayTeamId,
+        events: round.match.events,
+        homeScore: round.match.homeScore,
+        homeTeamId: round.match.homeTeamId,
+        statistics: round.match.statistics,
+        status: round.match.status
+      },
+      round.markets
+    );
+    if (derived.missing.length) {
       return {
-        data: { missing: result.missing },
-        message: `O catalogo ainda nao possui: ${result.missing.join(", ")}.`,
+        data: { missing: derived.missing },
+        message: `O catalogo ainda nao possui: ${derived.missing.join(", ")}.`,
         ok: false
       };
     }
+
+    await prisma.$transaction(
+      [
+        ...round.markets.map((market) =>
+          prisma.specialRoundResult.upsert({
+            create: {
+              answer: json(derived.answers[market.id]),
+              enteredById: admin.id,
+              marketId: market.id
+            },
+            update: {
+              answer: json(derived.answers[market.id]),
+              enteredById: admin.id
+            },
+            where: { marketId: market.id }
+          })
+        ),
+        prisma.specialRound.update({
+          data: { status: "AWAITING_RESULT" },
+          where: { id: round.id }
+        }),
+        prisma.specialRoundAuditLog.create({
+          data: {
+            action: "special_round.homologated_from_match_data",
+            actorId: admin.id,
+            entity: "SpecialRound",
+            entityId: round.id,
+            metadata: json({ matchId: round.match.id, markets: round.markets.length }),
+            specialRoundId: round.id
+          }
+        })
+      ],
+      serializable
+    );
 
     const calculation = await calculateSpecialRoundAction(id.data);
     if (!calculation.ok) {
@@ -1255,7 +1259,7 @@ export async function syncAndHomologateSpecialRoundAction(
   }
   if (sync.summary.fixturesUpdated === 0) {
     return {
-      message: `A API-Football nao atualizou esta partida: ${sync.message}`,
+      message: `A API-Football nao atualizou esta partida: ${sync.summary.errors[0] ?? sync.message}`,
       ok: false
     };
   }
@@ -1278,9 +1282,10 @@ export async function syncAndHomologateSpecialRoundAction(
 
   const homologation = await homologateSpecialRoundFromCatalogAction(id.data);
   if (!homologation.ok) {
+    const apiError = sync.summary.errors[0];
     return {
       data: homologation.data,
-      message: `A partida foi consultada na API-Football, mas ainda nao pode ser homologada. ${homologation.message}`,
+      message: `A partida foi consultada na API-Football, mas ainda nao pode ser homologada. ${homologation.message}${apiError ? ` API-Football: ${apiError}` : ""}`,
       ok: false
     };
   }
