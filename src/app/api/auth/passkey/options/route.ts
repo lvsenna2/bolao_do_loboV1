@@ -13,7 +13,10 @@ export async function POST() {
       { challengeId, ok: true, options },
       { headers: { "Cache-Control": "no-store" } }
     );
-  } catch {
+  } catch (error) {
+    console.error("[passkey] Falha ao gerar opcoes de login", {
+      error: error instanceof Error ? error.message : "Erro desconhecido"
+    });
     return NextResponse.json(
       { message: "Nao foi possivel iniciar o login por biometria.", ok: false },
       { status: 500 }

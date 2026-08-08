@@ -15,6 +15,9 @@ Este projeto precisa de um ambiente com Next.js e PostgreSQL. Para testes com us
    - Install command: `pnpm install`
    - Build command: `pnpm build`
    - Start command, se solicitado: `pnpm start`
+   - Na Vercel, o script `vercel-build` roda automaticamente e ja aplica as migrations
+     pendentes (`prisma migrate deploy`) antes do build. Em outros provedores, rode
+     `pnpm prisma:deploy` no deploy ou inclua o comando no build.
 
 4. Configure as variaveis de ambiente:
 
