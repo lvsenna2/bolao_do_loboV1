@@ -1007,7 +1007,6 @@ export async function runFootballAutomation(
       await markFixturesFullySynced(cancelledCandidateIds);
     }
     summary.trackedMatches = candidates.length;
-    summary.liveMatches = countLiveFixturesFromApi(Array.from(fixtures.values()));
     summary.pendingLineups = candidates.filter(
       (candidate) =>
         candidate.kickoff.getTime() - now.getTime() <= 30 * 60_000 &&
@@ -1060,6 +1059,8 @@ export async function runFootballAutomation(
           .forEach((fixture) => fixtures.set(fixture.apiId, fixture));
       } else summary.errors.push(liveResult.message);
     }
+
+    summary.liveMatches = countLiveFixturesFromApi(Array.from(fixtures.values()));
 
     const dueCandidates = candidates
       .filter((candidate) => {
