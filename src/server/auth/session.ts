@@ -1,25 +1,11 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { getServerSession } from "next-auth";
-import { unstable_cache } from "next/cache";
+import { cache } from "react";
 
 import { authOptions } from "./options";
 import { canAccessAdmin } from "./rbac";
 
-const getCachedSession = unstable_cache(
-  async () => getServerSession(authOptions),
-  ["auth-session"],
-  {
-    revalidate: 60,
-    tags: ["auth-session"]
-  }
-);
-
-export async function getCurrentSession() {
-  await headers();
-
-  return getCachedSession();
-}
+export const getCurrentSession = cache(() => getServerSession(authOptions));
 
 export async function requireUser() {
   const session = await getCurrentSession();
