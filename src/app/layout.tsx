@@ -17,8 +17,8 @@ export const metadata: Metadata = {
   title: "Bolao do Lobo",
   description: "Plataforma para gerenciamento de boloes esportivos online.",
   icons: {
-    apple: "/brand/bolao-do-lobo-logo.png",
-    icon: "/brand/bolao-do-lobo-logo.png"
+    apple: "/brand/bolao-do-lobo-apple.png",
+    icon: "/brand/bolao-do-lobo-icon.png"
   }
 };
 

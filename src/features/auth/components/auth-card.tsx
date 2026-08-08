@@ -18,7 +18,7 @@ export function AuthCard({ title, description, children, footer }: AuthCardProps
             className="h-full w-full object-cover"
             height={56}
             sizes="56px"
-            src="/brand/bolao-do-lobo-logo.png"
+            src="/brand/bolao-do-lobo-ui.webp"
             width={56}
           />
         </span>

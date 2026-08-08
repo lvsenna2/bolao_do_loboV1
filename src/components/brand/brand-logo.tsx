@@ -23,7 +23,7 @@ function BrandMark({ compact }: Pick<BrandLogoProps, "compact">) {
         className="h-full w-full object-cover"
         height={44}
         sizes={compact ? "36px" : "44px"}
-        src="/brand/bolao-do-lobo-logo.png"
+        src="/brand/bolao-do-lobo-ui.webp"
         width={44}
       />
     </span>

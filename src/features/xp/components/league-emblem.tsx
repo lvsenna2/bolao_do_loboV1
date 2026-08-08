@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 const SOURCE_WIDTH = 1536;
 const SOURCE_HEIGHT = 1024;
-const EMBLEM_SPRITE = "/brand/emblems/catalogo-oficial.png";
+const EMBLEM_SPRITE = "/brand/emblems/catalogo-oficial.webp";
 
 export type LeagueEmblemView = {
   badge: {

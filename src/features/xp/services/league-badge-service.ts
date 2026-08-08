@@ -32,7 +32,7 @@ export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
       tx.badge.upsert({
         create: {
           description: emblem.description,
-          image: `/brand/emblems/catalogo-oficial.png#${emblem.key}`,
+          image: `/brand/emblems/catalogo-oficial.webp#${emblem.key}`,
           key: `OFFICIAL_EMBLEM_${emblem.key}`,
           rarity: emblem.rarity,
           title: emblem.title
@@ -40,7 +40,7 @@ export async function grantLeagueBadge(input: GrantLeagueBadgeInput) {
         select: { id: true, title: true },
         update: {
           description: emblem.description,
-          image: `/brand/emblems/catalogo-oficial.png#${emblem.key}`,
+          image: `/brand/emblems/catalogo-oficial.webp#${emblem.key}`,
           rarity: emblem.rarity,
           title: emblem.title
         },

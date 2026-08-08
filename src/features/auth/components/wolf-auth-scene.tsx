@@ -25,7 +25,7 @@ export function WolfAuthScene({ className }: WolfAuthSceneProps) {
           height={360}
           priority
           sizes="280px"
-          src="/brand/bolao-do-lobo-logo.png"
+          src="/brand/bolao-do-lobo-ui.webp"
           width={360}
         />
       </div>
