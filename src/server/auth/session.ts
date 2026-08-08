@@ -7,7 +7,7 @@ import { authOptions } from "./options";
 import { canAccessAdmin } from "./rbac";
 
 const getCachedSession = unstable_cache(
-  async (cookieValue: string) => getServerSession(authOptions),
+  async () => getServerSession(authOptions),
   ["auth-session"],
   {
     revalidate: 60,
@@ -16,9 +16,9 @@ const getCachedSession = unstable_cache(
 );
 
 export async function getCurrentSession() {
-  const cookieValue = (await headers()).get("cookie") ?? "";
+  await headers();
 
-  return getCachedSession(cookieValue);
+  return getCachedSession();
 }
 
 export async function requireUser() {
