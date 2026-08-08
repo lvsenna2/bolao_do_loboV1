@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 
 import { LoadingButton } from "@/components/ui/loading-button";
 import { loginSchema, type LoginInput } from "../schemas/auth-schemas";
-import { getPostLoginDestination } from "../utils/login-destination";
+import { getPostLoginDestinationFromAuthResult } from "../utils/login-destination";
 import { ActionAlert } from "./action-alert";
 import { AuthField } from "./auth-field";
 
@@ -55,15 +55,12 @@ export function LoginForm({ callbackUrl, registered = false }: LoginFormProps) {
         return;
       }
 
-      if (result.url) {
-        const session = await getSession();
-        const destination = getPostLoginDestination(callbackUrl, session?.user?.role);
-        window.location.assign(result.url ?? destination);
-        return;
-      }
-
       const session = await getSession();
-      const destination = getPostLoginDestination(callbackUrl, session?.user?.role);
+      const destination = getPostLoginDestinationFromAuthResult(
+        callbackUrl,
+        session?.user?.role,
+        result?.url
+      );
       window.location.assign(destination);
     } catch {
       setError("Nao foi possivel entrar agora. Tente novamente.");

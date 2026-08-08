@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getPostLoginDestination } from "./login-destination";
+import { getPostLoginDestination, getPostLoginDestinationFromAuthResult } from "./login-destination";
 
 describe("getPostLoginDestination", () => {
   it("returns the provided safe callback URL", () => {
@@ -16,5 +16,11 @@ describe("getPostLoginDestination", () => {
     expect(getPostLoginDestination(undefined)).toBe("/dashboard");
     expect(getPostLoginDestination("//evil.com")).toBe("/dashboard");
     expect(getPostLoginDestination("https://example.com")).toBe("/dashboard");
+  });
+
+  it("prioritizes an admin redirect over the auth result URL", () => {
+    expect(getPostLoginDestinationFromAuthResult("/dashboard", "SUPER_ADMIN", "/dashboard")).toBe(
+      "/admin"
+    );
   });
 });
