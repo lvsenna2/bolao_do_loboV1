@@ -6,7 +6,8 @@ import {
   claimBackgroundHistorySlot,
   forceSelectedFixtureDetails,
   getFixtureSyncPriority,
-  isFinalConsolidationReady
+  isFinalConsolidationReady,
+  shouldQueueFixtureForAutomation
 } from "./automation-service";
 
 const emptyDecision = {
@@ -195,6 +196,36 @@ describe("football automation selected fixture", () => {
     expect(decision.fixture).toBe(true);
     expect(decision.events).toBe(false);
     expect(decision.statistics).toBe(false);
+  });
+});
+
+describe("football automation fixture queueing", () => {
+  it("keeps live and near-kickoff matches in the automation queue while skipping distant future backlog", () => {
+    const now = new Date("2026-08-08T18:00:00.000Z");
+
+    expect(
+      shouldQueueFixtureForAutomation(
+        {
+          kickoff: new Date("2026-08-08T18:10:00.000Z"),
+          specialRounds: [],
+          status: "SCHEDULED"
+        },
+        { ...emptyDecision, fixture: true, lineups: true },
+        now
+      )
+    ).toBe(true);
+
+    expect(
+      shouldQueueFixtureForAutomation(
+        {
+          kickoff: new Date("2026-08-15T18:10:00.000Z"),
+          specialRounds: [],
+          status: "SCHEDULED"
+        },
+        { ...emptyDecision, fixture: true },
+        now
+      )
+    ).toBe(false);
   });
 });
 

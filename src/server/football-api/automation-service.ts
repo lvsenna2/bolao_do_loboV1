@@ -501,6 +501,32 @@ export function getFixtureSyncPriority(
   return 7;
 }
 
+export function shouldQueueFixtureForAutomation(
+  candidate: Pick<Candidate, "kickoff" | "specialRounds" | "status">,
+  decision: FixtureSyncDecision | undefined,
+  now = serverNow()
+) {
+  if (!decision) return false;
+
+  if (["LIVE", "HALFTIME"].includes(candidate.status)) {
+    return Boolean(decision.fixture || decision.lineups || decision.events || decision.players || decision.statistics);
+  }
+
+  const untilKickoff = candidate.kickoff.getTime() - now.getTime();
+  const hasActiveSpecialRound = candidate.specialRounds.length > 0;
+  const isNearKickoff = untilKickoff <= 24 * 60 * MINUTE_MS && untilKickoff > -2 * 60 * MINUTE_MS;
+
+  if (hasActiveSpecialRound) return true;
+  if (decision.lineups && untilKickoff <= 10 * MINUTE_MS) return true;
+  if (untilKickoff <= 60 * MINUTE_MS && untilKickoff >= -2 * 60 * MINUTE_MS) return true;
+  if (isNearKickoff && (decision.fixture || decision.history || decision.lineups)) return true;
+  if (candidate.status === "FINISHED") {
+    return Boolean(decision.fixture || decision.events || decision.lineups || decision.players || decision.statistics);
+  }
+
+  return false;
+}
+
 function syncPriority(candidate: Candidate, decision: FixtureSyncDecision, now: Date) {
   return getFixtureSyncPriority(
     {
@@ -1040,11 +1066,7 @@ export async function runFootballAutomation(
           !fixtures.has(candidate.apiId as number) &&
           (!candidate.liveSyncedAt ||
             now.getTime() - candidate.liveSyncedAt.getTime() >= 5 * 60_000);
-        return (
-          (decision?.fixture && !["LIVE", "HALFTIME"].includes(candidate.status)) ||
-          (decision ? decisionNeedsWork(decision) : false) ||
-          missedLive
-        );
+        return missedLive || shouldQueueFixtureForAutomation(candidate, decision, now);
       })
       .sort((left, right) => {
         const leftDecision = decisions.get(left.apiId as number);
