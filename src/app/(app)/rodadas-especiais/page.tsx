@@ -9,6 +9,7 @@ import { getSpecialRoundsForUser } from "@/features/special-rounds/data/special-
 import { SpecialRoundCard } from "@/features/special-rounds/components/special-round-card";
 import { requireUser } from "@/server/auth/session";
 import { canCreateSpecialRound } from "@/features/subscriptions/service";
+import { serverNow } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,12 @@ export default async function SpecialRoundsPage() {
     canCreateSpecialRound(user.id)
   ]);
   const active = rounds.filter((round) => !["FINALIZED", "CANCELLED"].includes(round.status));
-  const closed = rounds.filter((round) => ["FINALIZED", "CANCELLED"].includes(round.status));
+  const visibleSince = new Date(serverNow().getTime() - 60 * 60_000);
+  const closed = rounds.filter((round) => {
+    if (!["FINALIZED", "CANCELLED"].includes(round.status)) return false;
+    const closedAt = round.finalizedAt ?? round.cancelledAt ?? round.updatedAt;
+    return closedAt >= visibleSince;
+  });
 
   return (
     <PageShell
@@ -71,10 +77,12 @@ export default async function SpecialRoundsPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {active.map((round) => (
               <SpecialRoundCard
+                awayTeamApiId={round.match?.awayTeam.apiId}
                 awayTeamLogo={round.awayTeamLogo}
                 awayTeamName={round.awayTeamName}
                 entryFee={Number(round.entryFee)}
                 estimatedPrize={round.estimatedPrize}
+                homeTeamApiId={round.match?.homeTeam.apiId}
                 homeTeamLogo={round.homeTeamLogo}
                 homeTeamName={round.homeTeamName}
                 id={round.id}
@@ -98,10 +106,12 @@ export default async function SpecialRoundsPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {closed.slice(0, 6).map((round) => (
               <SpecialRoundCard
+                awayTeamApiId={round.match?.awayTeam.apiId}
                 awayTeamLogo={round.awayTeamLogo}
                 awayTeamName={round.awayTeamName}
                 entryFee={Number(round.entryFee)}
                 estimatedPrize={round.estimatedPrize}
+                homeTeamApiId={round.match?.homeTeam.apiId}
                 homeTeamLogo={round.homeTeamLogo}
                 homeTeamName={round.homeTeamName}
                 id={round.id}

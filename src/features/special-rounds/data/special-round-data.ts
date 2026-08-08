@@ -12,6 +12,12 @@ export async function getSpecialRoundsForUser(userId: string) {
       entries: {
         select: { id: true, paymentStatus: true },
         where: { userId }
+      },
+      match: {
+        select: {
+          awayTeam: { select: { apiId: true, logo: true } },
+          homeTeam: { select: { apiId: true, logo: true } }
+        }
       }
     },
     orderBy: [{ matchStartsAt: "asc" }]
@@ -55,7 +61,13 @@ export async function getSpecialRoundsForUser(userId: string) {
       poolPercent: Number(round.prizePoolPercent)
     });
 
-    return { ...round, estimatedPrize: finance.prize, userEntry: round.entries[0] ?? null };
+    return {
+      ...round,
+      awayTeamLogo: round.match?.awayTeam.logo ?? round.awayTeamLogo,
+      estimatedPrize: finance.prize,
+      homeTeamLogo: round.match?.homeTeam.logo ?? round.homeTeamLogo,
+      userEntry: round.entries[0] ?? null
+    };
   });
 }
 
