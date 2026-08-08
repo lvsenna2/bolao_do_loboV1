@@ -1,6 +1,7 @@
 import type { SpecialRoundMarketKind } from "@prisma/client";
 
 import type { SpecialRoundAnswer } from "../types";
+import { getGoalScorerPlayerValue } from "./default-markets";
 
 type CatalogEvent = {
   detail?: string | null;
@@ -148,9 +149,9 @@ export function deriveCatalogResults(match: CatalogMatch, markets: readonly Resu
           answer = "NO_GOAL";
         } else if (goal?.player) {
           const playerValue = `PLAYER:${goal.player.id}`;
-          answer = market.options.some((option) => option.value === playerValue)
-            ? playerValue
-            : goal.player.name;
+          answer =
+            market.options.find((option) => getGoalScorerPlayerValue(option.value) === playerValue)
+              ?.value ?? goal.player.name;
         }
         break;
       case "TEAM_MOST_SHOTS_ON_GOAL":

@@ -33,10 +33,39 @@ export function formatCurrency(value: Prisma.Decimal | number | null | undefined
   }).format(amount);
 }
 
+const loadUserDashboardIdentity = cache(async (userId: string) => {
+  const [user, levels] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        avatarUrl: true,
+        createdAt: true,
+        id: true,
+        lastLoginAt: true,
+        name: true,
+        role: true,
+        status: true,
+        username: true,
+        xp: true
+      }
+    }),
+    getCachedActiveXpLevels()
+  ]);
+
+  return {
+    user,
+    xpProgress: user ? getXpProgressFromLevels(user.xp, levels) : null
+  };
+});
+
+export function getUserDashboardIdentity(userId: string) {
+  return loadUserDashboardIdentity(userId);
+}
+
 export async function getUserHomeData(userId: string) {
   const startedAt = Date.now();
   const empty = {
-    achievements: [],
+    achievementCount: 0,
     currentRound: null,
     leagueRanking: [],
     memberships: [],
@@ -59,24 +88,8 @@ export async function getUserHomeData(userId: string) {
   };
 
   try {
-    const [user, memberships, notifications, achievements, unread, levels] = await Promise.all([
-      prisma.user.findUnique({
-        where: {
-          id: userId
-        },
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          email: true,
-          avatarUrl: true,
-          xp: true,
-          role: true,
-          status: true,
-          createdAt: true,
-          lastLoginAt: true
-        }
-      }),
+    const [identity, memberships, notifications, achievementCount, unread] = await Promise.all([
+      loadUserDashboardIdentity(userId),
       prisma.leagueMember.findMany({
         select: {
           leagueId: true
@@ -103,36 +116,30 @@ export async function getUserHomeData(userId: string) {
         orderBy: {
           createdAt: "desc"
         },
-        take: 5,
-        where: {
-          userId
-        }
-      }),
-      prisma.achievement.findMany({
-        include: {
-          badge: true
-        },
-        orderBy: {
-          unlockedAt: "desc"
+        select: {
+          body: true,
+          id: true,
+          message: true,
+          title: true
         },
         take: 5,
         where: {
           userId
         }
       }),
-      getUnreadNotificationCount(userId),
-      getCachedActiveXpLevels()
+      prisma.achievement.count({ where: { userId } }),
+      getUnreadNotificationCount(userId)
     ]);
 
+    const { user, xpProgress } = identity;
     const activeLeagueIds = memberships.map((membership) => membership.leagueId);
     const primaryLeagueId = activeLeagueIds[0];
-    const xpProgress = user ? getXpProgressFromLevels(user.xp, levels) : null;
 
     if (activeLeagueIds.length === 0) {
       return {
         ok: true as const,
         data: {
-          achievements,
+          achievementCount,
           currentRound: null,
           leagueRanking: [],
           memberships,
@@ -257,6 +264,19 @@ export async function getUserHomeData(userId: string) {
           },
           id: true,
           kickoff: true,
+          guesses: {
+            select: {
+              id: true,
+              joker: true
+            },
+            where: {
+              deletedAt: null,
+              leagueId: {
+                in: activeLeagueIds
+              },
+              userId
+            }
+          },
           round: {
             select: {
               league: {
@@ -405,41 +425,7 @@ export async function getUserHomeData(userId: string) {
       (guess) =>
         guess.match.round.league?.championshipId === guess.match.round.season.championship.id
     );
-    const upcomingMatchGuesses =
-      consistentUpcomingMatches.length > 0
-        ? await prisma.guess.findMany({
-            select: {
-              id: true,
-              joker: true,
-              leagueId: true,
-              matchId: true
-            },
-            where: {
-              deletedAt: null,
-              leagueId: {
-                in: activeLeagueIds
-              },
-              matchId: {
-                in: consistentUpcomingMatches.map((match) => match.id)
-              },
-              userId
-            }
-          })
-        : [];
-
-    const guessesByMatchAndLeague = new Map(
-      upcomingMatchGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
-    );
-    const todayMatches = consistentUpcomingMatches.map((match) => {
-      const existingGuess = match.round.leagueId
-        ? guessesByMatchAndLeague.get(`${match.id}:${match.round.leagueId}`)
-        : undefined;
-
-      return {
-        ...match,
-        guesses: existingGuess ? [{ id: existingGuess.id, joker: existingGuess.joker }] : []
-      };
-    });
+    const todayMatches = consistentUpcomingMatches;
 
     const scoredGuesses = scoreGroups.reduce((sum, group) => sum + group._count._all, 0);
     const winnerHits = scoreGroups.reduce(
@@ -456,7 +442,7 @@ export async function getUserHomeData(userId: string) {
     return {
       ok: true as const,
       data: {
-        achievements,
+        achievementCount,
         currentRound: currentRoundView,
         leagueRanking,
         memberships,

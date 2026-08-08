@@ -54,8 +54,8 @@ describe("SpecialRoundPredictionForm", () => {
           {
             ...scorerMarket,
             options: [
-              { group: "Flamengo", label: "Pedro", value: "PLAYER:player-1" },
-              { group: "Sao Paulo", label: "Calleri", value: "PLAYER:player-2" },
+              { group: "Flamengo", label: "Pedro", value: "PLAYER:player-1:HOME" },
+              { group: "Sao Paulo", label: "Calleri", value: "PLAYER:player-2:AWAY" },
               { label: "Nenhum jogador (sem gols)", value: "NO_GOAL" }
             ]
           }

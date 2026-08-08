@@ -1449,6 +1449,7 @@ export async function getAdminFootballSyncStatus() {
   const empty = {
     apiConfigured: isFootballApiConfigured(),
     automation: null,
+    automationRunning: false,
     cacheHours: getFootballSyncCacheHours(),
     competitions: footballCompetitionConfigs.map((competition) => ({
       ...competition,
@@ -1468,6 +1469,12 @@ export async function getAdminFootballSyncStatus() {
       nextAvailableAt: null
     },
     recentRuns: [],
+    requestReport: {
+      endpoints: [],
+      repeatedCallsInSample: 0,
+      sampleSize: 0,
+      windowStartedAt: getSaoPauloDayRangeUtc().start
+    },
     usage: {
       callsToday: 0,
       dailyLimit: null,
@@ -1479,6 +1486,7 @@ export async function getAdminFootballSyncStatus() {
   try {
     const automationRunning = await isFootballAutomationRunning();
     const competitionKeys = footballCompetitionConfigs.map((competition) => competition.key);
+    const requestWindow = getSaoPauloDayRangeUtc();
     const [
       logs,
       championships,
@@ -1486,7 +1494,9 @@ export async function getAdminFootballSyncStatus() {
       recentRuns,
       usage,
       latestManualRun,
-      detailMatchesByCompetition
+      detailMatchesByCompetition,
+      requestGroups,
+      requestSamples
     ] = await Promise.all([
       prisma.footballSyncLog.findMany({
         orderBy: {
@@ -1584,7 +1594,34 @@ export async function getAdminFootballSyncStatus() {
             }
           })
         )
-      )
+      ),
+      prisma.footballApiRequestLog.groupBy({
+        _count: { _all: true },
+        _max: { createdAt: true },
+        _sum: { durationMs: true },
+        by: ["endpoint", "ok"],
+        where: {
+          createdAt: {
+            gte: requestWindow.start,
+            lt: requestWindow.end
+          }
+        }
+      }),
+      prisma.footballApiRequestLog.findMany({
+        orderBy: { createdAt: "desc" },
+        select: {
+          createdAt: true,
+          endpoint: true,
+          params: true
+        },
+        take: 500,
+        where: {
+          createdAt: {
+            gte: requestWindow.start,
+            lt: requestWindow.end
+          }
+        }
+      })
     ]);
 
     const competitions = await Promise.all(
@@ -1658,12 +1695,54 @@ export async function getAdminFootballSyncStatus() {
         status: match.status
       }));
     });
+    const endpointReport = Array.from(
+      requestGroups.reduce((report, group) => {
+        const current = report.get(group.endpoint) ?? {
+          calls: 0,
+          failures: 0,
+          lastCalledAt: null as Date | null,
+          totalDurationMs: 0
+        };
+        current.calls += group._count._all;
+        current.totalDurationMs += group._sum.durationMs ?? 0;
+        if (!group.ok) current.failures += group._count._all;
+        if (
+          group._max.createdAt &&
+          (!current.lastCalledAt || group._max.createdAt > current.lastCalledAt)
+        ) {
+          current.lastCalledAt = group._max.createdAt;
+        }
+        report.set(group.endpoint, current);
+        return report;
+      }, new Map<string, { calls: number; failures: number; lastCalledAt: Date | null; totalDurationMs: number }>())
+    )
+      .map(([endpoint, values]) => {
+        const samples = requestSamples.filter((request) => request.endpoint === endpoint);
+        return {
+          averageDurationMs:
+            values.calls > 0 ? Math.round(values.totalDurationMs / values.calls) : 0,
+          calls: values.calls,
+          endpoint,
+          failures: values.failures,
+          lastCalledAt: values.lastCalledAt,
+          sampleCalls: samples.length,
+          uniqueQueriesInSample: new Set(samples.map((request) => JSON.stringify(request.params)))
+            .size
+        };
+      })
+      .sort((left, right) => right.calls - left.calls);
+    const repeatedCallsInSample = endpointReport.reduce(
+      (total, endpoint) =>
+        total + Math.max(0, endpoint.sampleCalls - endpoint.uniqueQueriesInSample),
+      0
+    );
 
     return {
       ok: true as const,
       data: {
         apiConfigured: isFootballApiConfigured(),
         automation,
+        automationRunning,
         cacheHours: getFootballSyncCacheHours(),
         competitions,
         detailMatches,
@@ -1676,7 +1755,30 @@ export async function getAdminFootballSyncStatus() {
           lastRun: latestManualRun,
           nextAvailableAt
         },
-        recentRuns,
+        recentRuns: recentRuns.map((run) => {
+          const end = run.finishedAt ?? now;
+          const requests = requestSamples.filter(
+            (request) => request.createdAt >= run.startedAt && request.createdAt <= end
+          );
+          const requestBreakdown = Array.from(
+            requests.reduce((counts, request) => {
+              counts.set(request.endpoint, (counts.get(request.endpoint) ?? 0) + 1);
+              return counts;
+            }, new Map<string, number>())
+          ).map(([endpoint, calls]) => ({ calls, endpoint }));
+
+          return {
+            ...run,
+            durationMs: Math.max(0, end.getTime() - run.startedAt.getTime()),
+            requestBreakdown
+          };
+        }),
+        requestReport: {
+          endpoints: endpointReport,
+          repeatedCallsInSample,
+          sampleSize: requestSamples.length,
+          windowStartedAt: requestWindow.start
+        },
         usage
       }
     };

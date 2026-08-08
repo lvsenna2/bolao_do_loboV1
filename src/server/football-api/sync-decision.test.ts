@@ -48,11 +48,11 @@ describe("shouldSyncFixture", () => {
     expect(decision.statistics).toBe(false);
   });
 
-  it("busca escalacao na hora anterior ao jogo", () => {
+  it("inicia a busca da escalacao trinta minutos antes do jogo", () => {
     const decision = shouldSyncFixture(
       {
         coverage: fullCoverage,
-        kickoff: new Date("2026-07-16T15:45:00.000Z"),
+        kickoff: new Date("2026-07-16T15:30:00.000Z"),
         lineupsComplete: false,
         status: "SCHEDULED"
       },
@@ -60,6 +60,36 @@ describe("shouldSyncFixture", () => {
     );
 
     expect(decision.fixture).toBe(true);
+    expect(decision.lineups).toBe(true);
+  });
+
+  it("nao gasta chamada de escalacao antes da janela de trinta minutos", () => {
+    const decision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T15:31:00.000Z"),
+        lineupsComplete: false,
+        status: "SCHEDULED"
+      },
+      now
+    );
+
+    expect(decision.fixture).toBe(true);
+    expect(decision.lineups).toBe(false);
+  });
+
+  it("confirma novamente a escalacao nos dez minutos finais", () => {
+    const decision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T15:10:00.000Z"),
+        lineupsComplete: false,
+        lineupsSyncedAt: new Date("2026-07-16T14:57:30.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+
     expect(decision.lineups).toBe(true);
   });
 
@@ -84,7 +114,7 @@ describe("shouldSyncFixture", () => {
     const decision = shouldSyncFixture(
       {
         coverage: fullCoverage,
-        kickoff: new Date("2026-07-16T15:45:00.000Z"),
+        kickoff: new Date("2026-07-16T15:30:00.000Z"),
         lineupsComplete: true,
         status: "SCHEDULED"
       },
@@ -128,6 +158,31 @@ describe("shouldSyncFixture", () => {
     );
 
     expect(Object.values(decision).filter((value) => value === true)).toHaveLength(0);
+  });
+
+  it("nao repete detalhes finais que ja foram persistidos", () => {
+    const syncedAt = new Date("2026-07-16T14:00:00.000Z");
+    const decision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        eventsSyncedAt: syncedAt,
+        historySyncedAt: syncedAt,
+        kickoff: new Date("2026-07-16T12:00:00.000Z"),
+        lastSyncedAt: syncedAt,
+        lineupsComplete: true,
+        playersSyncedAt: syncedAt,
+        statisticsSyncedAt: syncedAt,
+        status: "FINISHED"
+      },
+      now
+    );
+
+    expect(decision.events).toBe(false);
+    expect(decision.history).toBe(false);
+    expect(decision.lineups).toBe(false);
+    expect(decision.players).toBe(false);
+    expect(decision.statistics).toBe(false);
+    expect(decision.fixture).toBe(false);
   });
 
   it("faz apenas verificacao moderada para partida cancelada", () => {

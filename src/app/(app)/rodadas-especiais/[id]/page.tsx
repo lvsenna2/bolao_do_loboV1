@@ -11,6 +11,10 @@ import { SpecialRoundPredictionForm } from "@/features/special-rounds/components
 import { SpecialRoundCountdown } from "@/features/special-rounds/components/countdown";
 import { SpecialRoundStatusBadge } from "@/features/special-rounds/components/status-badge";
 import { getSpecialRoundDetail } from "@/features/special-rounds/data/special-round-data";
+import {
+  getGoalScorerOptionSide,
+  getGoalScorerPlayerValue
+} from "@/features/special-rounds/services/default-markets";
 import type { SpecialRoundAnswer } from "@/features/special-rounds/types";
 import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
 import { requireUser } from "@/server/auth/session";
@@ -73,7 +77,12 @@ export default async function SpecialRoundDetailPage({
     id: market.id,
     kind: market.kind,
     options: market.options.map((option) => ({
-      group: playerTeamByOption.get(option.value) ?? null,
+      group:
+        getGoalScorerOptionSide(option.value) === "HOME"
+          ? round.homeTeamName
+          : getGoalScorerOptionSide(option.value) === "AWAY"
+            ? round.awayTeamName
+            : (playerTeamByOption.get(getGoalScorerPlayerValue(option.value)) ?? null),
       label: option.label,
       value: option.value
     })),

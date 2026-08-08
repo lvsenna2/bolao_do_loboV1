@@ -128,7 +128,7 @@ export function SpecialRoundPredictionForm({
                     </select>
                     {!market.options.some((option) => option.value.startsWith("PLAYER:")) ? (
                       <p className="text-xs text-app-muted">
-                        Os jogadores aparecerao aqui assim que a escalacao for sincronizada.
+                        Os jogadores aparecerao aqui quando o elenco for sincronizado.
                       </p>
                     ) : null}
                   </div>

@@ -38,6 +38,27 @@ partidas sao consultados em lote; detalhes mais caros sao processados para duas 
 execucao, priorizando as mais desatualizadas. Dados completos ja finalizados deixam de ser
 consultados.
 
+As escalacoes entram na fila 30 minutos antes do inicio. Enquanto estiverem incompletas,
+o sistema tenta novamente a cada 5 minutos e reduz o intervalo para 2 minutos nos 10
+minutos finais. Partidas ao vivo e escalacoes urgentes passam na frente do backlog de
+detalhes. Rodadas Especiais vinculadas ao mesmo `Match` reutilizam automaticamente a
+escalacao, os eventos e as estatisticas persistidos pelo sincronizador.
+
+Partidas encerradas buscam cada conjunto de detalhes apenas enquanto ele ainda nao foi salvo.
+O preenchimento do backlog de historico libera no maximo um lote a cada 30 minutos e a tabela
+de uma mesma competicao tambem respeita um intervalo minimo de 30 minutos. O Cron continua
+rodando a cada minuto para nao atrasar placares ao vivo, mas encerra rapidamente sem chamada
+externa quando nao existe trabalho devido.
+
+### Jogadores das Rodadas Especiais
+
+O endpoint `fixtures/lineups` publica somente a escalacao oficial, normalmente perto do
+inicio da partida. Antes disso, o mercado "Primeiro jogador a marcar" usa os elencos atuais
+obtidos por `players/squads`, separados entre mandante e visitante. A lista fica salva no
+banco e nao gera chamadas quando o participante abre a pagina. Quando a escalacao oficial
+estiver disponivel, a atualizacao administrativa prioriza titulares e reservas, preservando
+palpites que ja tenham sido enviados.
+
 ## Sincronizacao manual de contingencia
 
 O painel `/admin/sincronizacao` permite escolher uma competicao e iniciar a sincronizacao
@@ -64,6 +85,7 @@ seguranca. Um limitador central espacando o inicio das requisicoes mantem cada F
 5 chamadas por segundo. As paginas do usuario consultam o PostgreSQL e a rota interna de placares,
 nunca a API-Football diretamente.
 
-O painel administrativo mostra execucoes, jogos acompanhados, cota e erros recentes. As tabelas
+O painel administrativo mostra execucoes, jogos acompanhados, cota, consumo por endpoint,
+duracao media, falhas e repeticoes de parametros em uma amostra recente. As tabelas
 `football_api_request_logs`, `football_automation_logs` e `football_sync_states` mantem o
 diagnostico sem registrar a chave da API.

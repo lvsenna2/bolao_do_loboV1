@@ -62,4 +62,17 @@ describe("automatic special round markets", () => {
       { label: "Nenhum jogador (sem gols)", value: "NO_GOAL" }
     ]);
   });
+
+  it("keeps squad candidates grouped by home and away team", () => {
+    expect(
+      buildGoalScorerOptions([
+        { id: "away-player", name: "Visitante", side: "AWAY" },
+        { id: "home-player", name: "Mandante", side: "HOME" }
+      ])
+    ).toEqual([
+      { label: "Mandante", value: "PLAYER:home-player:HOME" },
+      { label: "Visitante", value: "PLAYER:away-player:AWAY" },
+      { label: "Nenhum jogador (sem gols)", value: "NO_GOAL" }
+    ]);
+  });
 });

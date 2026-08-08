@@ -192,11 +192,11 @@ export function AdminSpecialRoundWorkspace({
         </p>
         <div className="mt-4 flex flex-col gap-3 rounded-control border border-brand-gold/30 bg-brand-gold/5 p-4 md:flex-row md:items-center">
           <div className="min-w-0 flex-1">
-            <h3 className="font-semibold">Escalacao para o mercado de jogador</h3>
+            <h3 className="font-semibold">Jogadores para o mercado de primeiro gol</h3>
             <p className="mt-1 text-sm text-app-muted">
               {lineupPlayerCount > 0
-                ? `${lineupPlayerCount} jogadores disponiveis. Uma nova consulta verifica alteracoes quando a ultima atualizacao tiver mais de cinco minutos.`
-                : "Busque aproximadamente uma hora antes da partida, quando a API normalmente publica titulares e reservas."}
+                ? `${lineupPlayerCount} jogadores disponiveis. Antes da escalacao oficial, a lista usa o elenco atual dos clubes.`
+                : "Atualize para carregar os elencos. A escalacao oficial substitui a lista quando for publicada pela API."}
             </p>
           </div>
           <LoadingButton
@@ -206,7 +206,7 @@ export function AdminSpecialRoundWorkspace({
             loadingLabel="Buscando..."
             onClick={() => run(() => syncSpecialRoundLineupAction(specialRoundId))}
           >
-            Buscar escalacao
+            Atualizar jogadores
           </LoadingButton>
         </div>
         <div className="mt-4 space-y-2">
@@ -332,7 +332,10 @@ export function AdminSpecialRoundWorkspace({
                 {markets.map((market) => {
                   const prediction = entry.predictions.find((item) => item.marketId === market.id);
                   return (
-                    <p className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-3" key={market.id}>
+                    <p
+                      className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-3"
+                      key={market.id}
+                    >
                       <span className="text-app-muted">{market.title}</span>
                       <strong>
                         {prediction ? JSON.stringify(prediction.answer) : "Nao informado"}

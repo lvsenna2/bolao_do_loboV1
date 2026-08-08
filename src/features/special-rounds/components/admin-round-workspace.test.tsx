@@ -67,7 +67,7 @@ describe("AdminSpecialRoundWorkspace", () => {
     );
 
     expect(screen.getByText(/2 jogadores disponiveis/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Buscar escalacao" }));
+    fireEvent.click(screen.getByRole("button", { name: "Atualizar jogadores" }));
 
     await waitFor(() => expect(syncLineup).toHaveBeenCalledOnce());
     expect(syncLineup).toHaveBeenCalledWith("round-1");

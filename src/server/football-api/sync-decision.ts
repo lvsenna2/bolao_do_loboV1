@@ -4,6 +4,8 @@ import type { ExternalFootballCoverage } from "./types";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
+const LINEUP_INITIAL_WINDOW = 30 * MINUTE;
+const LINEUP_CONFIRMATION_WINDOW = 10 * MINUTE;
 
 export type FixtureSyncState = {
   coverage?: ExternalFootballCoverage | null;
@@ -86,16 +88,14 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
 
   if (isFinished) {
     return {
-      events: eventsCovered && olderThan(state.eventsSyncedAt, 10 * MINUTE, now),
-      fixture: olderThan(state.lastSyncedAt, 5 * MINUTE, now),
-      history: olderThan(state.historySyncedAt, 12 * HOUR, now),
+      events: eventsCovered && !state.eventsSyncedAt,
+      fixture: olderThan(state.lastSyncedAt, 6 * HOUR, now),
+      history: !state.historySyncedAt,
       lineups:
-        lineupsCovered &&
-        !state.lineupsComplete &&
-        olderThan(state.lineupsSyncedAt, 30 * MINUTE, now),
-      players: playersCovered && olderThan(state.playersSyncedAt, 30 * MINUTE, now),
+        lineupsCovered && !state.lineupsComplete && olderThan(state.lineupsSyncedAt, HOUR, now),
+      players: playersCovered && !state.playersSyncedAt,
       reason: "Partida encerrada aguardando consolidacao final.",
-      statistics: statisticsCovered && olderThan(state.statisticsSyncedAt, 10 * MINUTE, now)
+      statistics: statisticsCovered && !state.statisticsSyncedAt
     };
   }
 
@@ -111,10 +111,12 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
     };
   }
 
-  const inLineupWindow = untilKickoff <= HOUR && untilKickoff >= -2 * HOUR;
+  const inPregameWindow = untilKickoff <= HOUR && untilKickoff >= -2 * HOUR;
 
-  if (inLineupWindow) {
+  if (inPregameWindow) {
     const fixtureInterval = untilKickoff <= 15 * MINUTE ? 2 * MINUTE : 5 * MINUTE;
+    const lineupInterval = untilKickoff <= LINEUP_CONFIRMATION_WINDOW ? 2 * MINUTE : 5 * MINUTE;
+    const shouldCheckLineup = untilKickoff <= LINEUP_INITIAL_WINDOW;
 
     return {
       events: false,
@@ -122,8 +124,9 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
       history: olderThan(state.historySyncedAt, 24 * HOUR, now),
       lineups:
         lineupsCovered &&
+        shouldCheckLineup &&
         !state.lineupsComplete &&
-        olderThan(state.lineupsSyncedAt, 5 * MINUTE, now),
+        olderThan(state.lineupsSyncedAt, lineupInterval, now),
       players: false,
       reason: "Partida proxima do inicio.",
       statistics: false

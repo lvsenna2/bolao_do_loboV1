@@ -35,7 +35,9 @@ async function runCron(request: Request) {
     ...("summary" in result
       ? {
           callsUsed: result.summary.callsUsed,
-          fixturesUpdated: result.summary.fixturesUpdated,
+          detailsProcessed: result.summary.detailsProcessed,
+          fixturesFetched: result.summary.fixturesFetched,
+          localRecordsReviewed: result.summary.fixturesUpdated,
           liveMatches: result.summary.liveMatches,
           trackedMatches: result.summary.trackedMatches
         }

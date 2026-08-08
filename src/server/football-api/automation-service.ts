@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { Prisma } from "@prisma/client";
+import { Prisma, type MatchStatus } from "@prisma/client";
 
 import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
@@ -47,12 +47,18 @@ export const FOOTBALL_MANUAL_TRIGGER = "admin-manual";
 const LOCK_TTL_MS = 10 * 60_000;
 const NEXT_RUN_MS = 60_000;
 const MAX_CANDIDATES = 100;
+const MINUTE_MS = 60_000;
+const BACKGROUND_HISTORY_INTERVAL_MS = 30 * MINUTE_MS;
+const STANDINGS_INTERVAL_MS = 30 * MINUTE_MS;
 
 export type AutomationSummary = {
+  backlogIsCapped: boolean;
   callsUsed: number;
   candidatesProcessed: number;
   catalogsSynced: number;
+  detailsProcessed: number;
   errors: string[];
+  fixturesFetched: number;
   fixturesUpdated: number;
   liveMatches: number;
   pendingFinalDetails: number;
@@ -89,10 +95,13 @@ export type FootballAutomationResult =
 
 function emptySummary(): AutomationSummary {
   return {
+    backlogIsCapped: false,
     callsUsed: 0,
     candidatesProcessed: 0,
     catalogsSynced: 0,
+    detailsProcessed: 0,
     errors: [],
+    fixturesFetched: 0,
     fixturesUpdated: 0,
     liveMatches: 0,
     pendingFinalDetails: 0,
@@ -100,6 +109,53 @@ function emptySummary(): AutomationSummary {
     remainingCandidates: 0,
     trackedMatches: 0
   };
+}
+
+export function shouldRunBackgroundHistory(
+  lastHistorySyncedAt: Date | null,
+  now = serverNow(),
+  intervalMs = BACKGROUND_HISTORY_INTERVAL_MS
+) {
+  return !lastHistorySyncedAt || now.getTime() - lastHistorySyncedAt.getTime() >= intervalMs;
+}
+
+function getLatestHistorySync(candidates: Candidate[]) {
+  return candidates.reduce<Date | null>((latest, candidate) => {
+    if (!candidate.historySyncedAt) return latest;
+    if (!latest || candidate.historySyncedAt > latest) return candidate.historySyncedAt;
+    return latest;
+  }, null);
+}
+
+function readRequestParam(value: Prisma.JsonValue | null, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const param = (value as Prisma.JsonObject)[key];
+  return typeof param === "string" ? param : null;
+}
+
+async function getStandingsConfigDue(configs: FootballCompetitionConfig[], now: Date) {
+  if (configs.length === 0) return null;
+  const recent = await prisma.footballApiRequestLog.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { params: true },
+    take: 20,
+    where: {
+      createdAt: { gte: new Date(now.getTime() - STANDINGS_INTERVAL_MS) },
+      endpoint: "standings",
+      ok: true
+    }
+  });
+
+  return (
+    configs.find(
+      (config) =>
+        !recent.some(
+          (request) =>
+            readRequestParam(request.params, "league") === String(config.leagueId) &&
+            readRequestParam(request.params, "season") === String(config.season)
+        )
+    ) ?? null
+  );
 }
 
 function chunk<T>(values: T[], size: number) {
@@ -240,95 +296,136 @@ export async function isFootballAutomationRunning(now = serverNow()) {
   return false;
 }
 
+const candidateSelect = Prisma.validator<Prisma.MatchSelect>()({
+  apiId: true,
+  eventsSyncedAt: true,
+  fullySyncedAt: true,
+  historySyncedAt: true,
+  id: true,
+  kickoff: true,
+  lastSyncedAt: true,
+  lineups: {
+    select: {
+      complete: true
+    }
+  },
+  lineupsSyncedAt: true,
+  liveSyncedAt: true,
+  playersSyncedAt: true,
+  round: {
+    select: {
+      season: {
+        select: {
+          championship: {
+            select: {
+              apiId: true,
+              provider: true
+            }
+          },
+          coverage: true,
+          year: true
+        }
+      }
+    }
+  },
+  specialRounds: {
+    select: { id: true },
+    take: 1,
+    where: {
+      status: {
+        notIn: ["FINALIZED", "CANCELLED"]
+      }
+    }
+  },
+  statisticsSyncedAt: true,
+  status: true
+});
+
 async function loadCandidates(
   configs = footballCompetitionConfigs,
   scanLimit = MAX_CANDIDATES,
   matchId?: string
 ) {
   const now = serverNow();
-  return prisma.match.findMany({
-    orderBy: {
-      kickoff: "asc"
+  const commonWhere: Prisma.MatchWhereInput = {
+    apiId: {
+      not: null
     },
-    select: {
-      apiId: true,
-      eventsSyncedAt: true,
-      fullySyncedAt: true,
-      historySyncedAt: true,
-      id: true,
-      kickoff: true,
-      lastSyncedAt: true,
-      lineups: {
-        select: {
-          complete: true
-        }
-      },
-      lineupsSyncedAt: true,
-      liveSyncedAt: true,
-      playersSyncedAt: true,
-      round: {
-        select: {
-          season: {
-            select: {
-              championship: {
-                select: {
-                  apiId: true,
-                  provider: true
-                }
-              },
-              coverage: true,
-              year: true
+    deletedAt: null,
+    round: {
+      leagueId: null,
+      season: {
+        OR: configs.map((config) => ({
+          championship: {
+            apiId: config.leagueId,
+            provider: "api-football"
+          },
+          year: config.season
+        }))
+      }
+    }
+  };
+
+  if (matchId) {
+    return prisma.match.findMany({
+      select: candidateSelect,
+      take: 1,
+      where: {
+        ...commonWhere,
+        id: matchId
+      }
+    });
+  }
+
+  const urgent = await prisma.match.findMany({
+    orderBy: { kickoff: "asc" },
+    select: candidateSelect,
+    take: scanLimit,
+    where: {
+      ...commonWhere,
+      OR: [
+        {
+          status: {
+            in: ["LIVE", "HALFTIME", "SUSPENDED"]
+          }
+        },
+        {
+          kickoff: {
+            gte: new Date(now.getTime() - 12 * 60 * 60_000),
+            lte: new Date(now.getTime() + 48 * 60 * 60_000)
+          }
+        },
+        {
+          specialRounds: {
+            some: {
+              status: {
+                notIn: ["FINALIZED", "CANCELLED"]
+              }
             }
           }
         }
-      },
-      statisticsSyncedAt: true,
-      status: true
-    },
-    take: scanLimit,
-    where: {
-      apiId: {
-        not: null
-      },
-      deletedAt: null,
-      ...(matchId ? { id: matchId } : {}),
-      round: {
-        leagueId: null,
-        season: {
-          OR: configs.map((config) => ({
-            championship: {
-              apiId: config.leagueId,
-              provider: "api-football"
-            },
-            year: config.season
-          }))
-        }
-      },
-      ...(matchId
-        ? {}
-        : {
-            OR: [
-              {
-                status: {
-                  in: ["LIVE", "HALFTIME", "SUSPENDED"]
-                }
-              },
-              {
-                kickoff: {
-                  gte: new Date(now.getTime() - 12 * 60 * 60_000),
-                  lte: new Date(now.getTime() + 48 * 60 * 60_000)
-                }
-              },
-              {
-                fullySyncedAt: null,
-                status: {
-                  in: ["FINISHED", "CANCELLED"]
-                }
-              }
-            ]
-          })
+      ]
     }
   });
+  const remainingSlots = Math.max(0, scanLimit - urgent.length);
+
+  if (remainingSlots === 0) return urgent;
+
+  const backlog = await prisma.match.findMany({
+    orderBy: { kickoff: "desc" },
+    select: candidateSelect,
+    take: remainingSlots,
+    where: {
+      ...commonWhere,
+      fullySyncedAt: null,
+      id: { notIn: urgent.map((candidate) => candidate.id) },
+      status: {
+        in: ["FINISHED", "CANCELLED"]
+      }
+    }
+  });
+
+  return [...urgent, ...backlog];
 }
 
 function decisionNeedsWork(decision: FixtureSyncDecision) {
@@ -349,6 +446,39 @@ function decisionNeedsDetails(decision: FixtureSyncDecision) {
     decision.lineups ||
     decision.players ||
     decision.statistics
+  );
+}
+
+export function getFixtureSyncPriority(
+  input: {
+    decision: FixtureSyncDecision;
+    hasActiveSpecialRound: boolean;
+    kickoff: Date;
+    status: MatchStatus;
+  },
+  now = serverNow()
+) {
+  const untilKickoff = input.kickoff.getTime() - now.getTime();
+
+  if (["LIVE", "HALFTIME"].includes(input.status)) return 0;
+  if (input.decision.lineups && untilKickoff <= 10 * MINUTE_MS) return 1;
+  if (input.decision.lineups) return 2;
+  if (untilKickoff <= 60 * MINUTE_MS && untilKickoff >= -2 * 60 * MINUTE_MS) return 3;
+  if (input.hasActiveSpecialRound) return 4;
+  if (input.decision.history && untilKickoff > 0) return 5;
+  if (input.status === "FINISHED") return 6;
+  return 7;
+}
+
+function syncPriority(candidate: Candidate, decision: FixtureSyncDecision, now: Date) {
+  return getFixtureSyncPriority(
+    {
+      decision,
+      hasActiveSpecialRound: candidate.specialRounds.length > 0,
+      kickoff: candidate.kickoff,
+      status: candidate.status
+    },
+    now
   );
 }
 
@@ -684,12 +814,16 @@ async function updateState(
       lastFinishedAt: input.finishedAt,
       lastStartedAt: input.startedAt,
       ...(status === "SUCCESS" ? { lastSuccessAt: input.finishedAt } : {}),
-      liveMatches: summary.liveMatches,
+      ...(status === "RUNNING"
+        ? {}
+        : {
+            liveMatches: summary.liveMatches,
+            pendingFinalDetails: summary.pendingFinalDetails,
+            pendingLineups: summary.pendingLineups,
+            trackedMatches: summary.trackedMatches
+          }),
       nextRunAt: new Date((input.finishedAt ?? input.startedAt).getTime() + NEXT_RUN_MS),
-      pendingFinalDetails: summary.pendingFinalDetails,
-      pendingLineups: summary.pendingLineups,
-      status,
-      trackedMatches: summary.trackedMatches
+      status
     },
     where: { key: AUTOMATION_KEY }
   });
@@ -748,7 +882,7 @@ export async function runFootballAutomation(
     ).length;
     summary.pendingLineups = candidates.filter(
       (candidate) =>
-        candidate.kickoff.getTime() - now.getTime() <= 60 * 60_000 &&
+        candidate.kickoff.getTime() - now.getTime() <= 30 * 60_000 &&
         candidate.kickoff.getTime() - now.getTime() >= -2 * 60 * 60_000 &&
         !(candidate.lineups.length >= 2 && candidate.lineups.every((lineup) => lineup.complete))
     ).length;
@@ -756,13 +890,20 @@ export async function runFootballAutomation(
       (candidate) => candidate.status === "FINISHED" && !candidate.fullySyncedAt
     ).length;
 
+    const automaticHistoryAllowed =
+      !trigger.startsWith("vercel-") ||
+      Boolean(options.matchId) ||
+      shouldRunBackgroundHistory(getLatestHistorySync(candidates), now);
     const decisions = new Map(
       candidates.map((candidate) => [
         candidate.apiId as number,
-        applyDetailMode(
-          decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId)),
-          options.detailMode
-        )
+        (() => {
+          const decision = applyDetailMode(
+            decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId)),
+            options.detailMode
+          );
+          return automaticHistoryAllowed ? decision : { ...decision, history: false };
+        })()
       ])
     );
     const fixtures = new Map<number, ExternalFootballFixture>();
@@ -788,26 +929,40 @@ export async function runFootballAutomation(
       } else summary.errors.push(liveResult.message);
     }
 
-    const dueCandidates = candidates.filter((candidate) => {
-      const decision = decisions.get(candidate.apiId as number);
-      const missedLive =
-        ["LIVE", "HALFTIME"].includes(candidate.status) &&
-        !fixtures.has(candidate.apiId as number) &&
-        (!candidate.liveSyncedAt || now.getTime() - candidate.liveSyncedAt.getTime() >= 5 * 60_000);
-      return (
-        (decision?.fixture && !["LIVE", "HALFTIME"].includes(candidate.status)) ||
-        (decision ? decisionNeedsWork(decision) : false) ||
-        missedLive
-      );
-    });
+    const dueCandidates = candidates
+      .filter((candidate) => {
+        const decision = decisions.get(candidate.apiId as number);
+        const missedLive =
+          ["LIVE", "HALFTIME"].includes(candidate.status) &&
+          !fixtures.has(candidate.apiId as number) &&
+          (!candidate.liveSyncedAt ||
+            now.getTime() - candidate.liveSyncedAt.getTime() >= 5 * 60_000);
+        return (
+          (decision?.fixture && !["LIVE", "HALFTIME"].includes(candidate.status)) ||
+          (decision ? decisionNeedsWork(decision) : false) ||
+          missedLive
+        );
+      })
+      .sort((left, right) => {
+        const leftDecision = decisions.get(left.apiId as number);
+        const rightDecision = decisions.get(right.apiId as number);
+        if (!leftDecision || !rightDecision) return 0;
+        const priorityDifference =
+          syncPriority(left, leftDecision, now) - syncPriority(right, rightDecision, now);
+        if (priorityDifference !== 0) return priorityDifference;
+        return left.kickoff.getTime() - right.kickoff.getTime();
+      });
     const remainingFixtureLimit =
       options.detailMode === "lineups-history" && fixtures.size === 0
         ? Math.min(fixtureLimit, 1)
         : fixtureLimit;
-    const dueIds = dueCandidates
-      .filter((candidate) => !fixtures.has(candidate.apiId as number))
-      .slice(0, Math.max(0, remainingFixtureLimit - fixtures.size))
-      .map((candidate) => candidate.apiId as number);
+    const dueIds = Array.from(
+      new Set(
+        dueCandidates
+          .filter((candidate) => !fixtures.has(candidate.apiId as number))
+          .map((candidate) => candidate.apiId as number)
+      )
+    ).slice(0, Math.max(0, remainingFixtureLimit - fixtures.size));
 
     for (const fixtureIds of chunk(dueIds, 20)) {
       const result = await fetchApiFootballFixturesByIds(fixtureIds, "CRITICAL");
@@ -826,10 +981,18 @@ export async function runFootballAutomation(
       const leftCandidate = candidates.find((item) => item.apiId === left.apiId);
       const rightCandidate = candidates.find((item) => item.apiId === right.apiId);
       if (!leftCandidate || !rightCandidate) return 0;
-      return (
+      const leftDecision = decisions.get(left.apiId);
+      const rightDecision = decisions.get(right.apiId);
+      if (!leftDecision || !rightDecision) return 0;
+      const priorityDifference =
+        syncPriority(leftCandidate, leftDecision, now) -
+        syncPriority(rightCandidate, rightDecision, now);
+      if (priorityDifference !== 0) return priorityDifference;
+      const oldestDifference =
         oldestDetailSync(leftCandidate, decisions.get(left.apiId)) -
-        oldestDetailSync(rightCandidate, decisions.get(right.apiId))
-      );
+        oldestDetailSync(rightCandidate, decisions.get(right.apiId));
+      if (oldestDifference !== 0) return oldestDifference;
+      return leftCandidate.kickoff.getTime() - rightCandidate.kickoff.getTime();
     });
     const detailLimit = Math.max(
       0,
@@ -861,6 +1024,7 @@ export async function runFootballAutomation(
             summary
           });
           detailedFixtures += 1;
+          summary.detailsProcessed += 1;
         }
         summary.fixturesUpdated += applied.matchIds.length;
         summary.candidatesProcessed += 1;
@@ -874,9 +1038,10 @@ export async function runFootballAutomation(
       }
     }
 
+    summary.fixturesFetched = fixtures.size;
+
     if (standingsConfigs.size > 0 && (usage.dailyRemaining === null || usage.dailyRemaining > 20)) {
-      const config = standingsConfigs.values().next().value as
-        FootballCompetitionConfig | undefined;
+      const config = await getStandingsConfigDue([...standingsConfigs.values()], now);
       if (config) {
         const standings = await syncFootballCompetitionStandings(config);
         summary.callsUsed += standings.callsUsed;
@@ -896,10 +1061,14 @@ export async function runFootballAutomation(
     summary.remainingCandidates = remainingCandidates.filter((candidate) =>
       decisionNeedsWork(decisionForCandidate(candidate, usage.dailyRemaining, remainingNow))
     ).length;
+    summary.backlogIsCapped = !options.matchId && remainingCandidates.length === candidateScanLimit;
 
     const finishedAt = serverNow();
     const scopeLabel = selectedConfig ? `${selectedConfig.name}: ` : "";
-    const message = `${scopeLabel}${summary.catalogsSynced} campeonato(s) verificado(s); ${summary.fixturesUpdated} registro(s) de partida atualizado(s); ${summary.liveMatches} jogo(s) ao vivo; ${summary.remainingCandidates} partida(s) ainda aguardando detalhes; ${summary.callsUsed} chamada(s) externa(s).`;
+    const backlogLabel = `${summary.remainingCandidates}${summary.backlogIsCapped ? "+" : ""}`;
+    const catalogLabel =
+      summary.catalogsSynced > 0 ? `${summary.catalogsSynced} campeonato(s) atualizado(s); ` : "";
+    const message = `${scopeLabel}${catalogLabel}${summary.fixturesFetched} partida(s) consultada(s) na API; ${summary.fixturesUpdated} registro(s) local(is) revisado(s); ${summary.detailsProcessed} partida(s) com detalhes processados; ${summary.liveMatches} jogo(s) ao vivo; ${backlogLabel} pendencia(s) na fila analisada; ${summary.callsUsed} chamada(s) externa(s).`;
     const status = summary.errors.length > 0 ? "FAILED" : "SUCCESS";
     await prisma.footballAutomationLog.update({
       data: {

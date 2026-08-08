@@ -111,6 +111,11 @@ export type ExternalFootballPlayer = {
   position?: string | null;
 };
 
+export type ExternalFootballSquad = {
+  players: ExternalFootballPlayer[];
+  team: ExternalFootballTeam;
+};
+
 export type ExternalLineupPlayer = {
   grid?: string | null;
   number?: number | null;

@@ -50,7 +50,7 @@ const markets = [
     answerType: "OPTION_LIST",
     id: "scorer",
     kind: "GOAL_SCORER",
-    options: [{ value: "PLAYER:player-1" }],
+    options: [{ value: "PLAYER:player-1:HOME" }],
     title: "Artilheiro"
   }
 ] as const;
@@ -94,7 +94,7 @@ describe("catalog special round results", () => {
       "first-team": "HOME",
       goals: 3,
       result: "HOME",
-      scorer: "PLAYER:player-1"
+      scorer: "PLAYER:player-1:HOME"
     });
   });
 

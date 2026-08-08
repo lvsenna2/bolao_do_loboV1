@@ -18,19 +18,39 @@ export type AutomaticSpecialRoundMarket = {
   title: string;
 };
 
-type PlayerOption = {
+export type GoalScorerPlayerOption = {
   id: string;
   name: string;
+  side?: "AWAY" | "HOME";
 };
 
-export function buildGoalScorerOptions(players: PlayerOption[]): AutomaticMarketOption[] {
+export function getGoalScorerOptionSide(value: string) {
+  if (value.endsWith(":HOME")) return "HOME" as const;
+  if (value.endsWith(":AWAY")) return "AWAY" as const;
+  return null;
+}
+
+export function getGoalScorerPlayerValue(value: string) {
+  const match = /^(PLAYER:[^:]+)(?::(?:HOME|AWAY))?$/.exec(value);
+  return match?.[1] ?? value;
+}
+
+export function buildGoalScorerOptions(players: GoalScorerPlayerOption[]): AutomaticMarketOption[] {
   return [
     ...players
       .filter(
         (player, index, list) => list.findIndex((candidate) => candidate.id === player.id) === index
       )
-      .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
-      .map((player) => ({ label: player.name, value: `PLAYER:${player.id}` })),
+      .sort((left, right) => {
+        const sideOrder = { HOME: 0, AWAY: 1 } as const;
+        const sideDifference =
+          (left.side ? sideOrder[left.side] : 2) - (right.side ? sideOrder[right.side] : 2);
+        return sideDifference || left.name.localeCompare(right.name, "pt-BR");
+      })
+      .map((player) => ({
+        label: player.name,
+        value: `PLAYER:${player.id}${player.side ? `:${player.side}` : ""}`
+      })),
     { label: "Nenhum jogador (sem gols)", value: "NO_GOAL" }
   ];
 }
@@ -38,7 +58,7 @@ export function buildGoalScorerOptions(players: PlayerOption[]): AutomaticMarket
 export function buildAutomaticSpecialRoundMarkets(
   homeTeamName: string,
   awayTeamName: string,
-  players: PlayerOption[]
+  players: GoalScorerPlayerOption[]
 ): AutomaticSpecialRoundMarket[] {
   const playerOptions = buildGoalScorerOptions(players);
   const teamComparisonOptions = [

@@ -8,6 +8,7 @@ import type {
   ExternalFootballLineup,
   ExternalFootballPlayer,
   ExternalFootballPlayerStatistic,
+  ExternalFootballSquad,
   ExternalFootballStanding,
   ExternalFootballStatistic,
   ExternalFootballTeam,
@@ -26,6 +27,7 @@ export type {
   ExternalFootballLineup,
   ExternalFootballPlayer,
   ExternalFootballPlayerStatistic,
+  ExternalFootballSquad,
   ExternalFootballStanding,
   ExternalFootballStatistic,
   ExternalFootballTeam,
@@ -217,6 +219,15 @@ type ApiFootballPlayerStatisticResponse = Array<{
     player?: ApiPlayer;
     statistics?: Record<string, unknown>[];
   }>;
+  team?: ApiTeam;
+}>;
+
+type ApiFootballSquadResponse = Array<{
+  players?: Array<
+    ApiPlayer & {
+      position?: string | null;
+    }
+  >;
   team?: ApiTeam;
 }>;
 
@@ -606,6 +617,30 @@ export async function fetchApiFootballLineups(fixtureId: number) {
 
   return mapRequestData(result, (items) =>
     items.map(normalizeLineupItem).filter((lineup) => lineup !== null)
+  );
+}
+
+export async function fetchApiFootballTeamSquad(teamId: number) {
+  const result = await apiFootballRequest<ApiFootballSquadResponse>(
+    "players/squads",
+    new URLSearchParams({ team: String(teamId) }),
+    { priority: "NORMAL", retries: 0 }
+  );
+
+  return mapRequestData(result, (items) =>
+    items
+      .map((item) => {
+        const team = normalizeTeamFields(item.team);
+        if (!team) return null;
+
+        return {
+          players: (item.players || [])
+            .map((player) => normalizePlayer(player, player.position))
+            .filter((player) => player !== null),
+          team
+        } satisfies ExternalFootballSquad;
+      })
+      .filter((squad) => squad !== null)
   );
 }
 

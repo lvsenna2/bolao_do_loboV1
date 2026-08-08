@@ -28,9 +28,13 @@ import { getMatchStatusLabel, getRoundStatusLabel } from "@/features/rounds/data
 import { UserAlert } from "@/features/user/components/user-alert";
 import { UserStatCard } from "@/features/user/components/user-stat-card";
 import { XpProgress } from "@/features/user/components/xp-progress";
-import { formatDate, getUserHomeData } from "@/features/user/data/user-data";
+import {
+  formatDate,
+  getUserDashboardIdentity,
+  getUserHomeData
+} from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
-import DashboardLoading from "./loading";
+import { DashboardProfileLoading, DashboardSectionsLoading } from "./loading";
 
 export const dynamic = "force-dynamic";
 
@@ -84,10 +88,49 @@ function TeamMark({
   );
 }
 
+async function DashboardProfileContent({ userId }: { userId: string }) {
+  const { user, xpProgress } = await getUserDashboardIdentity(userId);
+
+  if (!user) {
+    return (
+      <EmptyState
+        description="Nao foi possivel localizar os dados da sua conta."
+        title="Dashboard indisponivel"
+      />
+    );
+  }
+
+  return (
+    <Card className="mb-6">
+      <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-4">
+          <Avatar className="h-16 w-16" name={user.name} priority src={user.avatarUrl} />
+          <div>
+            <p className="text-xl font-bold text-app-foreground">{user.name}</p>
+            <p className="text-sm text-app-muted">@{user.username}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Badge tone="info">
+                {xpProgress
+                  ? `${xpProgress.currentLevel.medal} ${xpProgress.currentLevel.name}`
+                  : "Patente indisponivel"}
+              </Badge>
+              <Badge tone="warning">{user.xp} XP</Badge>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-2 text-sm text-app-muted sm:grid-cols-2 lg:text-right">
+          <p>Criado em {formatDate(user.createdAt)}</p>
+          <p>Ultimo login {formatDate(user.lastLoginAt)}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 async function DashboardDataContent({ userId }: { userId: string }) {
   const result = await getUserHomeData(userId);
   const {
-    achievements,
+    achievementCount,
     currentRound,
     leagueRanking,
     memberships,
@@ -106,58 +149,11 @@ async function DashboardDataContent({ userId }: { userId: string }) {
   const leader = leagueRanking[0];
 
   return (
-    <PageShell
-      actions={
-        <>
-          <Link
-            className={buttonVariants({ size: "sm", variant: "accent" })}
-            href={"/palpites" as Route}
-          >
-            Palpitar
-          </Link>
-          <Link
-            className={buttonVariants({ size: "sm", variant: "secondary" })}
-            href={"/rodadas" as Route}
-          >
-            Rodadas
-          </Link>
-        </>
-      }
-      description="Acompanhe suas ligas, partidas abertas, palpites, ranking, estatisticas e notificacoes."
-      eyebrow="Area do usuario"
-      title="Dashboard"
-    >
+    <>
       <UserAlert message={result.ok ? undefined : result.message} />
 
       {user ? (
         <div className="space-y-6">
-          <Card>
-            <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16" name={user.name} priority src={user.avatarUrl} />
-                <div>
-                  <p className="text-xl font-bold text-app-foreground">{user.name}</p>
-                  <p className="text-sm text-app-muted">@{user.username}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge tone="info">
-                      {xpProgress
-                        ? `${xpProgress.currentLevel.medal} ${xpProgress.currentLevel.name}`
-                        : "Patente indisponivel"}
-                    </Badge>
-                    <Badge tone="warning">{user.xp} XP</Badge>
-                    <Badge tone={stats.myLeaguePosition ? "success" : "neutral"}>
-                      Posicao #{stats.myLeaguePosition ?? "-"}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-              <div className="grid gap-2 text-sm text-app-muted sm:grid-cols-2 lg:text-right">
-                <p>Criado em {formatDate(user.createdAt)}</p>
-                <p>Ultimo login {formatDate(user.lastLoginAt)}</p>
-              </div>
-            </CardContent>
-          </Card>
-
           {memberships.length === 0 ? (
             <EmptyState
               action={
@@ -400,12 +396,17 @@ async function DashboardDataContent({ userId }: { userId: string }) {
                       <CardTitle>Ranking da liga</CardTitle>
                       <CardDescription>Top 10 da sua liga ativa mais recente.</CardDescription>
                     </div>
-                    <Link
-                      className={buttonVariants({ size: "sm", variant: "secondary" })}
-                      href={"/ranking" as Route}
-                    >
-                      Abrir
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={stats.myLeaguePosition ? "success" : "neutral"}>
+                        Minha posicao #{stats.myLeaguePosition ?? "-"}
+                      </Badge>
+                      <Link
+                        className={buttonVariants({ size: "sm", variant: "secondary" })}
+                        href={"/ranking" as Route}
+                      >
+                        Abrir
+                      </Link>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -475,7 +476,7 @@ async function DashboardDataContent({ userId }: { userId: string }) {
                       <Award aria-hidden className="h-4 w-4 text-brand-gold" />
                       Conquistas
                     </span>
-                    <strong className="text-app-foreground">{achievements.length}</strong>
+                    <strong className="text-app-foreground">{achievementCount}</strong>
                   </div>
                   <div className="flex items-center justify-between rounded-control bg-app-background p-3">
                     <span className="flex items-center gap-2 text-sm text-app-muted">
@@ -529,7 +530,7 @@ async function DashboardDataContent({ userId }: { userId: string }) {
           title="Dashboard indisponivel"
         />
       )}
-    </PageShell>
+    </>
   );
 }
 
@@ -537,8 +538,33 @@ export default async function UserHomePage() {
   const sessionUser = await requireUser();
 
   return (
-    <Suspense fallback={<DashboardLoading />}>
-      <DashboardDataContent userId={sessionUser.id} />
-    </Suspense>
+    <PageShell
+      actions={
+        <>
+          <Link
+            className={buttonVariants({ size: "sm", variant: "accent" })}
+            href={"/palpites" as Route}
+          >
+            Palpitar
+          </Link>
+          <Link
+            className={buttonVariants({ size: "sm", variant: "secondary" })}
+            href={"/rodadas" as Route}
+          >
+            Rodadas
+          </Link>
+        </>
+      }
+      description="Acompanhe suas ligas, partidas abertas, palpites, ranking, estatisticas e notificacoes."
+      eyebrow="Area do usuario"
+      title="Dashboard"
+    >
+      <Suspense fallback={<DashboardProfileLoading />}>
+        <DashboardProfileContent userId={sessionUser.id} />
+      </Suspense>
+      <Suspense fallback={<DashboardSectionsLoading />}>
+        <DashboardDataContent userId={sessionUser.id} />
+      </Suspense>
+    </PageShell>
   );
 }

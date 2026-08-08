@@ -20,10 +20,16 @@ import {
 import { deriveCatalogResults } from "../services/catalog-result-service";
 import {
   buildAutomaticSpecialRoundMarkets,
-  buildGoalScorerOptions
+  buildGoalScorerOptions,
+  getGoalScorerPlayerValue,
+  type GoalScorerPlayerOption
 } from "../services/default-markets";
 import { shouldReuseSpecialRoundLineup } from "../services/lineup-market-service";
 import { resolveApiBackedSpecialRoundMatch } from "../services/match-link-service";
+import {
+  fetchSquadGoalScorerCandidates,
+  getStoredGoalScorerCandidates
+} from "../services/scorer-candidates-service";
 import { evaluateSpecialRoundAnswer, rankSpecialRoundEntries } from "../services/scoring-service";
 import {
   assertSpecialRoundTransition,
@@ -156,20 +162,62 @@ export async function createAutomaticSpecialRoundAction(
       throw new Error("MATCH_ALREADY_STARTED");
     }
 
-    const players = [
+    const activeRound = await prisma.specialRound.findFirst({
+      select: { id: true },
+      where: { matchId: match.id, status: { in: blockingSpecialRoundStatuses } }
+    });
+    if (activeRound) {
+      return {
+        data: { id: activeRound.id },
+        message: "Esta partida ja possui uma Rodada Especial ativa.",
+        ok: true
+      };
+    }
+
+    let players: GoalScorerPlayerOption[] = [
       ...match.lineups.flatMap((lineup) =>
-        lineup.players.map((item) => ({ id: item.player.id, name: item.player.name }))
+        lineup.players.map((item) => ({
+          id: item.player.id,
+          name: item.player.name,
+          side: lineup.teamId === match.homeTeamId ? ("HOME" as const) : ("AWAY" as const)
+        }))
       ),
       ...match.playerStatistics.map((item) => ({
         id: item.player.id,
-        name: item.player.name
+        name: item.player.name,
+        side: item.teamId === match.homeTeamId ? ("HOME" as const) : ("AWAY" as const)
       }))
     ];
+    let playerSource: "LINEUP" | "NONE" | "SQUAD" = players.length ? "LINEUP" : "NONE";
+    let squadCallsUsed = 0;
+    if (new Set(players.map((player) => player.side)).size < 2) {
+      try {
+        const squadCandidates = await fetchSquadGoalScorerCandidates({
+          awayTeam: { apiId: match.awayTeam.apiId, side: "AWAY" },
+          homeTeam: { apiId: match.homeTeam.apiId, side: "HOME" }
+        });
+        squadCallsUsed = squadCandidates.callsUsed;
+        if (squadCandidates.players.length > 0) {
+          players = squadCandidates.players;
+          playerSource = "SQUAD";
+        }
+      } catch (error) {
+        console.error("Special round squad fallback failed", {
+          error,
+          matchId: match.id
+        });
+      }
+    }
     const markets = buildAutomaticSpecialRoundMarkets(
       match.homeTeam.name,
       match.awayTeam.name,
       players
     );
+    const scorerMarket = markets.find((market) => market.kind === "GOAL_SCORER");
+    if (scorerMarket && playerSource === "SQUAD") {
+      scorerMarket.description =
+        "Escolha no elenco atual. A lista sera atualizada quando a escalacao oficial for publicada.";
+    }
     const championship = match.round.season.championship.name;
     const round = await prisma.$transaction(
       async (tx) => {
@@ -200,7 +248,7 @@ export async function createAutomaticSpecialRoundAction(
             registrationClosesAt: match.kickoff,
             registrationOpensAt: now,
             rules:
-              "Uma inscricao por participante. Os oito mercados sao apurados com os dados oficiais da partida catalogada. Em caso de empate, valem os criterios publicados da Rodada Especial.",
+              "Uma inscricao por participante. Os mercados sao apurados com os dados oficiais da partida catalogada. Em caso de empate, valem os criterios publicados da Rodada Especial.",
             status: "PREDICTIONS_OPEN",
             winnerCount: 1,
             markets: {
@@ -232,7 +280,12 @@ export async function createAutomaticSpecialRoundAction(
             actorId: admin.id,
             entity: "SpecialRound",
             entityId: created.id,
-            metadata: json({ matchId: match.id, markets: markets.length }),
+            metadata: json({
+              matchId: match.id,
+              markets: markets.length,
+              playerSource,
+              squadCallsUsed
+            }),
             specialRoundId: created.id
           }
         });
@@ -314,6 +367,8 @@ export async function syncSpecialRoundLineupAction(
     include: {
       match: {
         include: {
+          awayTeam: true,
+          homeTeam: true,
           lineups: {
             include: {
               players: { include: { player: true } }
@@ -354,13 +409,9 @@ export async function syncSpecialRoundLineupAction(
           data: { lineupsSyncedAt: serverNow() },
           where: { id: match.id }
         });
-        return {
-          message:
-            "A API-Football ainda nao publicou a escalacao. Tente novamente mais perto do inicio.",
-          ok: false
-        };
+      } else {
+        await saveFixtureLineups([match.id], result.data);
       }
-      await saveFixtureLineups([match.id], result.data);
     } catch (error) {
       console.error("Special round lineup sync failed", {
         error,
@@ -386,16 +437,26 @@ export async function syncSpecialRoundLineupAction(
   const usableLineups =
     storedLineups.length >= 2 && storedLineups.every((lineup) => lineup.players.length > 0);
   const completeLineups = usableLineups && storedLineups.every((lineup) => lineup.complete);
+  let candidateSource: "LINEUP" | "SQUAD" = "LINEUP";
+  let players: GoalScorerPlayerOption[] = await getStoredGoalScorerCandidates(match.id);
   if (!usableLineups) {
-    return {
-      message:
-        "A API-Football ainda nao publicou a escalacao completa dos dois times. Os dados parciais foram salvos; tente novamente em alguns minutos.",
-      ok: false
-    };
+    try {
+      const squadCandidates = await fetchSquadGoalScorerCandidates({
+        awayTeam: { apiId: match.awayTeam.apiId, side: "AWAY" },
+        homeTeam: { apiId: match.homeTeam.apiId, side: "HOME" }
+      });
+      if (squadCandidates.players.length > 0) {
+        players = squadCandidates.players;
+        candidateSource = "SQUAD";
+      }
+    } catch (error) {
+      console.error("Special round squad candidate sync failed", {
+        error,
+        fixtureId: match.apiId,
+        specialRoundId: round.id
+      });
+    }
   }
-  const players = storedLineups.flatMap((lineup) =>
-    lineup.players.map((item) => ({ id: item.player.id, name: item.player.name }))
-  );
   const playerOptions = buildGoalScorerOptions(players);
   if (playerOptions.length <= 1) {
     return {
@@ -417,6 +478,11 @@ export async function syncSpecialRoundLineupAction(
       .filter((option) => option.value.startsWith("PLAYER:"))
       .map((option) => [normalizedPlayerName(option.label), option.value])
   );
+  const optionByPlayerValue = new Map(
+    playerOptions
+      .filter((option) => option.value.startsWith("PLAYER:"))
+      .map((option) => [getGoalScorerPlayerValue(option.value), option.value])
+  );
   const migratedAnswers = new Map<string, string>();
   const legacyOptions = new Map<string, string>();
   const storedOptionLabels = new Map(
@@ -426,10 +492,13 @@ export async function syncSpecialRoundLineupAction(
   for (const prediction of scorerMarket.predictions) {
     if (typeof prediction.answer !== "string" || prediction.answer === "NO_GOAL") continue;
     if (prediction.answer.startsWith("PLAYER:")) {
-      legacyOptions.set(
-        prediction.answer,
-        storedOptionLabels.get(prediction.answer) ?? prediction.answer
-      );
+      const matchedValue = optionByPlayerValue.get(getGoalScorerPlayerValue(prediction.answer));
+      if (matchedValue) migratedAnswers.set(prediction.id, matchedValue);
+      else
+        legacyOptions.set(
+          prediction.answer,
+          storedOptionLabels.get(prediction.answer) ?? prediction.answer
+        );
       continue;
     }
     const matchedValue = optionByName.get(normalizedPlayerName(prediction.answer));
@@ -477,7 +546,10 @@ export async function syncSpecialRoundLineupAction(
       prisma.specialRoundMarket.update({
         data: {
           answerType: "OPTION_LIST",
-          description: "Escolha na escalacao quem marcara o primeiro gol da partida."
+          description:
+            candidateSource === "LINEUP"
+              ? "Escolha na escalacao oficial quem marcara o primeiro gol da partida."
+              : "Escolha no elenco atual. A lista sera atualizada quando a escalacao oficial for publicada."
         },
         where: { id: scorerMarket.id }
       }),
@@ -491,7 +563,8 @@ export async function syncSpecialRoundLineupAction(
             fixtureId: match.apiId,
             migratedPredictions: migratedAnswers.size,
             players: playerOptions.length - 1,
-            reusedStoredLineup
+            reusedStoredLineup,
+            source: candidateSource
           }),
           specialRoundId: round.id
         }
@@ -515,7 +588,10 @@ export async function syncSpecialRoundLineupAction(
   revalidateSpecialRounds(round.id);
   return {
     data: { playerCount: playerOptions.length - 1 },
-    message: `${completeLineups ? "Escalacao atualizada" : "Escalacao parcial atualizada"}. ${playerOptions.length - 1} jogadores estao disponiveis para palpite.`,
+    message:
+      candidateSource === "SQUAD"
+        ? `A escalacao oficial ainda nao foi publicada. ${playerOptions.length - 1} jogadores dos elencos estao disponiveis provisoriamente.`
+        : `${completeLineups ? "Escalacao oficial atualizada" : "Escalacao parcial atualizada"}. ${playerOptions.length - 1} jogadores estao disponiveis para palpite.`,
     ok: true
   };
 }

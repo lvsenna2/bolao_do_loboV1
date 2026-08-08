@@ -44,6 +44,14 @@ function eventKey(matchId: string, event: ExternalFootballEvent) {
   return `event:${createHash("sha256").update(identity).digest("hex")}`;
 }
 
+async function mapInBatches<T, R>(values: T[], size: number, mapper: (value: T) => Promise<R>) {
+  const mapped: R[] = [];
+  for (let index = 0; index < values.length; index += size) {
+    mapped.push(...(await Promise.all(values.slice(index, index + size).map(mapper))));
+  }
+  return mapped;
+}
+
 export async function upsertFootballPlayer(player: ExternalFootballPlayer) {
   return prisma.footballPlayer.upsert({
     create: {
@@ -111,23 +119,31 @@ export async function saveFixtureLineups(matchIds: string[], lineups: ExternalFo
   const syncedAt = serverNow();
   let complete = lineups.length >= 2;
 
-  for (const matchId of matchIds) {
-    for (const externalLineup of lineups) {
-      const team = await upsertFootballTeam(externalLineup.team);
-      const players = [
-        ...externalLineup.starters.map((entry, index) => ({
-          ...entry,
-          role: "STARTER" as const,
-          sortOrder: index
-        })),
-        ...externalLineup.substitutes.map((entry, index) => ({
-          ...entry,
-          role: "SUBSTITUTE" as const,
-          sortOrder: index
-        }))
-      ];
-      const lineupComplete = externalLineup.starters.length >= 11;
-      complete = complete && lineupComplete;
+  for (const externalLineup of lineups) {
+    const team = await upsertFootballTeam(externalLineup.team);
+    const players = [
+      ...externalLineup.starters.map((entry, index) => ({
+        ...entry,
+        role: "STARTER" as const,
+        sortOrder: index
+      })),
+      ...externalLineup.substitutes.map((entry, index) => ({
+        ...entry,
+        role: "SUBSTITUTE" as const,
+        sortOrder: index
+      }))
+    ];
+    const lineupComplete = externalLineup.starters.length >= 11;
+    complete = complete && lineupComplete;
+    const storedPlayers = await mapInBatches(players, 6, async (entry) => ({
+      entry,
+      player: await upsertFootballPlayer({
+        ...entry.player,
+        position: entry.position || entry.player.position
+      })
+    }));
+
+    for (const matchId of matchIds) {
       const lineup = await prisma.matchLineup.upsert({
         create: {
           coachExternalId: externalLineup.coach.apiId,
@@ -152,49 +168,44 @@ export async function saveFixtureLineups(matchIds: string[], lineups: ExternalFo
           }
         }
       });
-      const storedPlayerIds: string[] = [];
 
-      for (const entry of players) {
-        const player = await upsertFootballPlayer({
-          ...entry.player,
-          position: entry.position || entry.player.position
-        });
-        storedPlayerIds.push(player.id);
-        await prisma.matchLineupPlayer.upsert({
-          create: {
-            grid: entry.grid,
-            lineupId: lineup.id,
-            playerId: player.id,
-            position: entry.position,
-            role: entry.role,
-            shirtNumber: entry.number,
-            sortOrder: entry.sortOrder
-          },
-          update: {
-            grid: entry.grid,
-            position: entry.position,
-            role: entry.role,
-            shirtNumber: entry.number,
-            sortOrder: entry.sortOrder
-          },
-          where: {
-            lineupId_playerId: {
+      if (storedPlayers.length > 0) {
+        await prisma.$transaction([
+          ...storedPlayers.map(({ entry, player }) =>
+            prisma.matchLineupPlayer.upsert({
+              create: {
+                grid: entry.grid,
+                lineupId: lineup.id,
+                playerId: player.id,
+                position: entry.position,
+                role: entry.role,
+                shirtNumber: entry.number,
+                sortOrder: entry.sortOrder
+              },
+              update: {
+                grid: entry.grid,
+                position: entry.position,
+                role: entry.role,
+                shirtNumber: entry.number,
+                sortOrder: entry.sortOrder
+              },
+              where: {
+                lineupId_playerId: {
+                  lineupId: lineup.id,
+                  playerId: player.id
+                }
+              }
+            })
+          ),
+          prisma.matchLineupPlayer.deleteMany({
+            where: {
               lineupId: lineup.id,
-              playerId: player.id
+              playerId: {
+                notIn: storedPlayers.map(({ player }) => player.id)
+              }
             }
-          }
-        });
-      }
-
-      if (storedPlayerIds.length > 0) {
-        await prisma.matchLineupPlayer.deleteMany({
-          where: {
-            lineupId: lineup.id,
-            playerId: {
-              notIn: storedPlayerIds
-            }
-          }
-        });
+          })
+        ]);
       }
     }
   }
