@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -56,11 +56,14 @@ export function LoginForm({ callbackUrl, registered = false }: LoginFormProps) {
       }
 
       if (result.url) {
-        window.location.assign(result.url);
+        const session = await getSession();
+        const destination = getPostLoginDestination(callbackUrl, session?.user?.role);
+        window.location.assign(result.url ?? destination);
         return;
       }
 
-      const destination = getPostLoginDestination(callbackUrl, undefined);
+      const session = await getSession();
+      const destination = getPostLoginDestination(callbackUrl, session?.user?.role);
       window.location.assign(destination);
     } catch {
       setError("Nao foi possivel entrar agora. Tente novamente.");

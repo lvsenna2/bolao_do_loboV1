@@ -7,6 +7,11 @@ describe("getPostLoginDestination", () => {
     expect(getPostLoginDestination("/palpites")).toBe("/palpites");
   });
 
+  it("routes admins to the admin area even when a default callback is present", () => {
+    expect(getPostLoginDestination("/dashboard", "SUPER_ADMIN")).toBe("/admin");
+    expect(getPostLoginDestination("/dashboard", "ADMIN")).toBe("/admin");
+  });
+
   it("falls back to the dashboard for unsafe or missing values", () => {
     expect(getPostLoginDestination(undefined)).toBe("/dashboard");
     expect(getPostLoginDestination("//evil.com")).toBe("/dashboard");
