@@ -93,11 +93,11 @@ describe("shouldSyncFixture", () => {
     expect(decision.lineups).toBe(true);
   });
 
-  it("aumenta a frequencia perto do inicio sem consultar a cada minuto", () => {
+  it("mantem throttling da fixture fora da janela critica", () => {
     const decision = shouldSyncFixture(
       {
         coverage: fullCoverage,
-        kickoff: new Date("2026-07-16T15:10:00.000Z"),
+        kickoff: new Date("2026-07-16T15:45:00.000Z"),
         lastSyncedAt: new Date("2026-07-16T14:58:30.000Z"),
         lineupsComplete: false,
         lineupsSyncedAt: new Date("2026-07-16T14:59:00.000Z"),
@@ -108,6 +108,74 @@ describe("shouldSyncFixture", () => {
 
     expect(decision.fixture).toBe(false);
     expect(decision.lineups).toBe(false);
+  });
+
+  it("atualiza a fixture em toda execucao dentro da janela critica do kickoff", () => {
+    // Cenario B: kickoff em 5 minutos e lastSyncedAt ha 1 minuto nao podem bloquear a consulta.
+    const decision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T15:05:00.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:59:00.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+
+    expect(decision.fixture).toBe(true);
+  });
+
+  it("segue consultando apos o kickoff enquanto a partida local nao virou LIVE", () => {
+    const decision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T14:59:30.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:59:15.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+
+    expect(decision.fixture).toBe(true);
+  });
+
+  it("limita a janela critica a dez minutos depois do kickoff", () => {
+    const decision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T14:45:00.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:59:30.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+
+    expect(decision.fixture).toBe(false);
+  });
+
+  it("nao aplica a janela critica a partidas adiadas", () => {
+    // Cenario H: kickoff adiado atualizado pela API nao pode manter polling por minuto.
+    const nearDecision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T15:05:00.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:59:00.000Z"),
+        status: "POSTPONED"
+      },
+      now
+    );
+    const rescheduledDecision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-19T15:00:00.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:00:00.000Z"),
+        status: "POSTPONED"
+      },
+      now
+    );
+
+    expect(nearDecision.fixture).toBe(false);
+    expect(rescheduledDecision.fixture).toBe(false);
   });
 
   it("para de buscar escalacao completa", () => {

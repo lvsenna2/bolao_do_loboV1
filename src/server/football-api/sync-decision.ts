@@ -6,6 +6,8 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const LINEUP_INITIAL_WINDOW = 30 * MINUTE;
 const LINEUP_CONFIRMATION_WINDOW = 10 * MINUTE;
+const CRITICAL_WINDOW_BEFORE_KICKOFF = 15 * MINUTE;
+const CRITICAL_WINDOW_AFTER_KICKOFF = 10 * MINUTE;
 
 export type FixtureSyncState = {
   coverage?: ExternalFootballCoverage | null;
@@ -43,6 +45,13 @@ export function isLiveMatchStatus(status: MatchStatus) {
 
 export function isTerminalMatchStatus(status: MatchStatus) {
   return status === "FINISHED" || status === "CANCELLED";
+}
+
+export function isWithinCriticalKickoffWindow(kickoff: Date, now = new Date()) {
+  const untilKickoff = kickoff.getTime() - now.getTime();
+  return (
+    untilKickoff <= CRITICAL_WINDOW_BEFORE_KICKOFF && untilKickoff >= -CRITICAL_WINDOW_AFTER_KICKOFF
+  );
 }
 
 export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): FixtureSyncDecision {
@@ -113,13 +122,15 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
   const inPregameWindow = untilKickoff <= HOUR && untilKickoff >= -2 * HOUR;
 
   if (inPregameWindow) {
+    const inCriticalWindow =
+      state.status === "SCHEDULED" && isWithinCriticalKickoffWindow(state.kickoff, now);
     const fixtureInterval = untilKickoff <= 15 * MINUTE ? 2 * MINUTE : 5 * MINUTE;
     const lineupInterval = untilKickoff <= LINEUP_CONFIRMATION_WINDOW ? 2 * MINUTE : 5 * MINUTE;
     const shouldCheckLineup = untilKickoff <= LINEUP_INITIAL_WINDOW;
 
     return {
       events: false,
-      fixture: olderThan(state.lastSyncedAt, fixtureInterval, now),
+      fixture: inCriticalWindow || olderThan(state.lastSyncedAt, fixtureInterval, now),
       history: olderThan(state.historySyncedAt, 24 * HOUR, now),
       lineups:
         lineupsCovered &&
@@ -127,7 +138,9 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
         !state.lineupsComplete &&
         olderThan(state.lineupsSyncedAt, lineupInterval, now),
       players: false,
-      reason: "Partida proxima do inicio.",
+      reason: inCriticalWindow
+        ? "Partida na janela critica do kickoff."
+        : "Partida proxima do inicio.",
       statistics: false
     };
   }

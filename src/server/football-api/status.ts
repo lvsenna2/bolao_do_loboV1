@@ -31,3 +31,7 @@ export function mapApiFootballStatus(statusShort: string): MatchStatus {
 export function isApiFootballFinalStatus(statusShort: string) {
   return ["FT", "AET", "PEN", "AWD", "WO"].includes(statusShort);
 }
+
+export function isApiFootballLiveStatus(statusShort: string) {
+  return ["1H", "2H", "HT", "ET", "BT", "P", "LIVE"].includes(statusShort.toUpperCase());
+}

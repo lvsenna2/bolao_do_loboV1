@@ -34,9 +34,19 @@ simultaneas. Configure `CRON_SECRET` apenas no servidor e nunca como `NEXT_PUBLI
 
 O agendamento por minuto nao significa uma chamada externa por minuto quando nao ha jogo. A
 decisao usa os horarios e os carimbos de sincronizacao salvos no banco. Placar e status de ate 20
-partidas sao consultados em lote; detalhes mais caros sao processados para duas partidas por
-execucao, priorizando as mais desatualizadas. Dados completos ja finalizados deixam de ser
-consultados.
+partidas sao consultados em lote. Na janela critica do kickoff (15 minutos antes ate 10 minutos
+depois), a fixture e atualizada em toda execucao do cron, sem cooldown, para que a transicao
+SCHEDULED -> LIVE aconteca na mesma execucao em que a API reporta a partida em andamento. O
+endpoint `fixtures?live` tambem e consultado quando existe partida conhecida com kickoff ja
+iniciado, reconciliando o retorno com os candidatos locais mesmo que o banco ainda os considere
+SCHEDULED; fixtures obtidas pelo live nao entram novamente na consulta por ids na mesma execucao.
+Dados completos ja finalizados deixam de ser consultados.
+
+Os detalhes mais caros usam budgets independentes por categoria a cada execucao: ao vivo
+(prioridade maxima), pre-jogo (escalacoes de partidas prestes a comecar) e consolidacao de
+partidas encerradas. Assim, muitos jogos simultaneos ao vivo nao bloqueiam a escalacao de uma
+partida que comeca em poucos minutos. A atualizacao basica da fixture (status, placar, elapsed,
+kickoff e demais campos) nao depende desses budgets.
 
 As escalacoes entram na fila 30 minutos antes do inicio. Enquanto estiverem incompletas,
 o sistema tenta novamente a cada 5 minutos e reduz o intervalo para 2 minutos nos 10

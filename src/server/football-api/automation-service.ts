@@ -35,7 +35,7 @@ import {
 import { syncApiFootballCompetitionIntoLeagues } from "./league-sync-service";
 import { getFootballApiUsageSnapshot } from "./request";
 import { shouldSyncFixture, type FixtureSyncDecision } from "./sync-decision";
-import { isApiFootballFinalStatus } from "./status";
+import { isApiFootballFinalStatus, isApiFootballLiveStatus } from "./status";
 import {
   applyFootballFixture,
   syncFootballCompetition,
@@ -52,6 +52,9 @@ const MAX_CANDIDATES = 100;
 const MINUTE_MS = 60_000;
 const BACKGROUND_HISTORY_INTERVAL_MS = 30 * MINUTE_MS;
 const STANDINGS_INTERVAL_MS = 30 * MINUTE_MS;
+const LIVE_DISCOVERY_LOOKBACK_MS = 4 * 60 * MINUTE_MS;
+const LIVE_DISCOVERY_LOOKAHEAD_MS = MINUTE_MS;
+const EMPTY_EVENTS_GRACE_AFTER_KICKOFF_MS = 150 * MINUTE_MS;
 
 export type AutomationSummary = {
   backlogIsCapped: boolean;
@@ -59,12 +62,21 @@ export type AutomationSummary = {
   candidatesProcessed: number;
   catalogsSynced: number;
   detailsProcessed: number;
+  duplicateFixtureCallsAvoided: number;
   errors: string[];
+  finalDetailsProcessed: number;
   fixturesFetched: number;
+  fixturesFromIds: number;
+  fixturesFromLiveEndpoint: number;
   fixturesUpdated: number;
+  liveDetailsProcessed: number;
+  liveDiscoveredFromApi: number;
   liveMatches: number;
+  localLiveCandidates: number;
   pendingFinalDetails: number;
   pendingLineups: number;
+  pregameDetailsProcessed: number;
+  pregameWaitingForBudget: number;
   remainingCandidates: number;
   trackedMatches: number;
 };
@@ -73,10 +85,13 @@ export type FootballAutomationOptions = {
   competitionKey?: FootballCompetitionKey;
   detailLimit?: number;
   detailMode?: "full" | "lineups-history";
+  finalDetailLimit?: number;
   fixtureLimit?: number;
   historyBudget?: number;
   includeCatalog?: boolean;
+  liveDetailLimit?: number;
   matchId?: string;
+  pregameDetailLimit?: number;
 };
 
 type Candidate = Awaited<ReturnType<typeof loadCandidates>>[number];
@@ -102,12 +117,21 @@ function emptySummary(): AutomationSummary {
     candidatesProcessed: 0,
     catalogsSynced: 0,
     detailsProcessed: 0,
+    duplicateFixtureCallsAvoided: 0,
     errors: [],
+    finalDetailsProcessed: 0,
     fixturesFetched: 0,
+    fixturesFromIds: 0,
+    fixturesFromLiveEndpoint: 0,
     fixturesUpdated: 0,
+    liveDetailsProcessed: 0,
+    liveDiscoveredFromApi: 0,
     liveMatches: 0,
+    localLiveCandidates: 0,
     pendingFinalDetails: 0,
     pendingLineups: 0,
+    pregameDetailsProcessed: 0,
+    pregameWaitingForBudget: 0,
     remainingCandidates: 0,
     trackedMatches: 0
   };
@@ -480,10 +504,152 @@ function decisionNeedsDetails(decision: FixtureSyncDecision) {
 }
 
 export function countLiveFixturesFromApi(fixtures: Array<{ statusShort?: string | null }>) {
-  return fixtures.filter((fixture) => {
-    const shortStatus = fixture.statusShort?.toUpperCase();
-    return shortStatus === "1H" || shortStatus === "2H" || shortStatus === "ET" || shortStatus === "BT" || shortStatus === "P" || shortStatus === "LIVE" || shortStatus === "HT";
-  }).length;
+  return fixtures.filter((fixture) =>
+    fixture.statusShort ? isApiFootballLiveStatus(fixture.statusShort) : false
+  ).length;
+}
+
+export function selectLiveSyncCandidates<
+  T extends { apiId: number | null; kickoff: Date; status: MatchStatus }
+>(candidates: T[], decisions: Map<number, FixtureSyncDecision>, now = serverNow()) {
+  const localLive = candidates.filter((candidate) =>
+    ["LIVE", "HALFTIME"].includes(candidate.status)
+  );
+  const dueLocalLive = localLive.filter(
+    (candidate) => candidate.apiId !== null && decisions.get(candidate.apiId)?.fixture
+  );
+  const discovery = candidates.filter((candidate) => {
+    if (candidate.apiId === null) return false;
+    if (!["SCHEDULED", "SUSPENDED"].includes(candidate.status)) return false;
+    const sinceKickoff = now.getTime() - candidate.kickoff.getTime();
+    return sinceKickoff >= -LIVE_DISCOVERY_LOOKAHEAD_MS && sinceKickoff <= LIVE_DISCOVERY_LOOKBACK_MS;
+  });
+
+  return {
+    discovery,
+    localLive,
+    shouldCallLiveEndpoint: dueLocalLive.length > 0 || discovery.length > 0
+  };
+}
+
+export function reconcileLiveFixtures<T extends { apiId: number | null; status: MatchStatus }>(
+  candidates: T[],
+  liveFixtures: ExternalFootballFixture[]
+) {
+  const candidatesByApiId = new Map(
+    candidates
+      .filter((candidate) => candidate.apiId !== null)
+      .map((candidate) => [candidate.apiId as number, candidate])
+  );
+  const matched: ExternalFootballFixture[] = [];
+  let discovered = 0;
+
+  for (const fixture of liveFixtures) {
+    const candidate = candidatesByApiId.get(fixture.apiId);
+    if (!candidate) continue;
+    matched.push(fixture);
+    if (
+      !["LIVE", "HALFTIME"].includes(candidate.status) &&
+      isApiFootballLiveStatus(fixture.statusShort)
+    ) {
+      discovered += 1;
+    }
+  }
+
+  return { discovered, matched };
+}
+
+export function collectDueFixtureIds(
+  dueApiIds: number[],
+  alreadyFetched: Set<number>,
+  limit: number
+) {
+  const dueIds: number[] = [];
+  const seen = new Set<number>();
+  let duplicatesAvoided = 0;
+
+  for (const apiId of dueApiIds) {
+    if (seen.has(apiId)) continue;
+    seen.add(apiId);
+    if (alreadyFetched.has(apiId)) {
+      duplicatesAvoided += 1;
+      continue;
+    }
+    if (dueIds.length < limit) dueIds.push(apiId);
+  }
+
+  return { dueIds, duplicatesAvoided };
+}
+
+export function applyLiveFixtureDecision(
+  decision: FixtureSyncDecision,
+  statusShort: string,
+  coverage: ExternalFootballCoverage | null
+): FixtureSyncDecision {
+  if (!isApiFootballLiveStatus(statusShort)) return decision;
+
+  return {
+    ...decision,
+    events: coverage?.events !== false,
+    fixture: true,
+    reason: "Partida ao vivo detectada na API.",
+    statistics: coverage?.statisticsFixtures !== false
+  };
+}
+
+export type FixtureDetailCategory = "final" | "live" | "pregame";
+
+export function classifyFixtureDetailCategory(input: {
+  localStatus: MatchStatus;
+  statusShort: string;
+}): FixtureDetailCategory {
+  if (isApiFootballLiveStatus(input.statusShort)) return "live";
+  if (isApiFootballFinalStatus(input.statusShort)) return "final";
+  if (["LIVE", "HALFTIME"].includes(input.localStatus)) return "live";
+  if (["FINISHED", "CANCELLED"].includes(input.localStatus)) return "final";
+  return "pregame";
+}
+
+export type DetailBudgets = Record<FixtureDetailCategory, number>;
+
+export function resolveDetailBudgets(
+  options: Pick<
+    FootballAutomationOptions,
+    "detailLimit" | "finalDetailLimit" | "liveDetailLimit" | "pregameDetailLimit"
+  >,
+  totalFixtures: number
+): DetailBudgets {
+  const fallback = options.detailLimit ?? totalFixtures;
+  const clamp = (value: number) => Math.max(0, Math.min(value, totalFixtures));
+
+  return {
+    final: clamp(options.finalDetailLimit ?? fallback),
+    live: clamp(options.liveDetailLimit ?? fallback),
+    pregame: clamp(options.pregameDetailLimit ?? fallback)
+  };
+}
+
+export type DetailFetchPlan = {
+  fetchEvents: boolean;
+  fetchLineups: boolean;
+  fetchPlayers: boolean;
+  fetchStatistics: boolean;
+};
+
+export function planDetailFetches(
+  decision: FixtureSyncDecision,
+  fixture: Pick<ExternalFootballFixture, "events" | "lineups" | "playerStatistics" | "statistics">
+): DetailFetchPlan {
+  return {
+    fetchEvents: decision.events && fixture.events.length === 0,
+    fetchLineups: decision.lineups && fixture.lineups.length === 0,
+    fetchPlayers: decision.players && fixture.playerStatistics.length === 0,
+    fetchStatistics: decision.statistics && fixture.statistics.length === 0
+  };
+}
+
+export function canAcceptEmptyEventsAsFinal(kickoff: Date, now = serverNow()) {
+  return now.getTime() - kickoff.getTime() >= EMPTY_EVENTS_GRACE_AFTER_KICKOFF_MS;
 }
 
 export function getFixtureSyncPriority(
@@ -736,9 +902,11 @@ async function syncDetails(input: {
 }) {
   const { candidate, config, decision, fixture, matchIds, summary } = input;
   const coverage = parseCoverage(candidate.round.season.coverage);
+  const plan = planDetailFetches(decision, fixture);
   const finalConsolidationStartedAt = isApiFootballFinalStatus(fixture.statusShort)
     ? serverNow()
     : null;
+  let eventsConfirmedEmpty = false;
 
   if (fixture.venueId) {
     const venueExists = await prisma.footballVenue.findUnique({
@@ -757,7 +925,7 @@ async function syncDetails(input: {
   if (decision.lineups) {
     let lineups = fixture.lineups;
     let lineupsLoaded = lineups.length > 0;
-    if (lineups.length === 0) {
+    if (plan.fetchLineups) {
       const result = await fetchApiFootballLineups(fixture.apiId);
       summary.callsUsed += result.callsUsed;
       if (result.ok) {
@@ -779,7 +947,7 @@ async function syncDetails(input: {
   if (decision.events) {
     let events = fixture.events;
     let eventsLoaded = events.length > 0;
-    if (events.length === 0) {
+    if (plan.fetchEvents) {
       const result = await fetchApiFootballEvents(fixture.apiId);
       summary.callsUsed += result.callsUsed;
       if (result.ok) {
@@ -790,12 +958,13 @@ async function syncDetails(input: {
       }
     }
     if (eventsLoaded) await saveFixtureEvents(matchIds, events);
+    eventsConfirmedEmpty = eventsLoaded && events.length === 0;
   }
 
   if (decision.statistics) {
     let statistics = fixture.statistics;
     let statisticsLoaded = statistics.length > 0;
-    if (statistics.length === 0) {
+    if (plan.fetchStatistics) {
       const result = await fetchApiFootballStatistics(fixture.apiId);
       summary.callsUsed += result.callsUsed;
       if (result.ok) {
@@ -811,7 +980,7 @@ async function syncDetails(input: {
   if (decision.players) {
     let players = fixture.playerStatistics;
     let playersLoaded = players.length > 0;
-    if (players.length === 0) {
+    if (plan.fetchPlayers) {
       const result = await fetchApiFootballFixturePlayers(fixture.apiId);
       summary.callsUsed += result.callsUsed;
       if (result.ok) {
@@ -830,6 +999,16 @@ async function syncDetails(input: {
 
   if (fixture.statusShort === "CANC" || fixture.statusShort === "ABD") {
     await markFixturesFullySynced(matchIds);
+    return;
+  }
+
+  if (
+    finalConsolidationStartedAt &&
+    eventsConfirmedEmpty &&
+    !canAcceptEmptyEventsAsFinal(candidate.kickoff, serverNow())
+  ) {
+    // Eventos vazios logo apos o fim provavelmente sao atraso da API: adia a consolidacao
+    // final para a proxima tentativa em vez de congelar a partida como completa.
     return;
   }
 
@@ -1041,26 +1220,21 @@ export async function runFootballAutomation(
     );
     const fixtures = new Map<number, ExternalFootballFixture>();
     const fixtureLimit = Math.max(0, Math.min(options.fixtureLimit ?? MAX_CANDIDATES, 20));
-    const liveCandidates = candidates.filter(
-      (candidate) => ["LIVE", "HALFTIME"].includes(candidate.status) && decisions.get(candidate.apiId as number)?.fixture
-    );
+    const liveSelection = selectLiveSyncCandidates(candidates, decisions, now);
+    summary.localLiveCandidates = liveSelection.localLive.length;
 
-    if (fixtureLimit > 0 && liveCandidates.length > 0) {
-      const selectedLiveIds = new Set(
-        liveCandidates.slice(0, fixtureLimit).map((candidate) => candidate.apiId as number)
-      );
+    if (fixtureLimit > 0 && liveSelection.shouldCallLiveEndpoint) {
       const liveResult = await fetchApiFootballLiveFixtures(
         activeConfigs.map((config) => config.leagueId)
       );
       summary.callsUsed += liveResult.callsUsed;
       if (liveResult.ok) {
-        liveResult.data
-          .filter((fixture) => selectedLiveIds.has(fixture.apiId))
-          .forEach((fixture) => fixtures.set(fixture.apiId, fixture));
+        const reconciled = reconcileLiveFixtures(candidates, liveResult.data);
+        reconciled.matched.forEach((fixture) => fixtures.set(fixture.apiId, fixture));
+        summary.fixturesFromLiveEndpoint = reconciled.matched.length;
+        summary.liveDiscoveredFromApi = reconciled.discovered;
       } else summary.errors.push(liveResult.message);
     }
-
-    summary.liveMatches = countLiveFixturesFromApi(Array.from(fixtures.values()));
 
     const dueCandidates = candidates
       .filter((candidate) => {
@@ -1086,13 +1260,12 @@ export async function runFootballAutomation(
       options.detailMode === "lineups-history" && fixtures.size === 0
         ? Math.min(fixtureLimit, 1)
         : fixtureLimit;
-    const dueIds = Array.from(
-      new Set(
-        dueCandidates
-          .filter((candidate) => !fixtures.has(candidate.apiId as number))
-          .map((candidate) => candidate.apiId as number)
-      )
-    ).slice(0, Math.max(0, remainingFixtureLimit - fixtures.size));
+    const { dueIds, duplicatesAvoided } = collectDueFixtureIds(
+      dueCandidates.map((candidate) => candidate.apiId as number),
+      new Set(fixtures.keys()),
+      Math.max(0, remainingFixtureLimit)
+    );
+    summary.duplicateFixtureCallsAvoided = duplicatesAvoided;
 
     for (const fixtureIds of chunk(dueIds, 20)) {
       const result = await fetchApiFootballFixturesByIds(fixtureIds, "CRITICAL");
@@ -1101,12 +1274,21 @@ export async function runFootballAutomation(
       else summary.errors.push(result.message);
     }
 
+    summary.fixturesFromIds = Math.max(0, fixtures.size - summary.fixturesFromLiveEndpoint);
+    summary.liveMatches = countLiveFixturesFromApi(Array.from(fixtures.values()));
+
     let historyBudget =
       usage.dailyRemaining === null || usage.dailyRemaining > 35
         ? Math.max(0, Math.min(options.historyBudget ?? 1, fixtureLimit))
         : 0;
     const standingsConfigs = new Map<string, FootballCompetitionConfig>();
 
+    const fixturePriority = (
+      candidate: Candidate,
+      decision: FixtureSyncDecision,
+      fixture: ExternalFootballFixture
+    ) =>
+      isApiFootballLiveStatus(fixture.statusShort) ? 0 : syncPriority(candidate, decision, now);
     const orderedFixtures = [...fixtures.values()].sort((left, right) => {
       const leftCandidate = candidates.find((item) => item.apiId === left.apiId);
       const rightCandidate = candidates.find((item) => item.apiId === right.apiId);
@@ -1115,8 +1297,8 @@ export async function runFootballAutomation(
       const rightDecision = decisions.get(right.apiId);
       if (!leftDecision || !rightDecision) return 0;
       const priorityDifference =
-        syncPriority(leftCandidate, leftDecision, now) -
-        syncPriority(rightCandidate, rightDecision, now);
+        fixturePriority(leftCandidate, leftDecision, left) -
+        fixturePriority(rightCandidate, rightDecision, right);
       if (priorityDifference !== 0) return priorityDifference;
       const oldestDifference =
         oldestDetailSync(leftCandidate, decisions.get(left.apiId)) -
@@ -1124,11 +1306,8 @@ export async function runFootballAutomation(
       if (oldestDifference !== 0) return oldestDifference;
       return leftCandidate.kickoff.getTime() - rightCandidate.kickoff.getTime();
     });
-    const detailLimit = Math.max(
-      0,
-      Math.min(options.detailLimit ?? orderedFixtures.length, orderedFixtures.length)
-    );
-    let detailedFixtures = 0;
+    const detailBudgets = resolveDetailBudgets(options, orderedFixtures.length);
+    const detailCounts: Record<FixtureDetailCategory, number> = { final: 0, live: 0, pregame: 0 };
 
     for (const fixture of orderedFixtures) {
       const candidate = candidates.find((item) => item.apiId === fixture.apiId);
@@ -1141,29 +1320,42 @@ export async function runFootballAutomation(
         if (applied.matchIds.length === 0) continue;
         const baseDecision = decisions.get(fixture.apiId);
         if (!baseDecision) continue;
-        const decision = applyTerminalFixtureDecision(
+        const coverage = parseCoverage(candidate.round.season.coverage);
+        let decision = applyTerminalFixtureDecision(
           baseDecision,
           fixture.statusShort,
-          parseCoverage(candidate.round.season.coverage),
+          coverage,
           candidate.lineups.length >= 2 && candidate.lineups.every((lineup) => lineup.complete)
         );
+        if (!["LIVE", "HALFTIME"].includes(candidate.status)) {
+          // Partida local ainda SCHEDULED que ja comecou na API: trata como live imediatamente.
+          decision = applyLiveFixtureDecision(decision, fixture.statusShort, coverage);
+        }
         if (fixture.statusShort === "CANC" || fixture.statusShort === "ABD") {
           await markFixturesFullySynced(applied.matchIds);
         }
-        if (decisionNeedsDetails(decision) && detailedFixtures < detailLimit) {
-          const historyAllowed = decision.history && historyBudget > 0;
-          if (historyAllowed) historyBudget -= 1;
-          await syncDetails({
-            candidate,
-            config,
-            decision,
-            fixture,
-            historyAllowed,
-            matchIds: applied.matchIds,
-            summary
+        if (decisionNeedsDetails(decision)) {
+          const category = classifyFixtureDetailCategory({
+            localStatus: candidate.status,
+            statusShort: fixture.statusShort
           });
-          detailedFixtures += 1;
-          summary.detailsProcessed += 1;
+          if (detailCounts[category] < detailBudgets[category]) {
+            const historyAllowed = decision.history && historyBudget > 0;
+            if (historyAllowed) historyBudget -= 1;
+            await syncDetails({
+              candidate,
+              config,
+              decision,
+              fixture,
+              historyAllowed,
+              matchIds: applied.matchIds,
+              summary
+            });
+            detailCounts[category] += 1;
+            summary.detailsProcessed += 1;
+          } else if (category === "pregame") {
+            summary.pregameWaitingForBudget += 1;
+          }
         }
         summary.fixturesUpdated += applied.matchIds.length;
         summary.candidatesProcessed += 1;
@@ -1176,6 +1368,10 @@ export async function runFootballAutomation(
         );
       }
     }
+
+    summary.finalDetailsProcessed = detailCounts.final;
+    summary.liveDetailsProcessed = detailCounts.live;
+    summary.pregameDetailsProcessed = detailCounts.pregame;
 
     summary.fixturesFetched = fixtures.size;
 

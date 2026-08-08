@@ -21,10 +21,12 @@ async function runCron(request: Request) {
 
   const startedAt = Date.now();
   const result = await runFootballAutomation("vercel-cron", {
-    detailLimit: 2,
+    finalDetailLimit: 1,
     fixtureLimit: 20,
     historyBudget: 1,
-    includeCatalog: false
+    includeCatalog: false,
+    liveDetailLimit: 2,
+    pregameDetailLimit: 2
   });
   const durationMs = Date.now() - startedAt;
 
@@ -36,9 +38,18 @@ async function runCron(request: Request) {
       ? {
           callsUsed: result.summary.callsUsed,
           detailsProcessed: result.summary.detailsProcessed,
+          duplicateFixtureCallsAvoided: result.summary.duplicateFixtureCallsAvoided,
+          finalDetailsProcessed: result.summary.finalDetailsProcessed,
           fixturesFetched: result.summary.fixturesFetched,
-          localRecordsReviewed: result.summary.fixturesUpdated,
+          fixturesFromIds: result.summary.fixturesFromIds,
+          fixturesFromLiveEndpoint: result.summary.fixturesFromLiveEndpoint,
+          liveDetailsProcessed: result.summary.liveDetailsProcessed,
+          liveDiscoveredFromApi: result.summary.liveDiscoveredFromApi,
           liveMatches: result.summary.liveMatches,
+          localLiveCandidates: result.summary.localLiveCandidates,
+          localRecordsReviewed: result.summary.fixturesUpdated,
+          pregameDetailsProcessed: result.summary.pregameDetailsProcessed,
+          pregameWaitingForBudget: result.summary.pregameWaitingForBudget,
           trackedMatches: result.summary.trackedMatches
         }
       : {})
