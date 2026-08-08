@@ -91,6 +91,62 @@ export type GuessesPageData = {
   };
 };
 
+export async function getGuessLeagueAccessData(userId: string) {
+  const [activeMembershipCount, availableLeagues] = await Promise.all([
+    prisma.leagueMember.count({
+      where: {
+        league: {
+          championship: { deletedAt: null },
+          deletedAt: null,
+          status: { not: "ARCHIVED" }
+        },
+        status: "ACTIVE",
+        userId
+      }
+    }),
+    prisma.league.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        _count: { select: { members: true } },
+        championship: {
+          select: {
+            country: true,
+            logo: true,
+            name: true,
+            seasons: {
+              orderBy: { year: "desc" },
+              select: { name: true, year: true },
+              take: 1
+            }
+          }
+        },
+        description: true,
+        entryFee: true,
+        id: true,
+        name: true,
+        owner: { select: { name: true } },
+        status: true,
+        visibility: true
+      },
+      take: 50,
+      where: {
+        championship: { deletedAt: null, status: "ACTIVE" },
+        deletedAt: null,
+        members: {
+          none: {
+            status: { not: "LEFT" },
+            userId
+          }
+        },
+        status: { in: ["OPEN", "ACTIVE"] },
+        visibility: { in: ["PUBLIC", "PRIVATE"] }
+      }
+    })
+  ]);
+
+  return { activeMembershipCount, availableLeagues };
+}
+
 const guessSelect = {
   awayPrediction: true,
   id: true,
@@ -203,6 +259,7 @@ function matchName(homeTeam: TeamView, awayTeam: TeamView) {
 export async function getGuessesPageData(
   userId: string
 ): Promise<GuessDataResult<GuessesPageData>> {
+  const startedAt = Date.now();
   const empty: GuessesPageData = {
     rounds: [],
     scoring: fallbackScoring,
@@ -313,8 +370,7 @@ export async function getGuessesPageData(
 
     const rounds = roundRecords
       .filter(
-        (round) =>
-          round.league && round.league.championshipId === round.season.championship.id
+        (round) => round.league && round.league.championshipId === round.season.championship.id
       )
       .map((round): GuessRoundView => {
         const league = round.league;
@@ -330,13 +386,7 @@ export async function getGuessesPageData(
           return {
             awayScore: match.awayScore,
             awayTeam: match.awayTeam,
-            canEdit: canEditMatch(
-              match.kickoff,
-              round.endsAt,
-              round.status,
-              match.status,
-              now
-            ),
+            canEdit: canEditMatch(match.kickoff, round.endsAt, round.status, match.status, now),
             championshipName: round.season.championship.name,
             city: match.city,
             elapsed: match.elapsed,
@@ -364,9 +414,7 @@ export async function getGuessesPageData(
           id: round.id,
           jokerLimit: scoring.jokerLimitPerRound,
           jokerMatchId: jokerMatch?.id ?? null,
-          jokerMatchName: jokerMatch
-            ? matchName(jokerMatch.homeTeam, jokerMatch.awayTeam)
-            : null,
+          jokerMatchName: jokerMatch ? matchName(jokerMatch.homeTeam, jokerMatch.awayTeam) : null,
           label: roundLabel,
           leagueId: league.id,
           leagueName: league.name,
@@ -386,8 +434,8 @@ export async function getGuessesPageData(
     const isComplete = (match: GuessMatchView) =>
       Boolean(
         match.existingGuess &&
-          match.existingGuess.homePrediction !== null &&
-          match.existingGuess.awayPrediction !== null
+        match.existingGuess.homePrediction !== null &&
+        match.existingGuess.awayPrediction !== null
       );
 
     return {
@@ -406,5 +454,10 @@ export async function getGuessesPageData(
     };
   } catch {
     return emptyResult("Nao foi possivel carregar seus palpites.", empty);
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    if (durationMs >= 750) {
+      console.warn("[performance] Palpites demoraram para carregar", { durationMs });
+    }
   }
 }

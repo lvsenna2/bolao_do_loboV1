@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 
 import { prisma } from "@/server/db";
 
@@ -28,7 +29,7 @@ function readNumberSetting(value: JsonObject, key: keyof ScoringDefaults) {
   return typeof rawValue === "number" && Number.isFinite(rawValue) ? rawValue : undefined;
 }
 
-export async function getScoringDefaults(): Promise<ScoringDefaults> {
+async function loadScoringDefaults(): Promise<ScoringDefaults> {
   const setting = await prisma.setting.findUnique({
     select: {
       value: true
@@ -51,6 +52,15 @@ export async function getScoringDefaults(): Promise<ScoringDefaults> {
       readNumberSetting(setting.value, "jokerMultiplier") ?? fallbackScoring.jokerMultiplier,
     winnerHit: readNumberSetting(setting.value, "winnerHit") ?? fallbackScoring.winnerHit
   };
+}
+
+const getCachedScoringDefaults = unstable_cache(loadScoringDefaults, ["scoring-defaults"], {
+  revalidate: 300,
+  tags: ["scoring-defaults"]
+});
+
+export function getScoringDefaults(): Promise<ScoringDefaults> {
+  return process.env.NODE_ENV === "test" ? loadScoringDefaults() : getCachedScoringDefaults();
 }
 
 export function getPointsPreview(scoring: ScoringDefaults, joker: boolean) {

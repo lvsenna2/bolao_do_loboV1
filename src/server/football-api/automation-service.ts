@@ -44,7 +44,7 @@ import type { ExternalFootballCoverage, ExternalFootballFixture } from "./types"
 
 const AUTOMATION_KEY = "api-football-automatic";
 export const FOOTBALL_MANUAL_TRIGGER = "admin-manual";
-const LOCK_TTL_MS = 2 * 60_000;
+const LOCK_TTL_MS = 10 * 60_000;
 const NEXT_RUN_MS = 60_000;
 const MAX_CANDIDATES = 100;
 

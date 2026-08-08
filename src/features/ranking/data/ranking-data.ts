@@ -111,6 +111,7 @@ export async function getRankingPageData(
   userId: string,
   searchParams: SearchParams
 ): Promise<RankingDataResult<RankingPageData>> {
+  const startedAt = Date.now();
   const empty: RankingPageData = {
     filters: {
       leagueId: ""
@@ -201,7 +202,7 @@ export async function getRankingPageData(
       leagueId: selectedLeagueId,
       scope: "LEAGUE"
     };
-    const [rankingRows, myRanking, emblemAwards, subscriptions] = await prisma.$transaction([
+    const [rankingRows, myRanking] = await Promise.all([
       prisma.ranking.findMany({
         include: {
           user: {
@@ -243,7 +244,12 @@ export async function getRankingPageData(
           ...where,
           userId
         }
-      }),
+      })
+    ]);
+    const rankingUserIds = Array.from(
+      new Set([...rankingRows.map((row) => row.userId), ...(myRanking ? [myRanking.userId] : [])])
+    );
+    const [emblemAwards, subscriptions] = await Promise.all([
       prisma.leagueBadgeAward.findMany({
         include: {
           badge: { select: { title: true } },
@@ -251,6 +257,7 @@ export async function getRankingPageData(
         },
         orderBy: { createdAt: "desc" },
         where: {
+          userId: { in: rankingUserIds },
           OR: [
             {
               championshipId: selectedChampionshipId ?? "00000000-0000-0000-0000-000000000000"
@@ -264,7 +271,8 @@ export async function getRankingPageData(
         select: { plan: true, userId: true },
         where: {
           currentPeriodEnd: { gt: new Date() },
-          status: { in: ["ACTIVE", "CANCELED"] }
+          status: { in: ["ACTIVE", "CANCELED"] },
+          userId: { in: rankingUserIds }
         }
       })
     ]);
@@ -307,5 +315,10 @@ export async function getRankingPageData(
     };
   } catch {
     return emptyResult("Nao foi possivel carregar o ranking.", empty);
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    if (durationMs >= 750) {
+      console.warn("[performance] Ranking demorou para carregar", { durationMs });
+    }
   }
 }

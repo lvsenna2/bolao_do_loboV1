@@ -114,9 +114,11 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
   const inLineupWindow = untilKickoff <= HOUR && untilKickoff >= -2 * HOUR;
 
   if (inLineupWindow) {
+    const fixtureInterval = untilKickoff <= 15 * MINUTE ? 2 * MINUTE : 5 * MINUTE;
+
     return {
       events: false,
-      fixture: olderThan(state.lastSyncedAt, 5 * MINUTE, now),
+      fixture: olderThan(state.lastSyncedAt, fixtureInterval, now),
       history: olderThan(state.historySyncedAt, 24 * HOUR, now),
       lineups:
         lineupsCovered &&

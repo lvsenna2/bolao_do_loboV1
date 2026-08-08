@@ -5,7 +5,6 @@ import "./globals.css";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeScript } from "@/components/layout/theme-script";
 import { WhatsappContactButton } from "@/components/layout/whatsapp-contact-button";
-import { Providers } from "./providers";
 
 const geist = Geist({
   display: "swap",
@@ -34,7 +33,7 @@ export default function RootLayout({
         <ThemeScript />
       </head>
       <body className={geist.variable}>
-        <Providers>{children}</Providers>
+        {children}
         <WhatsappContactButton />
         <SpeedInsights />
       </body>

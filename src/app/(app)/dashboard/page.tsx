@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import type { Route } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import {
   Award,
   Bell,
@@ -29,6 +30,7 @@ import { UserStatCard } from "@/features/user/components/user-stat-card";
 import { XpProgress } from "@/features/user/components/xp-progress";
 import { formatDate, getUserHomeData } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
+import DashboardLoading from "./loading";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +68,8 @@ function TeamMark({
           <img
             alt=""
             className="h-7 w-7 object-contain"
+            decoding="async"
+            loading="lazy"
             referrerPolicy="no-referrer"
             src={logoSrc}
           />
@@ -80,9 +84,8 @@ function TeamMark({
   );
 }
 
-export default async function UserHomePage() {
-  const sessionUser = await requireUser();
-  const result = await getUserHomeData(sessionUser.id);
+async function DashboardDataContent({ userId }: { userId: string }) {
+  const result = await getUserHomeData(userId);
   const {
     achievements,
     currentRound,
@@ -131,7 +134,7 @@ export default async function UserHomePage() {
           <Card>
             <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16" name={user.name} src={user.avatarUrl} />
+                <Avatar className="h-16 w-16" name={user.name} priority src={user.avatarUrl} />
                 <div>
                   <p className="text-xl font-bold text-app-foreground">{user.name}</p>
                   <p className="text-sm text-app-muted">@{user.username}</p>
@@ -527,5 +530,15 @@ export default async function UserHomePage() {
         />
       )}
     </PageShell>
+  );
+}
+
+export default async function UserHomePage() {
+  const sessionUser = await requireUser();
+
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardDataContent userId={sessionUser.id} />
+    </Suspense>
   );
 }

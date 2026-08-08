@@ -54,7 +54,8 @@ export default async function AdminFootballSyncPage() {
       ) : (
         <div className="mb-5 flex items-center gap-2 rounded-control border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
           <CheckCircle2 aria-hidden className="h-5 w-5" />
-          API configurada. A sincronizacao pode ser iniciada manualmente abaixo; o cron e opcional.
+          API configurada. O Cron da Vercel acompanha placares automaticamente; os botoes abaixo
+          ficam disponiveis como contingencia administrativa.
         </div>
       )}
 

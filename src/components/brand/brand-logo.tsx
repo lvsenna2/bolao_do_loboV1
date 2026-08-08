@@ -22,7 +22,7 @@ function BrandMark({ compact }: Pick<BrandLogoProps, "compact">) {
         alt={compact ? "Bolao do Lobo" : ""}
         className="h-full w-full object-cover"
         height={44}
-        priority
+        sizes={compact ? "36px" : "44px"}
         src="/brand/bolao-do-lobo-logo.png"
         width={44}
       />

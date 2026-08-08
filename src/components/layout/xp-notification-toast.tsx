@@ -57,6 +57,10 @@ export function XpNotificationToast() {
     let cancelled = false;
 
     async function checkLatestXpNotification() {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
       try {
         const response = await fetch("/api/notifications/xp-toast", {
           cache: "no-store"
@@ -93,7 +97,7 @@ export function XpNotificationToast() {
 
     void checkLatestXpNotification();
 
-    const interval = window.setInterval(checkLatestXpNotification, 8000);
+    const interval = window.setInterval(checkLatestXpNotification, 30_000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void checkLatestXpNotification();

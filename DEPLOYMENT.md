@@ -30,6 +30,7 @@ MERCADO_PAGO_NOTIFICATION_URL="https://sua-url-publica/api/webhooks/mercado-pago
 API_FOOTBALL_KEY=""
 API_FOOTBALL_BASE_URL="https://v3.football.api-sports.io"
 FOOTBALL_SYNC_CACHE_HOURS="12"
+CRON_SECRET="gere-um-segredo-longo-e-aleatorio"
 SMTP_HOST=""
 SMTP_PORT=""
 SMTP_USER=""
@@ -56,6 +57,11 @@ pnpm prisma:deploy
 Evite rodar migration dentro do build da Vercel. Se aparecer erro de lock/advisory lock,
 aguarde alguns minutos, cancele deploys antigos em andamento e rode a migration uma unica vez
 fora do build.
+
+O plano Vercel Pro le os agendamentos de `vercel.json` no deploy de producao. Depois do deploy,
+confirme em `Project > Settings > Cron Jobs` que `football-sync` aparece a cada minuto e
+`football-catalog` a cada seis horas. A mesma `CRON_SECRET` deve estar disponivel no ambiente
+Production; nao e necessario informar o segredo na URL.
 
 6. Cadastre campeonatos, ligas, rodadas e partidas pelo painel administrativo ou sincronize as competicoes reais configuradas no admin.
 

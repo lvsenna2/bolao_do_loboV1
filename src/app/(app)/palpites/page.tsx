@@ -6,9 +6,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AvailableLeagueList } from "@/features/leagues/components/available-league-list";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
 import { GuessesBoard } from "@/features/guesses/components/guesses-board";
-import { getGuessesPageData } from "@/features/guesses/data/guess-data";
+import { getGuessesPageData, getGuessLeagueAccessData } from "@/features/guesses/data/guess-data";
 import { UserAlert } from "@/features/user/components/user-alert";
-import { formatCurrency, getUserLeagues } from "@/features/user/data/user-data";
+import { formatCurrency } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
 
 function getChampionshipLabel(championship: {
@@ -25,14 +25,12 @@ function getChampionshipLabel(championship: {
 
 export default async function GuessesPage() {
   const user = await requireUser();
-  const [result, leaguesResult] = await Promise.all([
+  const [result, leagueAccess] = await Promise.all([
     getGuessesPageData(user.id),
-    getUserLeagues(user.id)
+    getGuessLeagueAccessData(user.id)
   ]);
-  const hasActiveLeague = leaguesResult.data.memberships.some(
-    (membership) => membership.status === "ACTIVE"
-  );
-  const availableLeagueItems = leaguesResult.data.availableLeagues.map((league) => ({
+  const hasActiveLeague = leagueAccess.activeMembershipCount > 0;
+  const availableLeagueItems = leagueAccess.availableLeagues.map((league) => ({
     championshipCountry: league.championship.country,
     championshipLabel: getChampionshipLabel(league.championship),
     championshipLogo: league.championship.logo,

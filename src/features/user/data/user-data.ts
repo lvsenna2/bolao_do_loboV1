@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
+import { cache } from "react";
 
 import { prisma } from "@/server/db";
+import { getCachedActiveXpLevels } from "@/features/xp/data/xp-level-cache";
 import { getActiveXpLevels, getXpProgressFromLevels } from "@/features/xp/services/xp-service";
 import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
 import type { UserDataResult } from "../types/user-action-result";
@@ -32,6 +34,7 @@ export function formatCurrency(value: Prisma.Decimal | number | null | undefined
 }
 
 export async function getUserHomeData(userId: string) {
+  const startedAt = Date.now();
   const empty = {
     achievements: [],
     currentRound: null,
@@ -56,7 +59,7 @@ export async function getUserHomeData(userId: string) {
   };
 
   try {
-    const [user, memberships, notifications, achievements, unread] = await prisma.$transaction([
+    const [user, memberships, notifications, achievements, unread, levels] = await Promise.all([
       prisma.user.findUnique({
         where: {
           id: userId
@@ -75,40 +78,8 @@ export async function getUserHomeData(userId: string) {
         }
       }),
       prisma.leagueMember.findMany({
-        include: {
-          league: {
-            include: {
-              championship: {
-                select: {
-                  country: true,
-                  id: true,
-                  logo: true,
-                  name: true,
-                  seasons: {
-                    orderBy: {
-                      year: "desc"
-                    },
-                    select: {
-                      name: true,
-                      year: true
-                    },
-                    take: 1
-                  }
-                }
-              },
-              owner: {
-                select: {
-                  name: true,
-                  email: true
-                }
-              },
-              _count: {
-                select: {
-                  members: true
-                }
-              }
-            }
-          }
+        select: {
+          leagueId: true
         },
         orderBy: {
           joinedAt: "desc"
@@ -149,17 +120,13 @@ export async function getUserHomeData(userId: string) {
           userId
         }
       }),
-      prisma.notification.count({
-        where: {
-          isRead: false,
-          userId
-        }
-      })
+      getUnreadNotificationCount(userId),
+      getCachedActiveXpLevels()
     ]);
 
     const activeLeagueIds = memberships.map((membership) => membership.leagueId);
     const primaryLeagueId = activeLeagueIds[0];
-    const xpProgress = user ? getXpProgressFromLevels(user.xp, await getActiveXpLevels()) : null;
+    const xpProgress = user ? getXpProgressFromLevels(user.xp, levels) : null;
 
     if (activeLeagueIds.length === 0) {
       return {
@@ -192,13 +159,13 @@ export async function getUserHomeData(userId: string) {
     const now = serverNow();
     const [
       guessCount,
-      scores,
+      scoreGroups,
       currentRound,
       upcomingMatches,
       recentGuesses,
       leagueRanking,
       myLeagueRanking
-    ] = await prisma.$transaction([
+    ] = await Promise.all([
       prisma.guess.count({
         where: {
           deletedAt: null,
@@ -208,11 +175,13 @@ export async function getUserHomeData(userId: string) {
           userId
         }
       }),
-      prisma.score.findMany({
-        select: {
-          exactScore: true,
-          totalPoints: true,
-          winnerHit: true
+      prisma.score.groupBy({
+        by: ["winnerHit", "exactScore"],
+        _count: {
+          _all: true
+        },
+        _sum: {
+          totalPoints: true
         },
         where: {
           guess: {
@@ -472,10 +441,17 @@ export async function getUserHomeData(userId: string) {
       };
     });
 
-    const winnerHits = scores.filter((score) => score.winnerHit).length;
-    const exactScores = scores.filter((score) => score.exactScore).length;
-    const points = scores.reduce((sum, score) => sum + score.totalPoints, 0);
-    const losses = Math.max(0, scores.length - winnerHits);
+    const scoredGuesses = scoreGroups.reduce((sum, group) => sum + group._count._all, 0);
+    const winnerHits = scoreGroups.reduce(
+      (sum, group) => sum + (group.winnerHit ? group._count._all : 0),
+      0
+    );
+    const exactScores = scoreGroups.reduce(
+      (sum, group) => sum + (group.exactScore ? group._count._all : 0),
+      0
+    );
+    const points = scoreGroups.reduce((sum, group) => sum + (group._sum.totalPoints ?? 0), 0);
+    const losses = Math.max(0, scoredGuesses - winnerHits);
 
     return {
       ok: true as const,
@@ -494,7 +470,7 @@ export async function getUserHomeData(userId: string) {
           myLeaguePosition: myLeagueRanking?.position ?? null,
           points,
           unreadNotifications: unread,
-          winRate: scores.length > 0 ? Math.round((winnerHits / scores.length) * 100) : 0,
+          winRate: scoredGuesses > 0 ? Math.round((winnerHits / scoredGuesses) * 100) : 0,
           winnerHits
         },
         todayMatches,
@@ -504,6 +480,11 @@ export async function getUserHomeData(userId: string) {
     };
   } catch {
     return emptyResult("Nao foi possivel carregar sua area.", empty);
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    if (durationMs >= 750) {
+      console.warn("[performance] Dashboard demorou para carregar", { durationMs });
+    }
   }
 }
 
@@ -971,9 +952,9 @@ export async function getUserNotifications(
   }
 }
 
-export async function getUnreadNotificationCount(userId: string) {
+export const getUnreadNotificationCount = cache(async (userId: string) => {
   try {
-    return prisma.notification.count({
+    return await prisma.notification.count({
       where: {
         isRead: false,
         userId
@@ -982,7 +963,7 @@ export async function getUnreadNotificationCount(userId: string) {
   } catch {
     return 0;
   }
-}
+});
 
 export async function getUserAchievements(userId: string) {
   const empty = {

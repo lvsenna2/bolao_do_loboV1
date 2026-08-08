@@ -63,6 +63,23 @@ describe("shouldSyncFixture", () => {
     expect(decision.lineups).toBe(true);
   });
 
+  it("aumenta a frequencia perto do inicio sem consultar a cada minuto", () => {
+    const decision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T15:10:00.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:58:30.000Z"),
+        lineupsComplete: false,
+        lineupsSyncedAt: new Date("2026-07-16T14:59:00.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+
+    expect(decision.fixture).toBe(false);
+    expect(decision.lineups).toBe(false);
+  });
+
   it("para de buscar escalacao completa", () => {
     const decision = shouldSyncFixture(
       {

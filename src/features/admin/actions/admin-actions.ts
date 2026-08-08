@@ -1,9 +1,10 @@
 "use server";
 
 import type { Prisma } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import { getTeamPreset } from "@/features/admin/data/team-presets";
+import { XP_LEVELS_CACHE_TAG } from "@/features/xp/data/xp-level-cache";
 import {
   sendGuessReminderEmailOncePerDay,
   sendIntegrationAnnouncementEmailOnce,
@@ -3019,6 +3020,7 @@ export async function createXpLevelAction(formData: FormData): Promise<AdminActi
   });
 
   await createAuditLog(admin.id, "admin.xp.level_created", "XpLevel", level.id, undefined, level);
+  revalidateTag(XP_LEVELS_CACHE_TAG);
   revalidateAdminPaths();
 
   return {
@@ -3062,6 +3064,7 @@ export async function updateXpLevelAction(formData: FormData): Promise<AdminActi
   });
 
   await createAuditLog(admin.id, "admin.xp.level_updated", "XpLevel", level.id, undefined, level);
+  revalidateTag(XP_LEVELS_CACHE_TAG);
   revalidateAdminPaths();
 
   return {

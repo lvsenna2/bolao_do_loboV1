@@ -1,20 +1,38 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { GET, POST } from "./route";
+import { isValidCronRequest } from "@/server/cron/auth";
 
-describe("football sync cron route", () => {
-  it.each([
-    ["GET", GET],
-    ["POST", POST]
-  ])("keeps %s disabled without starting an automation", async (_method, handler) => {
-    const response = await handler();
+const previousSecret = process.env.CRON_SECRET;
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      disabled: true,
-      message:
-        "A sincronizacao automatica esta desativada. Use a sincronizacao manual no painel administrativo.",
-      ok: true
-    });
+afterEach(() => {
+  process.env.CRON_SECRET = previousSecret;
+});
+
+describe("football cron authorization", () => {
+  it("rejects requests when the secret is not configured", () => {
+    delete process.env.CRON_SECRET;
+
+    expect(isValidCronRequest(new Request("https://example.com/api/cron/football-sync"))).toBe(
+      false
+    );
+  });
+
+  it("accepts only the matching bearer token", () => {
+    process.env.CRON_SECRET = "cron-test-secret";
+
+    expect(
+      isValidCronRequest(
+        new Request("https://example.com/api/cron/football-sync", {
+          headers: { authorization: "Bearer cron-test-secret" }
+        })
+      )
+    ).toBe(true);
+    expect(
+      isValidCronRequest(
+        new Request("https://example.com/api/cron/football-sync", {
+          headers: { authorization: "Bearer incorreto" }
+        })
+      )
+    ).toBe(false);
   });
 });

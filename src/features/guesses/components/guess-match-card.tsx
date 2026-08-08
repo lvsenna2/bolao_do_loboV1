@@ -76,8 +76,12 @@ function TeamMark({ align = "left", apiId, logo, name, shortName }: TeamMarkProp
           <img
             alt=""
             className="h-9 w-9 object-contain"
+            decoding="async"
+            height={36}
+            loading="lazy"
             referrerPolicy="no-referrer"
             src={logoSrc}
+            width={36}
           />
         ) : (
           getInitials(shortName || name)

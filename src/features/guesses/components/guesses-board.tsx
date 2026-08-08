@@ -30,6 +30,11 @@ type GuessesBoardProps = {
   initialRounds: GuessRoundView[];
 };
 
+type LiveScoreUpdate = Pick<
+  GuessMatchView,
+  "awayScore" | "elapsed" | "homeScore" | "id" | "status"
+>;
+
 type FilterOption = {
   icon: LucideIcon;
   label: string;
@@ -81,6 +86,70 @@ export function GuessesBoard({ initialRounds }: GuessesBoardProps) {
     return () => window.clearInterval(interval);
   }, []);
 
+  const shouldPollLiveScores = useMemo(() => {
+    const currentTime = nowMs || Date.now();
+
+    return rounds.some((round) =>
+      round.matches.some((match) => {
+        if (["LIVE", "HALFTIME", "SUSPENDED"].includes(match.status)) return true;
+        if (match.status !== "SCHEDULED") return false;
+
+        const untilKickoff = new Date(match.kickoff).getTime() - currentTime;
+        return untilKickoff <= 30 * 60_000 && untilKickoff >= -6 * 60 * 60_000;
+      })
+    );
+  }, [nowMs, rounds]);
+
+  useEffect(() => {
+    if (!shouldPollLiveScores) return;
+
+    let cancelled = false;
+
+    async function refreshLiveScores() {
+      if (document.visibilityState !== "visible") return;
+
+      try {
+        const response = await fetch("/api/football/live-scores");
+        if (!response.ok || cancelled) return;
+
+        const payload = (await response.json()) as { matches: LiveScoreUpdate[] };
+        const updates = new Map(payload.matches.map((match) => [match.id, match]));
+
+        setRounds((current) =>
+          current.map((round) => ({
+            ...round,
+            matches: round.matches.map((match) => {
+              const update = updates.get(match.id);
+              if (!update) return match;
+
+              return {
+                ...match,
+                awayScore: update.awayScore,
+                canEdit:
+                  match.canEdit &&
+                  update.status === "SCHEDULED" &&
+                  new Date(match.kickoff).getTime() > Date.now(),
+                elapsed: update.elapsed,
+                homeScore: update.homeScore,
+                status: update.status
+              };
+            })
+          }))
+        );
+      } catch {
+        // O HTML inicial continua utilizavel quando a atualizacao em segundo plano falha.
+      }
+    }
+
+    void refreshLiveScores();
+    const interval = window.setInterval(refreshLiveScores, 30_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [shouldPollLiveScores]);
+
   const selectedRound = useMemo(
     () => rounds.find((round) => round.id === selectedRoundId) ?? rounds[0] ?? null,
     [rounds, selectedRoundId]
@@ -114,7 +183,9 @@ export function GuessesBoard({ initialRounds }: GuessesBoardProps) {
       const firstEmptyInput = card?.querySelector<HTMLInputElement>(
         "input[data-score-input]:placeholder-shown"
       );
-      (firstEmptyInput ?? card?.querySelector<HTMLInputElement>("input[data-score-input]"))?.focus();
+      (
+        firstEmptyInput ?? card?.querySelector<HTMLInputElement>("input[data-score-input]")
+      )?.focus();
     }, 50);
     window.setTimeout(() => setHighlightedMatchId(null), 1_800);
   }, []);
@@ -245,7 +316,9 @@ export function GuessesBoard({ initialRounds }: GuessesBoardProps) {
       <section className="overflow-hidden rounded-card border border-app-border bg-app-surface shadow-soft">
         <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-start">
           <div>
-            <p className="text-xs font-semibold uppercase text-brand-gold">{selectedRound.leagueName}</p>
+            <p className="text-xs font-semibold uppercase text-brand-gold">
+              {selectedRound.leagueName}
+            </p>
             <h2 className="mt-1 text-xl font-bold text-app-foreground">{selectedRound.label}</h2>
             <p className="mt-1 text-sm text-app-muted">{selectedRound.championshipName}</p>
           </div>
@@ -269,7 +342,10 @@ export function GuessesBoard({ initialRounds }: GuessesBoardProps) {
             ["Bloqueados", blockedCount],
             ["Concluido", `${completion}%`]
           ].map(([label, value]) => (
-            <div className="border-b border-r border-app-border p-4 last:border-r-0 sm:border-b-0" key={label}>
+            <div
+              className="border-b border-r border-app-border p-4 last:border-r-0 sm:border-b-0"
+              key={label}
+            >
               <p className="text-xs font-semibold uppercase text-app-muted">{label}</p>
               <p className="mt-1 text-xl font-black text-app-foreground">{value}</p>
             </div>
@@ -291,7 +367,7 @@ export function GuessesBoard({ initialRounds }: GuessesBoardProps) {
             />
           </div>
           <p className="mt-2 text-sm text-app-muted">
-            Palpites da rodada: {submittedCount} de {matches.length} concluidos. Faltam {" "}
+            Palpites da rodada: {submittedCount} de {matches.length} concluidos. Faltam{" "}
             {pendingMatches.length}.
           </p>
         </div>
@@ -327,7 +403,8 @@ export function GuessesBoard({ initialRounds }: GuessesBoardProps) {
             </div>
             {jokerMatch ? (
               <p className="mt-1 text-sm text-app-muted">
-                Coringa utilizado em <strong className="text-app-foreground">
+                Coringa utilizado em{" "}
+                <strong className="text-app-foreground">
                   {jokerMatch.homeTeam.name} x {jokerMatch.awayTeam.name}
                 </strong>
                 {jokerLocked ? ". A escolha esta bloqueada." : ". Voce ainda pode troca-lo."}

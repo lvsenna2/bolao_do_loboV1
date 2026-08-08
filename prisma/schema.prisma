@@ -392,6 +392,7 @@ model LeagueMember {
 
   @@unique([leagueId, userId])
   @@index([userId])
+  @@index([userId, status], map: "league_members_user_status_idx")
   @@index([status])
   @@map("league_members")
 }
@@ -466,6 +467,7 @@ model Round {
 
   @@unique([leagueId, seasonId, number])
   @@index([leagueId])
+  @@index([leagueId, status, startsAt], map: "rounds_league_status_starts_at_idx")
   @@index([startsAt])
   @@index([endsAt])
   @@index([status])
@@ -556,6 +558,7 @@ model Match {
   @@index([awayTeamId])
   @@index([kickoff])
   @@index([status])
+  @@index([status, kickoff], map: "matches_status_kickoff_idx")
   @@index([apiStatus])
   @@index([lastSyncedAt])
   @@index([fullySyncedAt])
@@ -743,6 +746,7 @@ model Guess {
   @@unique([userId, leagueId, matchId])
   @@index([leagueId])
   @@index([matchId])
+  @@index([userId, leagueId, deletedAt], map: "guesses_user_league_deleted_at_idx")
   @@index([submittedAt])
   @@index([joker])
   @@map("guesses")
@@ -768,6 +772,7 @@ model Score {
   league League? @relation(fields: [leagueId], references: [id], onDelete: Restrict)
 
   @@index([userId])
+  @@index([userId, leagueId], map: "scores_user_league_idx")
   @@index([matchId])
   @@index([leagueId])
   @@index([totalPoints])

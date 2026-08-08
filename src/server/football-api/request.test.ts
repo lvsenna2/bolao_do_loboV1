@@ -55,6 +55,19 @@ describe("apiFootballRequest", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("mantem uma reserva minima ate para chamadas criticas", async () => {
+    requestLog.findFirst.mockResolvedValue({ dailyRemaining: 50 });
+
+    const result = await apiFootballRequest<unknown[]>("fixtures", new URLSearchParams(), {
+      priority: "CRITICAL",
+      retries: 0
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.callsUsed).toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("deduplica duas requisicoes simultaneas identicas", async () => {
     let resolveFetch: ((response: Response) => void) | undefined;
     vi.mocked(fetch).mockImplementation(

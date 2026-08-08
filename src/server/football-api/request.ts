@@ -20,7 +20,23 @@ const EMPTY_RATE_LIMIT: FootballApiRateLimit = {
   minuteLimit: null,
   minuteRemaining: null
 };
+const MIN_REQUEST_INTERVAL_MS = 225;
 const inFlightRequests = new Map<string, Promise<ApiFootballRequestResult<unknown>>>();
+let nextRequestAt = 0;
+let requestStartQueue = Promise.resolve();
+
+function waitForApiRequestSlot() {
+  const scheduled = requestStartQueue.then(async () => {
+    const waitMs = Math.max(0, nextRequestAt - Date.now());
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    nextRequestAt = Date.now() + MIN_REQUEST_INTERVAL_MS;
+  });
+
+  requestStartQueue = scheduled.catch(() => undefined);
+  return scheduled;
+}
 
 export function isFootballApiConfigured() {
   return Boolean(process.env.API_FOOTBALL_KEY || process.env.FOOTBALL_API_KEY);
@@ -162,15 +178,15 @@ export async function getFootballApiUsageSnapshot() {
 
 function quotaThreshold(priority: FootballApiPriority, reserve: number) {
   if (priority === "CRITICAL") {
-    return 0;
+    return Math.min(reserve, 50);
   }
 
   if (priority === "HIGH") {
-    return Math.min(reserve, 2);
+    return Math.min(reserve, 100);
   }
 
   if (priority === "LOW") {
-    return reserve + 8;
+    return reserve + 250;
   }
 
   return reserve;
@@ -272,6 +288,7 @@ async function executeRequest<T>(
     let response: Response | null = null;
 
     try {
+      await waitForApiRequestSlot();
       response = await fetch(
         `${config.baseUrl.replace(/\/$/, "")}/${endpoint}?${params.toString()}`,
         {

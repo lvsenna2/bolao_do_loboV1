@@ -6,6 +6,7 @@ type AvatarProps = {
   alt?: string;
   className?: string;
   name?: string | null;
+  priority?: boolean;
   src?: string | null;
 };
 
@@ -23,7 +24,7 @@ function getInitials(name?: string | null) {
     .toUpperCase();
 }
 
-export function Avatar({ alt = "", className, name, src }: AvatarProps) {
+export function Avatar({ alt = "", className, name, priority = false, src }: AvatarProps) {
   const initials = getInitials(name);
 
   return (
@@ -35,7 +36,16 @@ export function Avatar({ alt = "", className, name, src }: AvatarProps) {
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img alt={alt || name || ""} className="h-full w-full object-cover" src={src} />
+        <img
+          alt={alt || name || ""}
+          className="h-full w-full object-cover"
+          decoding="async"
+          fetchPriority={priority ? "high" : "auto"}
+          height={80}
+          loading={priority ? "eager" : "lazy"}
+          src={src}
+          width={80}
+        />
       ) : initials ? (
         initials
       ) : (

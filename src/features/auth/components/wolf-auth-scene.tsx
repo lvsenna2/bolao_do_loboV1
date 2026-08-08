@@ -24,6 +24,7 @@ export function WolfAuthScene({ className }: WolfAuthSceneProps) {
           className="h-auto w-full max-w-[280px] rounded-full object-contain"
           height={360}
           priority
+          sizes="280px"
           src="/brand/bolao-do-lobo-logo.png"
           width={360}
         />
