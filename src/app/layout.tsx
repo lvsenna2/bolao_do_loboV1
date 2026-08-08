@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 import { Geist } from "next/font/google";
 import "./globals.css";
 
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeScript } from "@/components/layout/theme-script";
-import { WhatsappContactButton } from "@/components/layout/whatsapp-contact-button";
+
+const WhatsappContactButton = dynamic(
+  () =>
+    import("@/components/layout/whatsapp-contact-button").then(
+      (mod) => mod.WhatsappContactButton
+    ),
+  { ssr: false }
+);
 
 const geist = Geist({
   display: "swap",

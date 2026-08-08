@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 
 import { LoadingButton } from "@/components/ui/loading-button";
 import { loginSchema, type LoginInput } from "../schemas/auth-schemas";
+import { getPostLoginDestination } from "../utils/login-destination";
 import { ActionAlert } from "./action-alert";
 import { AuthField } from "./auth-field";
 
@@ -16,17 +17,7 @@ type LoginFormProps = {
   registered?: boolean;
 };
 
-const adminRoles = new Set(["ADMIN", "SUPER_ADMIN"]);
 const defaultCallbackUrl = "/dashboard";
-
-async function getSessionWithTimeout() {
-  return Promise.race([
-    getSession(),
-    new Promise<null>((resolve) => {
-      window.setTimeout(() => resolve(null), 2500);
-    })
-  ]);
-}
 
 export function LoginForm({ callbackUrl, registered = false }: LoginFormProps) {
   const [message, setMessage] = useState<string | undefined>(
@@ -64,15 +55,12 @@ export function LoginForm({ callbackUrl, registered = false }: LoginFormProps) {
         return;
       }
 
-      if (callbackUrl) {
-        window.location.assign(result.url ?? callbackUrl);
+      if (result.url) {
+        window.location.assign(result.url);
         return;
       }
 
-      const session = await getSessionWithTimeout();
-      const role = session?.user?.role;
-      const destination = adminRoles.has(String(role)) ? "/admin" : defaultCallbackUrl;
-
+      const destination = getPostLoginDestination(callbackUrl, undefined);
       window.location.assign(destination);
     } catch {
       setError("Nao foi possivel entrar agora. Tente novamente.");

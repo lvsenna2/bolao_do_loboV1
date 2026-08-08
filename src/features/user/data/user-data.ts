@@ -62,8 +62,15 @@ export function getUserDashboardIdentity(userId: string) {
   return loadUserDashboardIdentity(userId);
 }
 
-export async function getUserHomeData(userId: string) {
+type UserHomeDataOptions = {
+  mode?: "light" | "full";
+};
+
+export async function getUserHomeData(userId: string, options: UserHomeDataOptions = {}) {
   const startedAt = Date.now();
+  const mode = options.mode ?? "full";
+  const includeUpcomingMatches = mode === "full";
+  const includeScoreDetails = mode === "full";
   const empty = {
     currentRound: null,
     leagueRanking: [],
@@ -139,21 +146,23 @@ export async function getUserHomeData(userId: string) {
           userId
         }
       }),
-      prisma.score.groupBy({
-        by: ["userId"],
-        _sum: {
-          totalPoints: true
-        },
-        where: {
-          guess: {
-            deletedAt: null
-          },
-          leagueId: {
-            in: activeLeagueIds
-          },
-          userId
-        }
-      }),
+      includeScoreDetails
+        ? prisma.score.groupBy({
+            by: ["userId"],
+            _sum: {
+              totalPoints: true
+            },
+            where: {
+              guess: {
+                deletedAt: null
+              },
+              leagueId: {
+                in: activeLeagueIds
+              },
+              userId
+            }
+          })
+        : Promise.resolve([]),
       prisma.round.findFirst({
         include: {
           league: {
@@ -195,82 +204,84 @@ export async function getUserHomeData(userId: string) {
           }
         }
       }),
-      prisma.match.findMany({
-        orderBy: {
-          kickoff: "asc"
-        },
-        select: {
-          awayTeam: {
-            select: {
-              apiId: true,
-              logo: true,
-              name: true,
-              shortName: true
-            }
-          },
-          homeTeam: {
-            select: {
-              apiId: true,
-              logo: true,
-              name: true,
-              shortName: true
-            }
-          },
-          id: true,
-          kickoff: true,
-          guesses: {
-            select: {
-              id: true,
-              joker: true
+      includeUpcomingMatches
+        ? prisma.match.findMany({
+            orderBy: {
+              kickoff: "asc"
             },
-            where: {
-              deletedAt: null,
-              leagueId: {
-                in: activeLeagueIds
-              },
-              userId
-            }
-          },
-          round: {
             select: {
-              league: {
+              awayTeam: {
                 select: {
-                  championshipId: true
+                  apiId: true,
+                  logo: true,
+                  name: true,
+                  shortName: true
                 }
               },
-              leagueId: true,
-              season: {
+              homeTeam: {
                 select: {
-                  championship: {
+                  apiId: true,
+                  logo: true,
+                  name: true,
+                  shortName: true
+                }
+              },
+              id: true,
+              kickoff: true,
+              guesses: {
+                select: {
+                  id: true,
+                  joker: true
+                },
+                where: {
+                  deletedAt: null,
+                  leagueId: {
+                    in: activeLeagueIds
+                  },
+                  userId
+                }
+              },
+              round: {
+                select: {
+                  league: {
                     select: {
-                      id: true,
-                      name: true
+                      championshipId: true
+                    }
+                  },
+                  leagueId: true,
+                  season: {
+                    select: {
+                      championship: {
+                        select: {
+                          id: true,
+                          name: true
+                        }
+                      }
                     }
                   }
                 }
-              }
+              },
+              status: true
+            },
+            take: 2,
+            where: {
+              deletedAt: null,
+              kickoff: {
+                gt: now
+              },
+              round: {
+                endsAt: {
+                  gte: now
+                },
+                leagueId: {
+                  in: activeLeagueIds
+                },
+                status: "OPEN"
+              },
+              status: "SCHEDULED"
             }
-          },
-          status: true
-        },
-        take: 2,
-        where: {
-          deletedAt: null,
-          kickoff: {
-            gt: now
-          },
-          round: {
-            endsAt: {
-              gte: now
-            },
-            leagueId: {
-              in: activeLeagueIds
-            },
-            status: "OPEN"
-          },
-          status: "SCHEDULED"
-        }
-      }),
+          })
+        : Promise.resolve([]),
       prisma.ranking.findFirst({
         select: {
           position: true
@@ -300,7 +311,9 @@ export async function getUserHomeData(userId: string) {
       (match) => match.round.league?.championshipId === match.round.season.championship.id
     );
     const todayMatches = consistentUpcomingMatches;
-    const points = scoreGroups.reduce((sum, group) => sum + (group._sum.totalPoints ?? 0), 0);
+    const points = includeScoreDetails
+      ? scoreGroups.reduce((sum, group) => sum + (group._sum.totalPoints ?? 0), 0)
+      : 0;
 
     return {
       ok: true as const,

@@ -87,8 +87,8 @@ async function DashboardProfileContent({ userId }: { userId: string }) {
 }
 
 async function DashboardDataContent({ userId }: { userId: string }) {
-  const result = await getUserHomeData(userId);
-  const { currentRound, memberships, stats, todayMatches, user, xpProgress } = result.data;
+  const result = await getUserHomeData(userId, { mode: "light" });
+  const { currentRound, memberships, stats, user, xpProgress } = result.data;
 
   return (
     <>
@@ -174,53 +174,9 @@ async function DashboardDataContent({ userId }: { userId: string }) {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-                  <div>
-                    <CardTitle>Proximos palpites</CardTitle>
-                    <CardDescription>Partidas abertas mais proximas.</CardDescription>
-                  </div>
-                  <Link
-                    className={buttonVariants({ size: "sm", variant: "accent" })}
-                    href="/palpites"
-                  >
-                    Palpitar
-                  </Link>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {todayMatches.length > 0 ? (
-                    todayMatches.map((match) => (
-                      <div
-                        className="rounded-control border border-app-border bg-app-background p-3"
-                        key={match.id}
-                      >
-                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                          <TeamMark {...match.homeTeam} />
-                          <span className="text-sm font-bold text-app-muted">x</span>
-                          <TeamMark {...match.awayTeam} />
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-app-muted">
-                          <span className="flex items-center gap-1.5">
-                            <CalendarClock aria-hidden className="h-4 w-4 text-brand-gold" />
-                            {formatDate(match.kickoff)}
-                          </span>
-                          <div className="flex gap-2">
-                            <Badge tone={match.guesses.length > 0 ? "success" : "warning"}>
-                              {match.guesses.length > 0 ? "Salvo" : "Pendente"}
-                            </Badge>
-                            <Badge>{getMatchStatusLabel(match.status)}</Badge>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <EmptyState
-                      description="Nenhuma partida disponivel para palpite."
-                      title="Tudo em dia"
-                    />
-                  )}
-                </CardContent>
-              </Card>
+              <Suspense fallback={<Card><CardContent className="p-4"><p className="text-sm text-app-muted">Carregando proximos palpites...</p></CardContent></Card>}>
+                <DashboardMatchesContent userId={userId} />
+              </Suspense>
             </div>
 
             <aside>
@@ -235,6 +191,52 @@ async function DashboardDataContent({ userId }: { userId: string }) {
         />
       )}
     </>
+  );
+}
+
+async function DashboardMatchesContent({ userId }: { userId: string }) {
+  const result = await getUserHomeData(userId, { mode: "full" });
+  const { todayMatches } = result.data;
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle>Proximos palpites</CardTitle>
+          <CardDescription>Partidas abertas mais proximas.</CardDescription>
+        </div>
+        <Link className={buttonVariants({ size: "sm", variant: "accent" })} href="/palpites">
+          Palpitar
+        </Link>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {todayMatches.length > 0 ? (
+          todayMatches.map((match) => (
+            <div className="rounded-control border border-app-border bg-app-background p-3" key={match.id}>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <TeamMark {...match.homeTeam} />
+                <span className="text-sm font-bold text-app-muted">x</span>
+                <TeamMark {...match.awayTeam} />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-app-muted">
+                <span className="flex items-center gap-1.5">
+                  <CalendarClock aria-hidden className="h-4 w-4 text-brand-gold" />
+                  {formatDate(match.kickoff)}
+                </span>
+                <div className="flex gap-2">
+                  <Badge tone={match.guesses.length > 0 ? "success" : "warning"}>
+                    {match.guesses.length > 0 ? "Salvo" : "Pendente"}
+                  </Badge>
+                  <Badge>{getMatchStatusLabel(match.status)}</Badge>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <EmptyState description="Nenhuma partida disponivel para palpite." title="Tudo em dia" />
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

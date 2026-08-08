@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import { Suspense, type ReactNode } from "react";
 import type { Session } from "next-auth";
 import { PawPrint } from "lucide-react";
@@ -5,9 +6,17 @@ import { PawPrint } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopbar } from "./app-topbar";
-import { MobileBottomNav } from "./mobile-bottom-nav";
 import { UnreadNotificationBadge } from "./unread-notification-badge";
-import { XpNotificationToast } from "./xp-notification-toast";
+
+const MobileBottomNav = dynamic(
+  () => import("./mobile-bottom-nav").then((mod) => mod.MobileBottomNav),
+  { ssr: false }
+);
+
+const XpNotificationToast = dynamic(
+  () => import("./xp-notification-toast").then((mod) => mod.XpNotificationToast),
+  { ssr: false }
+);
 
 type AppShellProps = {
   children: ReactNode;

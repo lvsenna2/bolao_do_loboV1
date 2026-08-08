@@ -3,8 +3,6 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
 import { loginSchema } from "@/features/auth/schemas/auth-schemas";
-import { sendWelcomeEmailOnce } from "@/features/auth/services/auth-email-service";
-import { grantDailyLoginXp } from "@/features/xp/services/xp-service";
 import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import { verifyPassword } from "./password";
@@ -96,18 +94,17 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        await prisma.user.update({
-          where: {
-            id: user.id
-          },
-          data: {
-            lastLoginAt: serverNow()
-          }
-        });
-
-        await registerLoginAudit(user.id, true);
-        await grantDailyLoginXp(user.id).catch(() => null);
-        void sendWelcomeEmailOnce(user).catch(() => null);
+        await Promise.all([
+          prisma.user.update({
+            where: {
+              id: user.id
+            },
+            data: {
+              lastLoginAt: serverNow()
+            }
+          }),
+          registerLoginAudit(user.id, true)
+        ]);
 
         return {
           id: user.id,
