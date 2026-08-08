@@ -4,6 +4,7 @@ import {
   applyDetailMode,
   applyTerminalFixtureDecision,
   claimBackgroundHistorySlot,
+  countLiveFixturesFromApi,
   forceSelectedFixtureDetails,
   getFixtureSyncPriority,
   isFinalConsolidationReady,
@@ -200,6 +201,16 @@ describe("football automation selected fixture", () => {
 });
 
 describe("football automation fixture queueing", () => {
+  it("counts live fixtures from the API payload even when the local record is still scheduled", () => {
+    expect(
+      countLiveFixturesFromApi([
+        { statusShort: "1H" },
+        { statusShort: "NS" },
+        { statusShort: "HT" }
+      ] as Array<{ statusShort: string }>)
+    ).toBe(2);
+  });
+
   it("keeps live and near-kickoff matches in the automation queue while skipping distant future backlog", () => {
     const now = new Date("2026-08-08T18:00:00.000Z");
 

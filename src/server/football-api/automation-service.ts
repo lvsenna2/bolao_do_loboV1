@@ -479,6 +479,13 @@ function decisionNeedsDetails(decision: FixtureSyncDecision) {
   );
 }
 
+export function countLiveFixturesFromApi(fixtures: Array<{ statusShort?: string | null }>) {
+  return fixtures.filter((fixture) => {
+    const shortStatus = fixture.statusShort?.toUpperCase();
+    return shortStatus === "1H" || shortStatus === "2H" || shortStatus === "ET" || shortStatus === "BT" || shortStatus === "P" || shortStatus === "LIVE" || shortStatus === "HT";
+  }).length;
+}
+
 export function getFixtureSyncPriority(
   input: {
     decision: FixtureSyncDecision;
@@ -1000,9 +1007,7 @@ export async function runFootballAutomation(
       await markFixturesFullySynced(cancelledCandidateIds);
     }
     summary.trackedMatches = candidates.length;
-    summary.liveMatches = candidates.filter((candidate) =>
-      ["LIVE", "HALFTIME"].includes(candidate.status)
-    ).length;
+    summary.liveMatches = countLiveFixturesFromApi(Array.from(fixtures.values()));
     summary.pendingLineups = candidates.filter(
       (candidate) =>
         candidate.kickoff.getTime() - now.getTime() <= 30 * 60_000 &&
