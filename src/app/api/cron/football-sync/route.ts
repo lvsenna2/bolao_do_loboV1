@@ -21,6 +21,7 @@ async function runCron(request: Request) {
 
   const startedAt = Date.now();
   const result = await runFootballAutomation("vercel-cron", {
+    detailLimit: 2,
     fixtureLimit: 20,
     historyBudget: 1,
     includeCatalog: false

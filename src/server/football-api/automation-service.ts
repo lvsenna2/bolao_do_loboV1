@@ -63,6 +63,7 @@ export type AutomationSummary = {
 
 export type FootballAutomationOptions = {
   competitionKey?: FootballCompetitionKey;
+  detailLimit?: number;
   detailMode?: "full" | "lineups-history";
   fixtureLimit?: number;
   historyBudget?: number;
@@ -169,7 +170,22 @@ async function acquireLock(ownerToken: string, now: Date) {
     }
   });
 
-  return recovered.count === 1;
+  if (recovered.count !== 1) return false;
+
+  const interruptedMessage =
+    "A execucao anterior excedeu o tempo do lock e foi substituida por um novo lote.";
+  await prisma.footballAutomationLog.updateMany({
+    data: {
+      error: interruptedMessage,
+      finishedAt: now,
+      status: "FAILED"
+    },
+    where: {
+      status: "RUNNING"
+    }
+  });
+
+  return true;
 }
 
 async function releaseLock(ownerToken: string) {
@@ -324,6 +340,32 @@ function decisionNeedsWork(decision: FixtureSyncDecision) {
     decision.players ||
     decision.statistics
   );
+}
+
+function decisionNeedsDetails(decision: FixtureSyncDecision) {
+  return Boolean(
+    decision.events ||
+    decision.history ||
+    decision.lineups ||
+    decision.players ||
+    decision.statistics
+  );
+}
+
+function oldestDetailSync(candidate: Candidate, decision: FixtureSyncDecision | undefined) {
+  if (!decision) return Number.MAX_SAFE_INTEGER;
+  const values = [
+    decision.events ? candidate.eventsSyncedAt : undefined,
+    decision.history ? candidate.historySyncedAt : undefined,
+    decision.lineups ? candidate.lineupsSyncedAt : undefined,
+    decision.players ? candidate.playersSyncedAt : undefined,
+    decision.statistics ? candidate.statisticsSyncedAt : undefined
+  ]
+    .filter((value) => value !== undefined)
+    .map((value) => value?.getTime() ?? 0);
+
+  if (values.length === 0) return Number.MAX_SAFE_INTEGER;
+  return Math.min(...values);
 }
 
 export function applyDetailMode(
@@ -780,7 +822,22 @@ export async function runFootballAutomation(
         : 0;
     const standingsConfigs = new Map<string, FootballCompetitionConfig>();
 
-    for (const fixture of fixtures.values()) {
+    const orderedFixtures = [...fixtures.values()].sort((left, right) => {
+      const leftCandidate = candidates.find((item) => item.apiId === left.apiId);
+      const rightCandidate = candidates.find((item) => item.apiId === right.apiId);
+      if (!leftCandidate || !rightCandidate) return 0;
+      return (
+        oldestDetailSync(leftCandidate, decisions.get(left.apiId)) -
+        oldestDetailSync(rightCandidate, decisions.get(right.apiId))
+      );
+    });
+    const detailLimit = Math.max(
+      0,
+      Math.min(options.detailLimit ?? orderedFixtures.length, orderedFixtures.length)
+    );
+    let detailedFixtures = 0;
+
+    for (const fixture of orderedFixtures) {
       const candidate = candidates.find((item) => item.apiId === fixture.apiId);
       if (!candidate) continue;
       const config = configForCandidate(candidate);
@@ -791,17 +848,20 @@ export async function runFootballAutomation(
         if (applied.matchIds.length === 0) continue;
         const decision = decisions.get(fixture.apiId);
         if (!decision) continue;
-        const historyAllowed = decision.history && historyBudget > 0;
-        if (historyAllowed) historyBudget -= 1;
-        await syncDetails({
-          candidate,
-          config,
-          decision,
-          fixture,
-          historyAllowed,
-          matchIds: applied.matchIds,
-          summary
-        });
+        if (decisionNeedsDetails(decision) && detailedFixtures < detailLimit) {
+          const historyAllowed = decision.history && historyBudget > 0;
+          if (historyAllowed) historyBudget -= 1;
+          await syncDetails({
+            candidate,
+            config,
+            decision,
+            fixture,
+            historyAllowed,
+            matchIds: applied.matchIds,
+            summary
+          });
+          detailedFixtures += 1;
+        }
         summary.fixturesUpdated += applied.matchIds.length;
         summary.candidatesProcessed += 1;
         if (["FT", "AET", "PEN", "AWD", "WO"].includes(fixture.statusShort)) {

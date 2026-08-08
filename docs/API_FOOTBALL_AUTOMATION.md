@@ -33,8 +33,10 @@ requisicoes sem esse segredo e o servico usa lock no PostgreSQL para impedir exe
 simultaneas. Configure `CRON_SECRET` apenas no servidor e nunca como `NEXT_PUBLIC_*`.
 
 O agendamento por minuto nao significa uma chamada externa por minuto quando nao ha jogo. A
-decisao usa os horarios e os carimbos de sincronizacao salvos no banco. Partidas conhecidas sao
-consultadas em lotes de ate 20 IDs; dados completos ja finalizados deixam de ser consultados.
+decisao usa os horarios e os carimbos de sincronizacao salvos no banco. Placar e status de ate 20
+partidas sao consultados em lote; detalhes mais caros sao processados para duas partidas por
+execucao, priorizando as mais desatualizadas. Dados completos ja finalizados deixam de ser
+consultados.
 
 ## Sincronizacao manual de contingencia
 
