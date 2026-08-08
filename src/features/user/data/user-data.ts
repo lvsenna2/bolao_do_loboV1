@@ -253,7 +253,7 @@ export async function getUserHomeData(userId: string) {
           },
           status: true
         },
-        take: 4,
+        take: 2,
         where: {
           deletedAt: null,
           kickoff: {
@@ -269,28 +269,6 @@ export async function getUserHomeData(userId: string) {
             status: "OPEN"
           },
           status: "SCHEDULED"
-        }
-      }),
-      prisma.ranking.findMany({
-        include: {
-          user: {
-            select: {
-              avatarUrl: true,
-              id: true,
-              name: true,
-              username: true
-            }
-          }
-        },
-        orderBy: {
-          position: "asc"
-        },
-        take: 1,
-        where: {
-          leagueId: primaryLeagueId,
-          roundId: null,
-          scope: "LEAGUE",
-          seasonId: null
         }
       }),
       prisma.ranking.findFirst({
@@ -311,7 +289,7 @@ export async function getUserHomeData(userId: string) {
       dashboardDetailsPromise
     ]);
     const { user, xpProgress } = identity;
-    const [guessCount, scoreGroups, currentRound, upcomingMatches, leagueRanking, myLeagueRanking] =
+    const [guessCount, scoreGroups, currentRound, upcomingMatches, myLeagueRanking] =
       dashboardDetails;
 
     const currentRoundView =
@@ -328,7 +306,7 @@ export async function getUserHomeData(userId: string) {
       ok: true as const,
       data: {
         currentRound: currentRoundView,
-        leagueRanking,
+        leagueRanking: [],
         memberships,
         stats: {
           guesses: guessCount,

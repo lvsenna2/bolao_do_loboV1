@@ -71,47 +71,20 @@ function toCurrency(value: Prisma.Decimal | number | null | undefined) {
   }).format(amount);
 }
 
-function todayRange() {
-  return getSaoPauloDayRangeUtc();
-}
-
 export async function getAdminDashboardData() {
   const empty = {
-    accessToday: 0,
-    activeUsers: 0,
     errors: 0,
     leagues: 0,
-    matches: 0,
     pendingPayments: 0,
-    recentAuditLogs: [],
     recentUsers: [],
-    revenue: "R$ 0,00",
     users: 0
   };
 
   try {
-    const { end, start } = todayRange();
-    const [
-      users,
-      activeUsers,
-      leagues,
-      matches,
-      pendingPayments,
-      revenue,
-      accessToday,
-      errors,
-      recentUsers,
-      recentAuditLogs
-    ] = await prisma.$transaction([
+    const [users, leagues, pendingPayments, errors, recentUsers] = await prisma.$transaction([
       prisma.user.count({
         where: {
           deletedAt: null
-        }
-      }),
-      prisma.user.count({
-        where: {
-          deletedAt: null,
-          status: "ACTIVE"
         }
       }),
       prisma.league.count({
@@ -119,31 +92,9 @@ export async function getAdminDashboardData() {
           deletedAt: null
         }
       }),
-      prisma.match.count({
-        where: {
-          deletedAt: null
-        }
-      }),
       prisma.payment.count({
         where: {
           status: "PENDING"
-        }
-      }),
-      prisma.payment.aggregate({
-        _sum: {
-          amount: true
-        },
-        where: {
-          status: "APPROVED"
-        }
-      }),
-      prisma.auditLog.count({
-        where: {
-          action: "auth.login.success",
-          createdAt: {
-            gte: start,
-            lt: end
-          }
         }
       }),
       prisma.auditLog.count({
@@ -166,36 +117,17 @@ export async function getAdminDashboardData() {
           status: true,
           createdAt: true
         },
-        take: 5
-      }),
-      prisma.auditLog.findMany({
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: "desc"
-        },
-        take: 6
+        take: 3
       })
     ]);
 
     return {
       ok: true as const,
       data: {
-        accessToday,
-        activeUsers,
         errors,
         leagues,
-        matches,
         pendingPayments,
-        recentAuditLogs,
         recentUsers,
-        revenue: toCurrency(revenue._sum.amount),
         users
       }
     };

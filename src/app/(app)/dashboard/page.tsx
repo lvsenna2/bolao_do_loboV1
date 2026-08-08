@@ -88,9 +88,7 @@ async function DashboardProfileContent({ userId }: { userId: string }) {
 
 async function DashboardDataContent({ userId }: { userId: string }) {
   const result = await getUserHomeData(userId);
-  const { currentRound, leagueRanking, memberships, stats, todayMatches, user, xpProgress } =
-    result.data;
-  const leader = leagueRanking[0];
+  const { currentRound, memberships, stats, todayMatches, user, xpProgress } = result.data;
 
   return (
     <>
@@ -225,43 +223,8 @@ async function DashboardDataContent({ userId }: { userId: string }) {
               </Card>
             </div>
 
-            <aside className="space-y-5">
+            <aside>
               <XpProgress progress={xpProgress} xp={user.xp} />
-              <Card>
-                <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-                  <div>
-                    <CardTitle>Ranking</CardTitle>
-                    <CardDescription>Resumo da liga mais recente.</CardDescription>
-                  </div>
-                  <Link
-                    className={buttonVariants({ size: "sm", variant: "secondary" })}
-                    href="/ranking"
-                  >
-                    Abrir
-                  </Link>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between rounded-control bg-app-background p-3">
-                    <span className="text-sm text-app-muted">Minha posicao</span>
-                    <strong className="text-app-foreground">
-                      #{stats.myLeaguePosition ?? "-"}
-                    </strong>
-                  </div>
-                  {leader ? (
-                    <div className="flex items-center justify-between rounded-control border border-brand-gold/30 bg-brand-gold/10 p-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase text-brand-gold">Lider</p>
-                        <p className="font-semibold text-app-foreground">{leader.user.name}</p>
-                      </div>
-                      <strong className="text-app-foreground">{leader.points} pts</strong>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-app-muted">
-                      O ranking ainda nao possui participantes.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
             </aside>
           </section>
         </div>

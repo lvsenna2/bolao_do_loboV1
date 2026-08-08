@@ -1,19 +1,12 @@
-import {
-  AlertTriangle,
-  CalendarDays,
-  ClipboardList,
-  CreditCard,
-  Eye,
-  ShieldCheck,
-  Trophy,
-  Users
-} from "lucide-react";
+import { AlertTriangle, CreditCard, Trophy, Users } from "lucide-react";
+import Link from "next/link";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminAlert } from "@/features/admin/components/admin-alert";
 import { AdminStatCard } from "@/features/admin/components/admin-stat-card";
 import { AdminStatusBadge } from "@/features/admin/components/admin-status-badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   AdminTable,
   AdminTableBody,
@@ -32,7 +25,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <PageShell
-      description="Visao consolidada da operacao, pagamentos, usuarios e auditoria."
+      description="Indicadores essenciais e acessos rapidos da operacao."
       eyebrow="Administracao"
       title="Painel administrativo"
     >
@@ -46,40 +39,16 @@ export default async function AdminDashboardPage() {
           value={data.users}
         />
         <AdminStatCard
-          description="Contas com status ativo"
-          icon={ShieldCheck}
-          label="Usuarios ativos"
-          value={data.activeUsers}
-        />
-        <AdminStatCard
           description="Ligas criadas"
           icon={Trophy}
           label="Ligas"
           value={data.leagues}
         />
         <AdminStatCard
-          description="Partidas cadastradas"
-          icon={CalendarDays}
-          label="Partidas"
-          value={data.matches}
-        />
-        <AdminStatCard
           description="Aguardando confirmacao"
           icon={CreditCard}
           label="Pagamentos pendentes"
           value={data.pendingPayments}
-        />
-        <AdminStatCard
-          description="Pagamentos aprovados"
-          icon={ClipboardList}
-          label="Receita"
-          value={data.revenue}
-        />
-        <AdminStatCard
-          description="Logins registrados hoje"
-          icon={Eye}
-          label="Acessos do dia"
-          value={data.accessToday}
         />
         <AdminStatCard
           description="Eventos marcados como erro"
@@ -89,7 +58,7 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
-      <section className="mt-6 grid gap-5 xl:grid-cols-2">
+      <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
           <CardHeader>
             <CardTitle>Usuarios recentes</CardTitle>
@@ -126,28 +95,19 @@ export default async function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Auditoria recente</CardTitle>
-            <CardDescription>Ultimas operacoes registradas no sistema.</CardDescription>
+            <CardTitle>Acessos rapidos</CardTitle>
+            <CardDescription>Abra diretamente as areas mais usadas.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <AdminTable>
-              <AdminTableHead>
-                <tr>
-                  <AdminTh>Acao</AdminTh>
-                  <AdminTh>Usuario</AdminTh>
-                  <AdminTh>Data</AdminTh>
-                </tr>
-              </AdminTableHead>
-              <AdminTableBody>
-                {data.recentAuditLogs.map((log) => (
-                  <tr key={log.id}>
-                    <AdminTd>{log.action}</AdminTd>
-                    <AdminTd>{log.user?.email ?? "Sistema"}</AdminTd>
-                    <AdminTd>{formatDateTimeInSaoPaulo(log.createdAt)}</AdminTd>
-                  </tr>
-                ))}
-              </AdminTableBody>
-            </AdminTable>
+          <CardContent className="grid gap-2">
+            <Link className={buttonVariants({ variant: "secondary" })} href="/admin/rodadas">
+              Gerenciar rodadas
+            </Link>
+            <Link className={buttonVariants({ variant: "secondary" })} href="/admin/pagamentos">
+              Ver pagamentos
+            </Link>
+            <Link className={buttonVariants({ variant: "secondary" })} href="/admin/auditoria">
+              Abrir auditoria
+            </Link>
           </CardContent>
         </Card>
       </section>

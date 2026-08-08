@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { Download, Shield, Trash2, Trophy, UserRound } from "lucide-react";
+import { Download, Shield, Trash2 } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,7 +12,6 @@ import { DeleteAccountForm } from "@/features/user/components/delete-account-for
 import { PasswordForm } from "@/features/user/components/password-form";
 import { ProfileForm } from "@/features/user/components/profile-form";
 import { UserAlert } from "@/features/user/components/user-alert";
-import { UserStatCard } from "@/features/user/components/user-stat-card";
 import { XpProgress } from "@/features/user/components/xp-progress";
 import { formatDate, getUserProfileData } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
@@ -60,6 +59,8 @@ export default async function ProfilePage() {
                     {user.status}
                   </Badge>
                   <Badge tone="warning">{user.xp} XP</Badge>
+                  <Badge>{stats.points} pontos</Badge>
+                  <Badge>{stats.guesses} palpites</Badge>
                   <Badge>Desde {formatDate(user.createdAt)}</Badge>
                 </div>
               </div>
@@ -105,20 +106,6 @@ export default async function ProfilePage() {
 
             <aside className="space-y-5">
               <XpProgress progress={xpProgress} xp={user.xp} />
-              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <UserStatCard
-                  description="Total registrado"
-                  icon={UserRound}
-                  label="Palpites"
-                  value={stats.guesses}
-                />
-                <UserStatCard
-                  description="Pontuacao acumulada"
-                  icon={Trophy}
-                  label="Pontos"
-                  value={stats.points}
-                />
-              </section>
             </aside>
           </div>
 
