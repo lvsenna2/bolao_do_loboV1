@@ -20,8 +20,8 @@ export function DashboardProfileLoading() {
 export function DashboardSectionsLoading() {
   return (
     <div className="space-y-6" role="status" aria-label="Carregando dados do dashboard">
-      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, index) => (
+      <section className="grid gap-3 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, index) => (
           <Card key={index}>
             <CardContent className="space-y-3 p-5">
               <Skeleton className="h-4 w-24" />
@@ -34,7 +34,7 @@ export function DashboardSectionsLoading() {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
-          {Array.from({ length: 3 }).map((_, index) => (
+          {Array.from({ length: 2 }).map((_, index) => (
             <Card key={index}>
               <CardHeader>
                 <Skeleton className="h-5 w-40" />
@@ -49,7 +49,7 @@ export function DashboardSectionsLoading() {
         </div>
         <div className="space-y-6">
           <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-72 w-full" />
+          <Skeleton className="h-44 w-full" />
         </div>
       </section>
     </div>

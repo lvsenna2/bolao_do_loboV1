@@ -65,22 +65,13 @@ export function getUserDashboardIdentity(userId: string) {
 export async function getUserHomeData(userId: string) {
   const startedAt = Date.now();
   const empty = {
-    achievementCount: 0,
     currentRound: null,
     leagueRanking: [],
     memberships: [],
-    notifications: [],
-    recentGuesses: [],
     stats: {
-      exactScores: 0,
       guesses: 0,
-      leagues: 0,
-      losses: 0,
       myLeaguePosition: null,
-      points: 0,
-      unreadNotifications: 0,
-      winRate: 0,
-      winnerHits: 0
+      points: 0
     },
     todayMatches: [],
     user: null,
@@ -111,55 +102,24 @@ export async function getUserHomeData(userId: string) {
         userId
       }
     });
-    const notificationsPromise = prisma.notification.findMany({
-      orderBy: {
-        createdAt: "desc"
-      },
-      select: {
-        body: true,
-        id: true,
-        message: true,
-        title: true
-      },
-      take: 5,
-      where: {
-        userId
-      }
-    });
-    const achievementCountPromise = prisma.achievement.count({ where: { userId } });
-    const unreadPromise = getUnreadNotificationCount(userId);
     const memberships = await membershipsPromise;
     const activeLeagueIds = memberships.map((membership) => membership.leagueId);
     const primaryLeagueId = activeLeagueIds[0];
 
     if (activeLeagueIds.length === 0) {
-      const [identity, notifications, achievementCount, unread] = await Promise.all([
-        identityPromise,
-        notificationsPromise,
-        achievementCountPromise,
-        unreadPromise
-      ]);
+      const identity = await identityPromise;
       const { user, xpProgress } = identity;
 
       return {
         ok: true as const,
         data: {
-          achievementCount,
           currentRound: null,
           leagueRanking: [],
           memberships,
-          notifications,
-          recentGuesses: [],
           stats: {
-            exactScores: 0,
             guesses: 0,
-            leagues: 0,
-            losses: 0,
             myLeaguePosition: null,
-            points: 0,
-            unreadNotifications: unread,
-            winRate: 0,
-            winnerHits: 0
+            points: 0
           },
           todayMatches: [],
           user,
@@ -180,10 +140,7 @@ export async function getUserHomeData(userId: string) {
         }
       }),
       prisma.score.groupBy({
-        by: ["winnerHit", "exactScore"],
-        _count: {
-          _all: true
-        },
+        by: ["userId"],
         _sum: {
           totalPoints: true
         },
@@ -296,7 +253,7 @@ export async function getUserHomeData(userId: string) {
           },
           status: true
         },
-        take: 8,
+        take: 4,
         where: {
           deletedAt: null,
           kickoff: {
@@ -314,67 +271,6 @@ export async function getUserHomeData(userId: string) {
           status: "SCHEDULED"
         }
       }),
-      prisma.guess.findMany({
-        include: {
-          match: {
-            select: {
-              awayTeam: {
-                select: {
-                  name: true,
-                  shortName: true
-                }
-              },
-              homeTeam: {
-                select: {
-                  name: true,
-                  shortName: true
-                }
-              },
-              kickoff: true,
-              round: {
-                select: {
-                  league: {
-                    select: {
-                      championshipId: true
-                    }
-                  },
-                  number: true,
-                  name: true,
-                  season: {
-                    select: {
-                      championship: {
-                        select: {
-                          id: true,
-                          name: true
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              status: true
-            }
-          },
-          score: {
-            select: {
-              exactScore: true,
-              totalPoints: true,
-              winnerHit: true
-            }
-          }
-        },
-        orderBy: {
-          updatedAt: "desc"
-        },
-        take: 5,
-        where: {
-          deletedAt: null,
-          leagueId: {
-            in: activeLeagueIds
-          },
-          userId
-        }
-      }),
       prisma.ranking.findMany({
         include: {
           user: {
@@ -389,7 +285,7 @@ export async function getUserHomeData(userId: string) {
         orderBy: {
           position: "asc"
         },
-        take: 10,
+        take: 1,
         where: {
           leagueId: primaryLeagueId,
           roundId: null,
@@ -410,24 +306,13 @@ export async function getUserHomeData(userId: string) {
         }
       })
     ]);
-    const [identity, notifications, achievementCount, unread, dashboardDetails] =
-      await Promise.all([
-        identityPromise,
-        notificationsPromise,
-        achievementCountPromise,
-        unreadPromise,
-        dashboardDetailsPromise
-      ]);
+    const [identity, dashboardDetails] = await Promise.all([
+      identityPromise,
+      dashboardDetailsPromise
+    ]);
     const { user, xpProgress } = identity;
-    const [
-      guessCount,
-      scoreGroups,
-      currentRound,
-      upcomingMatches,
-      recentGuesses,
-      leagueRanking,
-      myLeagueRanking
-    ] = dashboardDetails;
+    const [guessCount, scoreGroups, currentRound, upcomingMatches, leagueRanking, myLeagueRanking] =
+      dashboardDetails;
 
     const currentRoundView =
       currentRound?.league?.championshipId === currentRound?.season.championship.id
@@ -436,43 +321,19 @@ export async function getUserHomeData(userId: string) {
     const consistentUpcomingMatches = upcomingMatches.filter(
       (match) => match.round.league?.championshipId === match.round.season.championship.id
     );
-    const consistentRecentGuesses = recentGuesses.filter(
-      (guess) =>
-        guess.match.round.league?.championshipId === guess.match.round.season.championship.id
-    );
     const todayMatches = consistentUpcomingMatches;
-
-    const scoredGuesses = scoreGroups.reduce((sum, group) => sum + group._count._all, 0);
-    const winnerHits = scoreGroups.reduce(
-      (sum, group) => sum + (group.winnerHit ? group._count._all : 0),
-      0
-    );
-    const exactScores = scoreGroups.reduce(
-      (sum, group) => sum + (group.exactScore ? group._count._all : 0),
-      0
-    );
     const points = scoreGroups.reduce((sum, group) => sum + (group._sum.totalPoints ?? 0), 0);
-    const losses = Math.max(0, scoredGuesses - winnerHits);
 
     return {
       ok: true as const,
       data: {
-        achievementCount,
         currentRound: currentRoundView,
         leagueRanking,
         memberships,
-        notifications,
-        recentGuesses: consistentRecentGuesses,
         stats: {
-          exactScores,
           guesses: guessCount,
-          leagues: memberships.length,
-          losses,
           myLeaguePosition: myLeagueRanking?.position ?? null,
-          points,
-          unreadNotifications: unread,
-          winRate: scoredGuesses > 0 ? Math.round((winnerHits / scoredGuesses) * 100) : 0,
-          winnerHits
+          points
         },
         todayMatches,
         user,
@@ -491,182 +352,46 @@ export async function getUserHomeData(userId: string) {
 
 export async function getUserProfileData(userId: string) {
   const empty = {
-    achievements: [],
-    missions: [],
-    recentXpEvents: [],
-    season: null,
-    seasonXp: 0,
     stats: {
-      exactScores: 0,
       guesses: 0,
-      points: 0,
-      winnerHits: 0
+      points: 0
     },
-    streak: null,
     xpProgress: null,
     user: null
   };
 
   try {
-    const [user, achievements, guessCount, scores, recentXpEvents, activeSeason, streak, missions] =
-      await prisma.$transaction([
-        prisma.user.findUnique({
-          where: {
-            id: userId
-          },
-          select: {
-            id: true,
-            name: true,
-            firstName: true,
-            lastName: true,
-            username: true,
-            email: true,
-            avatarUrl: true,
-            locale: true,
-            theme: true,
-            xp: true,
-            role: true,
-            status: true,
-            createdAt: true,
-            lastLoginAt: true
-          }
-        }),
-        prisma.achievement.findMany({
-          include: {
-            badge: true
-          },
-          orderBy: {
-            unlockedAt: "desc"
-          },
-          take: 6,
-          where: {
-            userId
-          }
-        }),
-        prisma.guess.count({
-          where: {
-            userId,
-            deletedAt: null
-          }
-        }),
-        prisma.score.findMany({
-          select: {
-            exactScore: true,
-            totalPoints: true,
-            winnerHit: true
-          },
-          where: {
-            userId
-          }
-        }),
-        prisma.xpEvent.findMany({
-          include: {
-            league: {
-              select: {
-                name: true
-              }
-            },
-            match: {
-              select: {
-                awayTeam: {
-                  select: {
-                    shortName: true
-                  }
-                },
-                homeTeam: {
-                  select: {
-                    shortName: true
-                  }
-                }
-              }
-            }
-          },
-          orderBy: {
-            createdAt: "desc"
-          },
-          take: 12,
-          where: {
-            userId
-          }
-        }),
-        prisma.season.findFirst({
-          orderBy: {
-            year: "desc"
-          },
-          select: {
-            id: true,
-            name: true,
-            year: true
-          },
-          where: {
-            championship: {
-              leagues: {
-                some: {
-                  members: {
-                    some: {
-                      status: "ACTIVE",
-                      userId
-                    }
-                  }
-                }
-              }
-            },
-            status: "ACTIVE"
-          }
-        }),
-        prisma.userStreak.findUnique({
-          where: {
-            userId
-          }
-        }),
-        prisma.userMissionProgress.findMany({
-          include: {
-            mission: true
-          },
-          orderBy: {
-            updatedAt: "desc"
-          },
-          take: 4,
-          where: {
-            userId
-          }
-        })
-      ]);
-    const [levels, seasonXpAggregate] = await Promise.all([
-      getActiveXpLevels(),
-      activeSeason
-        ? prisma.xpEvent.aggregate({
-            _sum: {
-              amount: true
-            },
-            where: {
-              seasonId: activeSeason.id,
-              userId
-            }
-          })
-        : Promise.resolve({ _sum: { amount: 0 } })
+    const [user, guessCount, scoreAggregate, levels] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          avatarUrl: true,
+          createdAt: true,
+          email: true,
+          firstName: true,
+          id: true,
+          lastName: true,
+          locale: true,
+          name: true,
+          status: true,
+          theme: true,
+          username: true,
+          xp: true
+        }
+      }),
+      prisma.guess.count({ where: { deletedAt: null, userId } }),
+      prisma.score.aggregate({ _sum: { totalPoints: true }, where: { userId } }),
+      getActiveXpLevels()
     ]);
-
-    const winnerHits = scores.filter((score) => score.winnerHit).length;
-    const exactScores = scores.filter((score) => score.exactScore).length;
-    const points = scores.reduce((sum, score) => sum + score.totalPoints, 0);
     const xpProgress = user ? getXpProgressFromLevels(user.xp, levels) : null;
 
     return {
       ok: true as const,
       data: {
-        achievements,
-        missions,
-        recentXpEvents,
-        season: activeSeason,
-        seasonXp: Math.max(0, seasonXpAggregate._sum.amount ?? 0),
         stats: {
-          exactScores,
           guesses: guessCount,
-          points,
-          winnerHits
+          points: scoreAggregate._sum.totalPoints ?? 0
         },
-        streak,
         xpProgress,
         user
       }

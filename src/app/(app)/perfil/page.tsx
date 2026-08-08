@@ -1,6 +1,6 @@
-import { Download, Flame, KeyRound, Sparkles, Trash2, UserRound } from "lucide-react";
-import Link from "next/link";
 import type { Route } from "next";
+import Link from "next/link";
+import { Download, Shield, Trash2, Trophy, UserRound } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Avatar } from "@/components/ui/avatar";
@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { requireUser } from "@/server/auth/session";
 import { DeleteAccountForm } from "@/features/user/components/delete-account-form";
 import { PasswordForm } from "@/features/user/components/password-form";
 import { ProfileForm } from "@/features/user/components/profile-form";
@@ -16,23 +15,14 @@ import { UserAlert } from "@/features/user/components/user-alert";
 import { UserStatCard } from "@/features/user/components/user-stat-card";
 import { XpProgress } from "@/features/user/components/xp-progress";
 import { formatDate, getUserProfileData } from "@/features/user/data/user-data";
+import { requireUser } from "@/server/auth/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
   const sessionUser = await requireUser();
   const result = await getUserProfileData(sessionUser.id);
-  const {
-    achievements,
-    missions,
-    recentXpEvents,
-    season,
-    seasonXp,
-    stats,
-    streak,
-    user,
-    xpProgress
-  } = result.data;
+  const { stats, user, xpProgress } = result.data;
 
   return (
     <PageShell
@@ -42,22 +32,59 @@ export default async function ProfilePage() {
           href={"/perfil/exportar" as Route}
         >
           <Download aria-hidden className="h-4 w-4" />
-          Exportar dados
+          Exportar
         </Link>
       }
-      description="Gerencie seus dados pessoais, senha, preferencia visual e exportacao."
+      description="Atualize seus dados, foto e seguranca da conta."
       eyebrow="Area do usuario"
       title="Perfil"
     >
       <UserAlert message={result.ok ? undefined : result.message} />
-
       {user ? (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="space-y-5">
+        <div className="space-y-5">
+          <Card>
+            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+              <Avatar
+                className="h-16 w-16"
+                name={user.name}
+                src={user.avatarUrl}
+                userId={user.id}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xl font-bold text-app-foreground">{user.name}</p>
+                <p className="truncate text-sm text-app-muted">
+                  @{user.username} | {user.email}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Badge tone={user.status === "ACTIVE" ? "success" : "warning"}>
+                    {user.status}
+                  </Badge>
+                  <Badge tone="warning">{user.xp} XP</Badge>
+                  <Badge>Desde {formatDate(user.createdAt)}</Badge>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Link
+                  className={buttonVariants({ size: "sm", variant: "secondary" })}
+                  href="/conquistas"
+                >
+                  Conquistas
+                </Link>
+                <Link
+                  className={buttonVariants({ size: "sm", variant: "secondary" })}
+                  href="/xp-ranking"
+                >
+                  Ranking XP
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
             <Card>
               <CardHeader>
                 <CardTitle>Dados do perfil</CardTitle>
-                <CardDescription>Nome, username, foto, idioma e tema.</CardDescription>
+                <CardDescription>Nome, username, foto e preferencias.</CardDescription>
               </CardHeader>
               <CardContent>
                 <ProfileForm
@@ -76,10 +103,33 @@ export default async function ProfilePage() {
               </CardContent>
             </Card>
 
+            <aside className="space-y-5">
+              <XpProgress progress={xpProgress} xp={user.xp} />
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <UserStatCard
+                  description="Total registrado"
+                  icon={UserRound}
+                  label="Palpites"
+                  value={stats.guesses}
+                />
+                <UserStatCard
+                  description="Pontuacao acumulada"
+                  icon={Trophy}
+                  label="Pontos"
+                  value={stats.points}
+                />
+              </section>
+            </aside>
+          </div>
+
+          <section className="grid gap-5 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Alterar senha</CardTitle>
-                <CardDescription>Atualize sua senha mantendo os criterios minimos.</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield aria-hidden className="h-5 w-5 text-brand-gold" />
+                  Alterar senha
+                </CardTitle>
+                <CardDescription>Atualize sua senha de acesso.</CardDescription>
               </CardHeader>
               <CardContent>
                 <PasswordForm />
@@ -92,165 +142,13 @@ export default async function ProfilePage() {
                   <Trash2 aria-hidden className="h-5 w-5" />
                   Excluir conta
                 </CardTitle>
-                <CardDescription>
-                  A exclusao marca sua conta como removida e encerra a sessao atual.
-                </CardDescription>
+                <CardDescription>Esta acao encerra sua conta e a sessao atual.</CardDescription>
               </CardHeader>
               <CardContent>
                 <DeleteAccountForm />
               </CardContent>
             </Card>
-          </div>
-
-          <aside className="space-y-5">
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16" name={user.name} src={user.avatarUrl} />
-                  <div>
-                    <p className="text-xl font-bold text-app-foreground">{user.name}</p>
-                    <p className="text-sm text-app-muted">@{user.username}</p>
-                    <div className="mt-2 flex gap-2">
-                      <Badge tone="info">{user.role}</Badge>
-                      <Badge tone={user.status === "ACTIVE" ? "success" : "warning"}>
-                        {user.status}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-5 space-y-2 text-sm text-app-muted">
-                  <p>E-mail: {user.email}</p>
-                  <p>Conta criada: {formatDate(user.createdAt)}</p>
-                  <p>Ultimo login: {formatDate(user.lastLoginAt)}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <XpProgress progress={xpProgress} xp={user.xp} />
-
-            <section className="grid gap-4">
-              <UserStatCard
-                description="Total registrado"
-                icon={UserRound}
-                label="Palpites"
-                value={stats.guesses}
-              />
-              <UserStatCard
-                description={season ? season.name || String(season.year) : "Temporada ativa"}
-                icon={Sparkles}
-                label="XP da temporada"
-                value={seasonXp}
-              />
-              <UserStatCard
-                description="Dias consecutivos de participacao"
-                icon={Flame}
-                label="Sequencia"
-                value={streak?.currentCount ?? 0}
-              />
-              <UserStatCard
-                description="Pontuacao acumulada"
-                icon={KeyRound}
-                label="Pontos"
-                value={stats.points}
-              />
-            </section>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Historico de XP</CardTitle>
-                <CardDescription>Ultimas movimentacoes auditadas.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {recentXpEvents.length > 0 ? (
-                  recentXpEvents.map((event) => (
-                    <div
-                      className="rounded-control border border-app-border bg-app-background p-3"
-                      key={event.id}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-app-foreground">
-                            {event.type.replaceAll("_", " ")}
-                          </p>
-                          <p className="text-xs text-app-muted">
-                            {event.league?.name ?? "Conta"} | {formatDate(event.createdAt)}
-                          </p>
-                        </div>
-                        <Badge tone={event.amount >= 0 ? "success" : "warning"}>
-                          {event.amount > 0 ? "+" : ""}
-                          {event.amount} XP
-                        </Badge>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState
-                    description="Envie palpites para iniciar sua progressao."
-                    title="Nenhum XP registrado"
-                  />
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Missoes</CardTitle>
-                <CardDescription>Progresso das missoes ativas.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {missions.length > 0 ? (
-                  missions.map((missionProgress) => (
-                    <div
-                      className="rounded-control border border-app-border bg-app-background p-3"
-                      key={missionProgress.id}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-app-foreground">
-                            {missionProgress.mission.title}
-                          </p>
-                          <p className="text-xs text-app-muted">
-                            {missionProgress.progress}/{missionProgress.mission.target} |{" "}
-                            {missionProgress.mission.xpReward} XP bonus
-                          </p>
-                        </div>
-                        <Badge tone={missionProgress.completedAt ? "success" : "info"}>
-                          {missionProgress.completedAt ? "Concluida" : "Ativa"}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState
-                    description="Missoes aparecem quando voce comeca a participar."
-                    title="Nenhuma missao iniciada"
-                  />
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Conquistas</CardTitle>
-                <CardDescription>Ultimas badges desbloqueadas.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {achievements.length > 0 ? (
-                  achievements.map((achievement) => (
-                    <div key={achievement.id}>
-                      <p className="font-medium text-app-foreground">{achievement.badge.title}</p>
-                      <p className="text-xs text-app-muted">{achievement.badge.description}</p>
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState
-                    description="Conquistas desbloqueadas aparecerao no seu perfil."
-                    title="Nenhuma conquista"
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </aside>
+          </section>
         </div>
       ) : (
         <EmptyState
