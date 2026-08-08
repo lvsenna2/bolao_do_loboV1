@@ -250,7 +250,7 @@ export async function getRoundsPageData(
           startsAt: true,
           status: true
         },
-        take: 50,
+        take: 15,
         where
       }),
       prisma.championship.findMany({

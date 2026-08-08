@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { CalendarClock, ClipboardCheck, MapPin, Trophy } from "lucide-react";
+import { CalendarClock, ChevronDown, ClipboardCheck, MapPin, Trophy } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { FootballLogo } from "@/components/football/football-logo";
@@ -104,7 +104,7 @@ function MatchRow({
 export function RoundCard({ round }: RoundCardProps) {
   return (
     <Card>
-      <CardHeader className="border-b border-app-border">
+      <CardHeader className="p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -118,45 +118,35 @@ export function RoundCard({ round }: RoundCardProps) {
           </div>
           <RoundStatusBadge value={round.status} />
         </div>
+        <div className="flex flex-wrap gap-2 text-xs text-app-muted">
+          <span>{round.totalMatches} jogos</span>
+          <span>|</span>
+          <span>{round.submittedGuesses} palpites</span>
+          <span>|</span>
+          <span>{round.remainingMatches} restantes</span>
+          <span>|</span>
+          <span>{formatRoundDate(round.endsAt)}</span>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-5 p-5">
-        <div className="grid gap-3 text-sm sm:grid-cols-4">
-          <div className="rounded-control bg-app-background p-3">
-            <p className="text-xs text-app-muted">Jogos</p>
-            <p className="mt-1 text-xl font-bold text-app-foreground">{round.totalMatches}</p>
+      <CardContent className="border-t border-app-border p-0">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-app-foreground">
+            Ver partidas
+            <ChevronDown className="h-4 w-4 transition group-open:rotate-180" aria-hidden />
+          </summary>
+          <div className="space-y-3 border-t border-app-border p-4">
+            {round.matches.length > 0 ? (
+              round.matches.map((match) => (
+                <MatchRow key={match.id} match={match} roundStatus={round.status} />
+              ))
+            ) : (
+              <div className="flex items-center gap-2 rounded-control border border-dashed border-app-border bg-app-background p-4 text-sm text-app-muted">
+                <ClipboardCheck aria-hidden className="h-4 w-4 text-brand-gold" />
+                Nenhuma partida cadastrada nesta rodada.
+              </div>
+            )}
           </div>
-          <div className="rounded-control bg-app-background p-3">
-            <p className="text-xs text-app-muted">Restantes</p>
-            <p className="mt-1 text-xl font-bold text-app-foreground">{round.remainingMatches}</p>
-          </div>
-          <div className="rounded-control bg-app-background p-3">
-            <p className="text-xs text-app-muted">Meus palpites</p>
-            <p className="mt-1 text-xl font-bold text-app-foreground">{round.submittedGuesses}</p>
-          </div>
-          <div className="rounded-control bg-app-background p-3">
-            <p className="text-xs text-app-muted">Prazo</p>
-            <p className="mt-1 text-sm font-semibold text-app-foreground">
-              {formatRoundDate(round.endsAt)}
-            </p>
-          </div>
-        </div>
-
-        {round.description ? (
-          <p className="text-sm leading-6 text-app-muted">{round.description}</p>
-        ) : null}
-
-        <div className="space-y-3">
-          {round.matches.length > 0 ? (
-            round.matches.map((match) => (
-              <MatchRow key={match.id} match={match} roundStatus={round.status} />
-            ))
-          ) : (
-            <div className="flex items-center gap-2 rounded-control border border-dashed border-app-border bg-app-background p-4 text-sm text-app-muted">
-              <ClipboardCheck aria-hidden className="h-4 w-4 text-brand-gold" />
-              Nenhuma partida cadastrada nesta rodada.
-            </div>
-          )}
-        </div>
+        </details>
       </CardContent>
     </Card>
   );
