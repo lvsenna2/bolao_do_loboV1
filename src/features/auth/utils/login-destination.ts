@@ -1,7 +1,11 @@
 const adminRoles = new Set(["ADMIN", "SUPER_ADMIN"]);
 
-function isSafeRelativeUrl(value?: string | null) {
-  return Boolean(value && value.startsWith("/") && !value.startsWith("//"));
+function getSafeRelativeUrl(value?: string | null) {
+  if (value && value.startsWith("/") && !value.startsWith("//")) {
+    return value;
+  }
+
+  return undefined;
 }
 
 export function getPostLoginDestination(callbackUrl?: string, role?: string | null) {
@@ -9,11 +13,7 @@ export function getPostLoginDestination(callbackUrl?: string, role?: string | nu
     return "/admin";
   }
 
-  if (isSafeRelativeUrl(callbackUrl)) {
-    return callbackUrl;
-  }
-
-  return "/dashboard";
+  return getSafeRelativeUrl(callbackUrl) ?? "/dashboard";
 }
 
 export function getPostLoginDestinationFromAuthResult(
@@ -25,13 +25,5 @@ export function getPostLoginDestinationFromAuthResult(
     return "/admin";
   }
 
-  if (isSafeRelativeUrl(authResultUrl)) {
-    return authResultUrl;
-  }
-
-  if (isSafeRelativeUrl(callbackUrl)) {
-    return callbackUrl;
-  }
-
-  return "/dashboard";
+  return getSafeRelativeUrl(authResultUrl) ?? getSafeRelativeUrl(callbackUrl) ?? "/dashboard";
 }
