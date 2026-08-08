@@ -40,6 +40,7 @@ export default async function RoundsPage({ searchParams }: RoundsPageProps) {
   ]);
   const { championships, leagues, rounds, stats } = result.data;
   const availableLeagueItems = leaguesResult.data.availableLeagues.map((league) => ({
+    championshipApiId: league.championship.apiId,
     championshipCountry: league.championship.country,
     championshipLabel: getChampionshipLabel(league.championship),
     championshipLogo: league.championship.logo,

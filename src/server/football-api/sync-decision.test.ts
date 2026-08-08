@@ -160,7 +160,7 @@ describe("shouldSyncFixture", () => {
     expect(Object.values(decision).filter((value) => value === true)).toHaveLength(0);
   });
 
-  it("nao repete detalhes finais que ja foram persistidos", () => {
+  it("garante consolidacao final mesmo quando timestamps vieram do live", () => {
     const syncedAt = new Date("2026-07-16T14:00:00.000Z");
     const decision = shouldSyncFixture(
       {
@@ -177,15 +177,15 @@ describe("shouldSyncFixture", () => {
       now
     );
 
-    expect(decision.events).toBe(false);
+    expect(decision.events).toBe(true);
     expect(decision.history).toBe(false);
     expect(decision.lineups).toBe(false);
-    expect(decision.players).toBe(false);
-    expect(decision.statistics).toBe(false);
-    expect(decision.fixture).toBe(false);
+    expect(decision.players).toBe(true);
+    expect(decision.statistics).toBe(true);
+    expect(decision.fixture).toBe(true);
   });
 
-  it("faz apenas verificacao moderada para partida cancelada", () => {
+  it("encerra partida cancelada sem novas consultas periodicas", () => {
     const decision = shouldSyncFixture(
       {
         kickoff: new Date("2026-07-16T12:00:00.000Z"),

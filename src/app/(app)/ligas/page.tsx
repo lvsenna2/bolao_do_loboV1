@@ -4,6 +4,7 @@ import type { Route } from "next";
 import type { Prisma } from "@prisma/client";
 
 import { PageShell } from "@/components/layout/page-shell";
+import { FootballLogo } from "@/components/football/football-logo";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +40,7 @@ export default async function LeaguesPage() {
   const result = await getUserLeagues(sessionUser.id);
   const { availableLeagues, memberships, ownedLeagues } = result.data;
   const availableLeagueItems = availableLeagues.map((league) => ({
+    championshipApiId: league.championship.apiId,
     championshipCountry: league.championship.country,
     championshipLabel: getChampionshipLabel(league.championship),
     championshipLogo: league.championship.logo,
@@ -110,21 +112,14 @@ export default async function LeaguesPage() {
                 >
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
                     <div className="flex gap-3">
-                      <span
-                        aria-hidden
-                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-cover bg-center text-xs font-bold text-app-foreground"
-                        style={
-                          membership.league.championship.logo
-                            ? {
-                                backgroundImage: `url("${membership.league.championship.logo}")`
-                              }
-                            : undefined
-                        }
-                      >
-                        {membership.league.championship.logo
-                          ? null
-                          : membership.league.championship.name.slice(0, 2)}
-                      </span>
+                      <FootballLogo
+                        apiId={membership.league.championship.apiId}
+                        className="p-1"
+                        kind="championship"
+                        logo={membership.league.championship.logo}
+                        name={membership.league.championship.name}
+                        size={44}
+                      />
                       <div>
                         <h2 className="font-semibold text-app-foreground">
                           {membership.league.name}
@@ -225,17 +220,14 @@ export default async function LeaguesPage() {
                 key={league.id}
               >
                 <div className="flex gap-3">
-                  <span
-                    aria-hidden
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-cover bg-center text-xs font-bold text-app-foreground"
-                    style={
-                      league.championship.logo
-                        ? { backgroundImage: `url("${league.championship.logo}")` }
-                        : undefined
-                    }
-                  >
-                    {league.championship.logo ? null : league.championship.name.slice(0, 2)}
-                  </span>
+                  <FootballLogo
+                    apiId={league.championship.apiId}
+                    className="p-1"
+                    kind="championship"
+                    logo={league.championship.logo}
+                    name={league.championship.name}
+                    size={40}
+                  />
                   <div>
                     <h2 className="font-semibold text-app-foreground">{league.name}</h2>
                     <p className="mt-1 text-xs font-semibold text-brand-gold">

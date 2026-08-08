@@ -88,21 +88,20 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
 
   if (isFinished) {
     return {
-      events: eventsCovered && !state.eventsSyncedAt,
-      fixture: olderThan(state.lastSyncedAt, 6 * HOUR, now),
+      events: eventsCovered,
+      fixture: true,
       history: !state.historySyncedAt,
-      lineups:
-        lineupsCovered && !state.lineupsComplete && olderThan(state.lineupsSyncedAt, HOUR, now),
-      players: playersCovered && !state.playersSyncedAt,
+      lineups: lineupsCovered && !state.lineupsComplete,
+      players: playersCovered,
       reason: "Partida encerrada aguardando consolidacao final.",
-      statistics: statisticsCovered && !state.statisticsSyncedAt
+      statistics: statisticsCovered
     };
   }
 
   if (isCancelled) {
     return {
       events: false,
-      fixture: olderThan(state.lastSyncedAt, 6 * HOUR, now),
+      fixture: false,
       history: false,
       lineups: false,
       players: false,

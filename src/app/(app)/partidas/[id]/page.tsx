@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 import { CalendarClock, MapPin, Shield, Timer, UserRound, Users } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
+import { FootballLogo } from "@/components/football/football-logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RoundStatusBadge } from "@/features/rounds/components/round-status-badge";
 import { getMatchDetail } from "@/features/matches/data/match-detail-data";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
-import { getTeamLogoSrc } from "@/lib/team-logo";
 import { requireUser } from "@/server/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -50,18 +50,16 @@ function TeamLogo({
   logo: string | null;
   name: string;
 }) {
-  const src = getTeamLogoSrc({ apiId, logo });
-  return src ? (
-    <img
-      alt={`Escudo do ${name}`}
-      className="h-16 w-16 object-contain sm:h-20 sm:w-20"
-      referrerPolicy="no-referrer"
-      src={src}
+  return (
+    <FootballLogo
+      apiId={apiId}
+      className="p-2"
+      containerClassName="h-16 w-16 sm:h-20 sm:w-20"
+      kind="team"
+      logo={logo}
+      name={name}
+      size={80}
     />
-  ) : (
-    <span className="flex h-16 w-16 items-center justify-center rounded-full border border-app-border text-lg font-bold">
-      {name.slice(0, 3).toUpperCase()}
-    </span>
   );
 }
 

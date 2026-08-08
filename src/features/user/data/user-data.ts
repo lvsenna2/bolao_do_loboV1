@@ -88,54 +88,59 @@ export async function getUserHomeData(userId: string) {
   };
 
   try {
-    const [identity, memberships, notifications, achievementCount, unread] = await Promise.all([
-      loadUserDashboardIdentity(userId),
-      prisma.leagueMember.findMany({
-        select: {
-          leagueId: true
-        },
-        orderBy: {
-          joinedAt: "desc"
-        },
-        take: 4,
-        where: {
-          league: {
-            championship: {
-              deletedAt: null
-            },
-            deletedAt: null,
-            status: {
-              not: "ARCHIVED"
-            }
+    const identityPromise = loadUserDashboardIdentity(userId);
+    const membershipsPromise = prisma.leagueMember.findMany({
+      select: {
+        leagueId: true
+      },
+      orderBy: {
+        joinedAt: "desc"
+      },
+      take: 4,
+      where: {
+        league: {
+          championship: {
+            deletedAt: null
           },
-          status: "ACTIVE",
-          userId
-        }
-      }),
-      prisma.notification.findMany({
-        orderBy: {
-          createdAt: "desc"
+          deletedAt: null,
+          status: {
+            not: "ARCHIVED"
+          }
         },
-        select: {
-          body: true,
-          id: true,
-          message: true,
-          title: true
-        },
-        take: 5,
-        where: {
-          userId
-        }
-      }),
-      prisma.achievement.count({ where: { userId } }),
-      getUnreadNotificationCount(userId)
-    ]);
-
-    const { user, xpProgress } = identity;
+        status: "ACTIVE",
+        userId
+      }
+    });
+    const notificationsPromise = prisma.notification.findMany({
+      orderBy: {
+        createdAt: "desc"
+      },
+      select: {
+        body: true,
+        id: true,
+        message: true,
+        title: true
+      },
+      take: 5,
+      where: {
+        userId
+      }
+    });
+    const achievementCountPromise = prisma.achievement.count({ where: { userId } });
+    const unreadPromise = getUnreadNotificationCount(userId);
+    const memberships = await membershipsPromise;
     const activeLeagueIds = memberships.map((membership) => membership.leagueId);
     const primaryLeagueId = activeLeagueIds[0];
 
     if (activeLeagueIds.length === 0) {
+      const [identity, notifications, achievementCount, unread] = await Promise.all([
+        identityPromise,
+        notificationsPromise,
+        achievementCountPromise,
+        unreadPromise
+      ]);
+      const { user, xpProgress } = identity;
+
       return {
         ok: true as const,
         data: {
@@ -164,15 +169,7 @@ export async function getUserHomeData(userId: string) {
     }
 
     const now = serverNow();
-    const [
-      guessCount,
-      scoreGroups,
-      currentRound,
-      upcomingMatches,
-      recentGuesses,
-      leagueRanking,
-      myLeagueRanking
-    ] = await Promise.all([
+    const dashboardDetailsPromise = Promise.all([
       prisma.guess.count({
         where: {
           deletedAt: null,
@@ -413,6 +410,24 @@ export async function getUserHomeData(userId: string) {
         }
       })
     ]);
+    const [identity, notifications, achievementCount, unread, dashboardDetails] =
+      await Promise.all([
+        identityPromise,
+        notificationsPromise,
+        achievementCountPromise,
+        unreadPromise,
+        dashboardDetailsPromise
+      ]);
+    const { user, xpProgress } = identity;
+    const [
+      guessCount,
+      scoreGroups,
+      currentRound,
+      upcomingMatches,
+      recentGuesses,
+      leagueRanking,
+      myLeagueRanking
+    ] = dashboardDetails;
 
     const currentRoundView =
       currentRound?.league?.championshipId === currentRound?.season.championship.id
@@ -676,6 +691,7 @@ export async function getUserLeagues(userId: string) {
             include: {
               championship: {
                 select: {
+                  apiId: true,
                   country: true,
                   id: true,
                   logo: true,
@@ -752,6 +768,7 @@ export async function getUserLeagues(userId: string) {
         include: {
           championship: {
             select: {
+              apiId: true,
               country: true,
               id: true,
               logo: true,
@@ -793,6 +810,7 @@ export async function getUserLeagues(userId: string) {
         include: {
           championship: {
             select: {
+              apiId: true,
               country: true,
               id: true,
               logo: true,

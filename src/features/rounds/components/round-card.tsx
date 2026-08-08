@@ -1,11 +1,10 @@
-/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import type { Route } from "next";
 import { CalendarClock, ClipboardCheck, MapPin, Trophy } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { FootballLogo } from "@/components/football/football-logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getTeamLogoSrc } from "@/lib/team-logo";
 import { cn } from "@/lib/utils";
 import {
   formatRoundDate,
@@ -26,37 +25,17 @@ type TeamMarkProps = {
   shortName: string | null;
 };
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 function TeamMark({ apiId, logo, name, shortName }: TeamMarkProps) {
-  const logoSrc = getTeamLogoSrc({ apiId, logo });
-
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <span
-        aria-label={name}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground"
-        role="img"
-      >
-        {logoSrc ? (
-          <img
-            alt=""
-            className="h-7 w-7 object-contain"
-            referrerPolicy="no-referrer"
-            src={logoSrc}
-          />
-        ) : (
-          getInitials(shortName || name)
-        )}
-      </span>
+      <FootballLogo
+        apiId={apiId}
+        className="p-1"
+        kind="team"
+        logo={logo}
+        name={shortName || name}
+        size={36}
+      />
       <span className="truncate font-semibold text-app-foreground">{shortName || name}</span>
     </span>
   );

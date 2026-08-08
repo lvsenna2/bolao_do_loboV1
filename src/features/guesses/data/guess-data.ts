@@ -110,6 +110,7 @@ export async function getGuessLeagueAccessData(userId: string) {
         _count: { select: { members: true } },
         championship: {
           select: {
+            apiId: true,
             country: true,
             logo: true,
             name: true,

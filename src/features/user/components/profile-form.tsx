@@ -20,7 +20,7 @@ type ProfileFormProps = {
 
 const avatarAcceptedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxOriginalAvatarSize = 6 * 1024 * 1024;
-const avatarOutputSize = 512;
+const avatarOutputSize = 256;
 
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -73,7 +73,7 @@ async function createAvatarDataUrl(file: File) {
       avatarOutputSize
     );
 
-    return canvas.toDataURL("image/jpeg", 0.84);
+    return canvas.toDataURL("image/webp", 0.78);
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

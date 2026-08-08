@@ -179,6 +179,11 @@ textarea {
     0 10px 28px rgb(0 0 0 / 0.35);
 }
 
+.dashboard-deferred {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1200px;
+}
+
 .wolf-card-glow {
   position: relative;
   overflow: hidden;

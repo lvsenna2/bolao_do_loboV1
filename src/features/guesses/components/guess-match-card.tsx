@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import {
   CalendarClock,
   ChartNoAxesCombined,
@@ -17,6 +16,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { FootballLogo } from "@/components/football/football-logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatGuessDate, type GuessMatchView, type GuessView } from "../data/guess-data";
 import {
@@ -25,7 +25,6 @@ import {
   hasCompleteGuess,
   isStartingSoon
 } from "../guess-status";
-import { getTeamLogoSrc } from "@/lib/team-logo";
 import { cn } from "@/lib/utils";
 import { GuessForm, type GuessDraftState } from "./guess-form";
 
@@ -47,19 +46,7 @@ type TeamMarkProps = GuessMatchView["homeTeam"] & {
   align?: "left" | "right";
 };
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 function TeamMark({ align = "left", apiId, logo, name, shortName }: TeamMarkProps) {
-  const logoSrc = getTeamLogoSrc({ apiId, logo });
-
   return (
     <div
       className={cn(
@@ -67,26 +54,14 @@ function TeamMark({ align = "left", apiId, logo, name, shortName }: TeamMarkProp
         align === "right" ? "flex-row-reverse text-right" : ""
       )}
     >
-      <span
-        aria-label={name}
-        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated text-sm font-bold text-app-foreground"
-        role="img"
-      >
-        {logoSrc ? (
-          <img
-            alt=""
-            className="h-9 w-9 object-contain"
-            decoding="async"
-            height={36}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            src={logoSrc}
-            width={36}
-          />
-        ) : (
-          getInitials(shortName || name)
-        )}
-      </span>
+      <FootballLogo
+        apiId={apiId}
+        className="p-1.5"
+        kind="team"
+        logo={logo}
+        name={shortName || name}
+        size={48}
+      />
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-app-foreground">{name}</span>
         {shortName ? <span className="block text-xs text-app-muted">{shortName}</span> : null}

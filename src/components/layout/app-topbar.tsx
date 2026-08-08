@@ -1,4 +1,5 @@
 import type { Session } from "next-auth";
+import type { ReactNode } from "react";
 import { Bell, Search } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
@@ -13,14 +14,12 @@ import { ThemeToggle } from "./theme-toggle";
 
 type AppTopbarProps = {
   mode?: "user" | "admin";
-  unreadNotificationCount?: number;
+  notificationBadge?: ReactNode;
   user: Session["user"];
 };
 
-export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: AppTopbarProps) {
+export function AppTopbar({ mode = "user", notificationBadge, user }: AppTopbarProps) {
   const userMode = mode === "user";
-  const notificationBadgeLabel =
-    unreadNotificationCount > 99 ? "99+" : String(unreadNotificationCount);
 
   return (
     <header
@@ -73,11 +72,7 @@ export function AppTopbar({ mode = "user", unreadNotificationCount = 0, user }: 
             href={"/notificacoes" as Route}
           >
             <Bell aria-hidden className="h-4 w-4" />
-            {unreadNotificationCount > 0 ? (
-              <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold leading-5 text-slate-950">
-                {notificationBadgeLabel}
-              </span>
-            ) : null}
+            {notificationBadge}
           </Link>
           {userMode ? null : (
             <span className="hidden sm:inline-flex">

@@ -19,4 +19,19 @@ describe("Avatar", () => {
       "https://example.com/avatar.png"
     );
   });
+
+  it("keeps uploaded avatar bytes out of the rendered document", () => {
+    render(
+      <Avatar
+        name="Lucas Silva"
+        src="data:image/webp;base64,AAAA"
+        userId="4d0ebf43-c690-4de6-a8ad-1a4bbf412345"
+      />
+    );
+
+    const image = screen.getByRole("img", { name: "Lucas Silva" });
+
+    expect(image.getAttribute("src")).toContain("%2Fapi%2Favatar%2F4d0ebf43");
+    expect(image.getAttribute("src")).not.toContain("data%3Aimage");
+  });
 });

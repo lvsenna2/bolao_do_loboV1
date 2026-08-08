@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Route } from "next";
 
 import { PageShell } from "@/components/layout/page-shell";
+import { FootballLogo } from "@/components/football/football-logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   deleteLeagueAction,
@@ -127,17 +128,14 @@ export default async function AdminLeaguesPage({ searchParams }: LeaguesPageProp
                   </AdminTd>
                   <AdminTd>
                     <div className="flex items-center gap-3">
-                      <span
-                        aria-hidden
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-cover bg-center text-xs font-bold text-app-foreground"
-                        style={
-                          league.championship.logo
-                            ? { backgroundImage: `url("${league.championship.logo}")` }
-                            : undefined
-                        }
-                      >
-                        {league.championship.logo ? null : league.championship.name.slice(0, 2)}
-                      </span>
+                      <FootballLogo
+                        apiId={league.championship.apiId}
+                        className="p-1"
+                        kind="championship"
+                        logo={league.championship.logo}
+                        name={league.championship.name}
+                        size={36}
+                      />
                       <div>
                         <p className="font-semibold">{league.championship.name}</p>
                         <p className="text-xs text-app-muted">

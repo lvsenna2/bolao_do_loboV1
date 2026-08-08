@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import type { Route } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -17,12 +16,12 @@ import {
 } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
+import { FootballLogo } from "@/components/football/football-logo";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { getTeamLogoSrc } from "@/lib/team-logo";
 import { cn } from "@/lib/utils";
 import { getMatchStatusLabel, getRoundStatusLabel } from "@/features/rounds/data/round-data";
 import { UserAlert } from "@/features/user/components/user-alert";
@@ -38,16 +37,6 @@ import { DashboardProfileLoading, DashboardSectionsLoading } from "./loading";
 
 export const dynamic = "force-dynamic";
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 function TeamMark({
   apiId,
   logo,
@@ -59,28 +48,16 @@ function TeamMark({
   name: string;
   shortName: string | null;
 }) {
-  const logoSrc = getTeamLogoSrc({ apiId, logo });
-
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <span
-        aria-label={name}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground"
-        role="img"
-      >
-        {logoSrc ? (
-          <img
-            alt=""
-            className="h-7 w-7 object-contain"
-            decoding="async"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            src={logoSrc}
-          />
-        ) : (
-          getInitials(shortName || name)
-        )}
-      </span>
+      <FootballLogo
+        apiId={apiId}
+        className="p-1"
+        kind="team"
+        logo={logo}
+        name={shortName || name}
+        size={36}
+      />
       <span className="truncate text-sm font-semibold text-app-foreground">
         {shortName || name}
       </span>
@@ -104,7 +81,13 @@ async function DashboardProfileContent({ userId }: { userId: string }) {
     <Card className="mb-6">
       <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
-          <Avatar className="h-16 w-16" name={user.name} priority src={user.avatarUrl} />
+          <Avatar
+            className="h-16 w-16"
+            name={user.name}
+            priority
+            src={user.avatarUrl}
+            userId={user.id}
+          />
           <div>
             <p className="text-xl font-bold text-app-foreground">{user.name}</p>
             <p className="text-sm text-app-muted">@{user.username}</p>
@@ -206,7 +189,7 @@ async function DashboardDataContent({ userId }: { userId: string }) {
             />
           </section>
 
-          <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <section className="dashboard-deferred grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
             <div className="space-y-6">
               <Card>
                 <CardHeader>
@@ -423,7 +406,11 @@ async function DashboardDataContent({ userId }: { userId: string }) {
                     leagueRanking.slice(0, 10).map((ranking) => (
                       <div className="flex items-center justify-between gap-3" key={ranking.id}>
                         <div className="flex min-w-0 items-center gap-3">
-                          <Avatar name={ranking.user.name} src={ranking.user.avatarUrl} />
+                          <Avatar
+                            name={ranking.user.name}
+                            src={ranking.user.avatarUrl}
+                            userId={ranking.user.id}
+                          />
                           <div className="min-w-0">
                             <p className="truncate font-medium text-app-foreground">
                               {ranking.user.name}

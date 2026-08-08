@@ -35,6 +35,7 @@ import {
 import { syncApiFootballCompetitionIntoLeagues } from "./league-sync-service";
 import { getFootballApiUsageSnapshot } from "./request";
 import { shouldSyncFixture, type FixtureSyncDecision } from "./sync-decision";
+import { isApiFootballFinalStatus } from "./status";
 import {
   applyFootballFixture,
   syncFootballCompetition,
@@ -43,6 +44,7 @@ import {
 import type { ExternalFootballCoverage, ExternalFootballFixture } from "./types";
 
 const AUTOMATION_KEY = "api-football-automatic";
+const HISTORY_THROTTLE_KEY = "api-football-history-throttle";
 export const FOOTBALL_MANUAL_TRIGGER = "admin-manual";
 const LOCK_TTL_MS = 10 * 60_000;
 const NEXT_RUN_MS = 60_000;
@@ -111,20 +113,48 @@ function emptySummary(): AutomationSummary {
   };
 }
 
-export function shouldRunBackgroundHistory(
-  lastHistorySyncedAt: Date | null,
-  now = serverNow(),
-  intervalMs = BACKGROUND_HISTORY_INTERVAL_MS
-) {
-  return !lastHistorySyncedAt || now.getTime() - lastHistorySyncedAt.getTime() >= intervalMs;
+type HistoryThrottleStore = {
+  create(input: {
+    data: { key: string; lockedUntil: Date; ownerToken: string };
+  }): Promise<unknown>;
+  updateMany(input: {
+    data: { lockedUntil: Date; ownerToken: string };
+    where: { key: string; lockedUntil: { lte: Date } };
+  }): Promise<{ count: number }>;
+};
+
+function isUniqueConstraintError(error: unknown) {
+  return (
+    (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") ||
+    (typeof error === "object" && error !== null && "code" in error && error.code === "P2002")
+  );
 }
 
-function getLatestHistorySync(candidates: Candidate[]) {
-  return candidates.reduce<Date | null>((latest, candidate) => {
-    if (!candidate.historySyncedAt) return latest;
-    if (!latest || candidate.historySyncedAt > latest) return candidate.historySyncedAt;
-    return latest;
-  }, null);
+export async function claimBackgroundHistorySlot(
+  now = serverNow(),
+  store: HistoryThrottleStore = prisma.footballSyncLock as unknown as HistoryThrottleStore
+) {
+  const lockedUntil = new Date(now.getTime() + BACKGROUND_HISTORY_INTERVAL_MS);
+  const ownerToken = randomUUID();
+
+  try {
+    await store.create({
+      data: { key: HISTORY_THROTTLE_KEY, lockedUntil, ownerToken }
+    });
+    return true;
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+  }
+
+  const claimed = await store.updateMany({
+    data: { lockedUntil, ownerToken },
+    where: {
+      key: HISTORY_THROTTLE_KEY,
+      lockedUntil: { lte: now }
+    }
+  });
+
+  return claimed.count === 1;
 }
 
 function readRequestParam(value: Prisma.JsonValue | null, key: string) {
@@ -525,6 +555,63 @@ export function forceSelectedFixtureDetails(
   };
 }
 
+export function applyTerminalFixtureDecision(
+  decision: FixtureSyncDecision,
+  statusShort: string,
+  coverage: ExternalFootballCoverage | null,
+  lineupsComplete: boolean
+): FixtureSyncDecision {
+  if (statusShort === "CANC" || statusShort === "ABD") {
+    return {
+      events: false,
+      fixture: false,
+      history: false,
+      lineups: false,
+      players: false,
+      reason: "Partida cancelada ou abandonada.",
+      statistics: false
+    };
+  }
+
+  if (!isApiFootballFinalStatus(statusShort)) return decision;
+
+  return {
+    ...decision,
+    events: coverage?.events !== false,
+    fixture: true,
+    lineups: coverage?.lineups !== false && !lineupsComplete,
+    players: coverage?.statisticsPlayers !== false,
+    reason: "Partida encerrada aguardando consolidacao final.",
+    statistics: coverage?.statisticsFixtures !== false
+  };
+}
+
+type FinalSyncState = {
+  eventsSyncedAt: Date | null;
+  lineupsComplete: boolean;
+  lineupsSyncedAt: Date | null;
+  playersSyncedAt: Date | null;
+  statisticsSyncedAt: Date | null;
+};
+
+export function isFinalConsolidationReady(
+  stored: FinalSyncState,
+  coverage: ExternalFootballCoverage | null,
+  consolidationStartedAt: Date
+) {
+  const syncedSinceStart = (value: Date | null) =>
+    Boolean(value && value.getTime() >= consolidationStartedAt.getTime());
+
+  return (
+    (coverage?.events === false || syncedSinceStart(stored.eventsSyncedAt)) &&
+    (coverage?.statisticsFixtures === false || syncedSinceStart(stored.statisticsSyncedAt)) &&
+    (coverage?.statisticsPlayers === false || syncedSinceStart(stored.playersSyncedAt)) &&
+    (coverage?.lineups === false ||
+      stored.lineupsComplete ||
+      syncedSinceStart(stored.lineupsSyncedAt))
+  );
+}
+
 function decisionForCandidate(
   candidate: Candidate,
   remaining: number | null,
@@ -615,6 +702,9 @@ async function syncDetails(input: {
 }) {
   const { candidate, config, decision, fixture, matchIds, summary } = input;
   const coverage = parseCoverage(candidate.round.season.coverage);
+  const finalConsolidationStartedAt = isApiFootballFinalStatus(fixture.statusShort)
+    ? serverNow()
+    : null;
 
   if (fixture.venueId) {
     const venueExists = await prisma.footballVenue.findUnique({
@@ -709,12 +799,10 @@ async function syncDetails(input: {
     return;
   }
 
-  if (["FT", "AET", "PEN", "AWD", "WO"].includes(fixture.statusShort)) {
+  if (finalConsolidationStartedAt) {
     const stored = await prisma.match.findUnique({
       select: {
         eventsSyncedAt: true,
-        historySyncedAt: true,
-        kickoff: true,
         lineups: { select: { complete: true } },
         lineupsSyncedAt: true,
         playersSyncedAt: true,
@@ -722,22 +810,24 @@ async function syncDetails(input: {
       },
       where: { id: matchIds[0] }
     });
-    const lineupGraceExpired = stored
-      ? serverNow().getTime() - stored.kickoff.getTime() >= 8 * 60 * 60_000
-      : false;
-    const lineupsReady =
-      coverage?.lineups === false ||
-      (stored?.lineups.length === 2 && stored.lineups.every((lineup) => lineup.complete)) ||
-      (lineupGraceExpired && Boolean(stored?.lineupsSyncedAt));
-    const ready =
-      stored &&
-      lineupsReady &&
-      (coverage?.events === false || Boolean(stored.eventsSyncedAt)) &&
-      (coverage?.statisticsFixtures === false || Boolean(stored.statisticsSyncedAt)) &&
-      (coverage?.statisticsPlayers === false || Boolean(stored.playersSyncedAt)) &&
-      Boolean(stored.historySyncedAt);
 
-    if (ready) await markFixturesFullySynced(matchIds);
+    if (
+      stored &&
+      isFinalConsolidationReady(
+        {
+          eventsSyncedAt: stored.eventsSyncedAt,
+          lineupsComplete:
+            stored.lineups.length >= 2 && stored.lineups.every((lineup) => lineup.complete),
+          lineupsSyncedAt: stored.lineupsSyncedAt,
+          playersSyncedAt: stored.playersSyncedAt,
+          statisticsSyncedAt: stored.statisticsSyncedAt
+        },
+        coverage,
+        finalConsolidationStartedAt
+      )
+    ) {
+      await markFixturesFullySynced(matchIds);
+    }
   }
 }
 
@@ -876,6 +966,12 @@ export async function runFootballAutomation(
 
     const candidates = await loadCandidates(activeConfigs, candidateScanLimit, options.matchId);
     const now = serverNow();
+    const cancelledCandidateIds = candidates
+      .filter((candidate) => candidate.status === "CANCELLED" && !candidate.fullySyncedAt)
+      .map((candidate) => candidate.id);
+    if (cancelledCandidateIds.length > 0) {
+      await markFixturesFullySynced(cancelledCandidateIds);
+    }
     summary.trackedMatches = candidates.length;
     summary.liveMatches = candidates.filter((candidate) =>
       ["LIVE", "HALFTIME"].includes(candidate.status)
@@ -890,20 +986,26 @@ export async function runFootballAutomation(
       (candidate) => candidate.status === "FINISHED" && !candidate.fullySyncedAt
     ).length;
 
+    const rawDecisions = candidates.map((candidate) => [
+      candidate.apiId as number,
+      applyDetailMode(
+        decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId)),
+        options.detailMode
+      )
+    ] as const);
+    const historyRequested = rawDecisions.some(([, decision]) => decision.history);
+    const historyHasBudget =
+      (usage.dailyRemaining === null || usage.dailyRemaining > 35) &&
+      (options.historyBudget ?? 1) > 0 &&
+      (options.fixtureLimit ?? MAX_CANDIDATES) > 0;
     const automaticHistoryAllowed =
       !trigger.startsWith("vercel-") ||
       Boolean(options.matchId) ||
-      shouldRunBackgroundHistory(getLatestHistorySync(candidates), now);
+      (historyRequested && historyHasBudget && (await claimBackgroundHistorySlot(now)));
     const decisions = new Map(
-      candidates.map((candidate) => [
-        candidate.apiId as number,
-        (() => {
-          const decision = applyDetailMode(
-            decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId)),
-            options.detailMode
-          );
-          return automaticHistoryAllowed ? decision : { ...decision, history: false };
-        })()
+      rawDecisions.map(([apiId, decision]) => [
+        apiId,
+        automaticHistoryAllowed ? decision : { ...decision, history: false }
       ])
     );
     const fixtures = new Map<number, ExternalFootballFixture>();
@@ -1009,8 +1111,17 @@ export async function runFootballAutomation(
       try {
         const applied = await applyFootballFixture(config, fixture);
         if (applied.matchIds.length === 0) continue;
-        const decision = decisions.get(fixture.apiId);
-        if (!decision) continue;
+        const baseDecision = decisions.get(fixture.apiId);
+        if (!baseDecision) continue;
+        const decision = applyTerminalFixtureDecision(
+          baseDecision,
+          fixture.statusShort,
+          parseCoverage(candidate.round.season.coverage),
+          candidate.lineups.length >= 2 && candidate.lineups.every((lineup) => lineup.complete)
+        );
+        if (fixture.statusShort === "CANC" || fixture.statusShort === "ABD") {
+          await markFixturesFullySynced(applied.matchIds);
+        }
         if (decisionNeedsDetails(decision) && detailedFixtures < detailLimit) {
           const historyAllowed = decision.history && historyBudget > 0;
           if (historyAllowed) historyBudget -= 1;
@@ -1028,7 +1139,7 @@ export async function runFootballAutomation(
         }
         summary.fixturesUpdated += applied.matchIds.length;
         summary.candidatesProcessed += 1;
-        if (["FT", "AET", "PEN", "AWD", "WO"].includes(fixture.statusShort)) {
+        if (isApiFootballFinalStatus(fixture.statusShort)) {
           standingsConfigs.set(config.key, config);
         }
       } catch (error) {

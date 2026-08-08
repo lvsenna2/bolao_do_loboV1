@@ -31,6 +31,7 @@ export default async function GuessesPage() {
   ]);
   const hasActiveLeague = leagueAccess.activeMembershipCount > 0;
   const availableLeagueItems = leagueAccess.availableLeagues.map((league) => ({
+    championshipApiId: league.championship.apiId,
     championshipCountry: league.championship.country,
     championshipLabel: getChampionshipLabel(league.championship),
     championshipLogo: league.championship.logo,

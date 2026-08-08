@@ -766,6 +766,7 @@ export async function getAdminLeagues(searchParams: SearchParams) {
         include: {
           championship: {
             select: {
+              apiId: true,
               country: true,
               id: true,
               logo: true,

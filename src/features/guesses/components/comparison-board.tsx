@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import {
   ChevronDown,
   CircleCheck,
@@ -15,11 +14,11 @@ import {
 import { useMemo, useState } from "react";
 
 import { Avatar } from "@/components/ui/avatar";
+import { FootballLogo } from "@/components/football/football-logo";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
-import { getTeamLogoSrc } from "@/lib/team-logo";
 import { cn } from "@/lib/utils";
 import type {
   ComparisonGuessView,
@@ -74,37 +73,17 @@ function matchesFilter(match: GuessComparisonMatchView, filter: ComparisonFilter
   return match.status === "FINISHED" || match.status === "CANCELLED";
 }
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 function TeamMark({ apiId, logo, name, shortName }: GuessComparisonMatchView["homeTeam"]) {
-  const logoSrc = getTeamLogoSrc({ apiId, logo });
-
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      <span
-        aria-label={name}
-        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated text-xs font-semibold text-app-foreground"
-        role="img"
-      >
-        {logoSrc ? (
-          <img
-            alt=""
-            className="h-8 w-8 object-contain"
-            referrerPolicy="no-referrer"
-            src={logoSrc}
-          />
-        ) : (
-          getInitials(shortName || name)
-        )}
-      </span>
+      <FootballLogo
+        apiId={apiId}
+        className="p-1"
+        kind="team"
+        logo={logo}
+        name={shortName || name}
+        size={40}
+      />
       <span className="truncate text-sm font-semibold text-app-foreground">
         {shortName || name}
       </span>

@@ -1,10 +1,12 @@
 import { CreditCard, Globe2, LockKeyhole, Users } from "lucide-react";
 
+import { FootballLogo } from "@/components/football/football-logo";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { JoinAvailableLeagueButton } from "./join-available-league-button";
 
 export type AvailableLeagueListItem = {
+  championshipApiId: number | null;
   championshipCountry: string;
   championshipLabel: string;
   championshipLogo: string | null;
@@ -47,17 +49,14 @@ export function AvailableLeagueList({
             <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    aria-hidden
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-cover bg-center text-[10px] font-bold text-app-foreground"
-                    style={
-                      league.championshipLogo
-                        ? { backgroundImage: `url("${league.championshipLogo}")` }
-                        : undefined
-                    }
-                  >
-                    {league.championshipLogo ? null : league.championshipLabel.slice(0, 2)}
-                  </span>
+                  <FootballLogo
+                    apiId={league.championshipApiId}
+                    className="p-1"
+                    kind="championship"
+                    logo={league.championshipLogo}
+                    name={league.championshipLabel}
+                    size={32}
+                  />
                   <h3 className="font-semibold text-app-foreground">{league.name}</h3>
                   <Badge tone={league.visibility === "PUBLIC" ? "success" : "warning"}>
                     {league.visibility === "PUBLIC" ? "PUBLICA" : "PRIVADA"}

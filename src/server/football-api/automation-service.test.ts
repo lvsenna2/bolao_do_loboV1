@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   applyDetailMode,
+  applyTerminalFixtureDecision,
+  claimBackgroundHistorySlot,
   forceSelectedFixtureDetails,
   getFixtureSyncPriority,
-  shouldRunBackgroundHistory
+  isFinalConsolidationReady
 } from "./automation-service";
 
 const emptyDecision = {
@@ -47,12 +49,98 @@ describe("football automation detail mode", () => {
 describe("football automation history throttle", () => {
   const now = new Date("2026-08-08T18:00:00.000Z");
 
-  it("does not repeat background history inside the thirty-minute window", () => {
-    expect(shouldRunBackgroundHistory(new Date("2026-08-08T17:45:00.000Z"), now)).toBe(false);
+  it("persists the thirty-minute window and atomically rejects concurrent batches", async () => {
+    let lockedUntil: Date | null = null;
+    const store = {
+      create: vi.fn(async ({ data }: { data: { lockedUntil: Date } }) => {
+        if (lockedUntil) throw { code: "P2002" };
+        lockedUntil = data.lockedUntil;
+      }),
+      updateMany: vi.fn(
+        async ({ data, where }: { data: { lockedUntil: Date }; where: { lockedUntil: { lte: Date } } }) => {
+          if (!lockedUntil || lockedUntil > where.lockedUntil.lte) return { count: 0 };
+          lockedUntil = data.lockedUntil;
+          return { count: 1 };
+        }
+      )
+    };
+
+    expect(await claimBackgroundHistorySlot(now, store)).toBe(true);
+    expect(
+      await claimBackgroundHistorySlot(new Date("2026-08-08T18:29:59.999Z"), store)
+    ).toBe(false);
+
+    const nextWindow = new Date("2026-08-08T18:30:00.000Z");
+    const concurrent = await Promise.all([
+      claimBackgroundHistorySlot(nextWindow, store),
+      claimBackgroundHistorySlot(nextWindow, store)
+    ]);
+    expect(concurrent.filter(Boolean)).toHaveLength(1);
+  });
+});
+
+describe("football automation terminal consolidation", () => {
+  const coverage = {
+    events: true,
+    lineups: true,
+    players: true,
+    standings: true,
+    statisticsFixtures: true,
+    statisticsPlayers: true
+  };
+
+  it("forces one final detail pass after a live fixture becomes FT", () => {
+    const decision = applyTerminalFixtureDecision(emptyDecision, "FT", coverage, false);
+
+    expect(decision.events).toBe(true);
+    expect(decision.fixture).toBe(true);
+    expect(decision.lineups).toBe(true);
+    expect(decision.players).toBe(true);
+    expect(decision.statistics).toBe(true);
   });
 
-  it("releases one background history batch after thirty minutes", () => {
-    expect(shouldRunBackgroundHistory(new Date("2026-08-08T17:30:00.000Z"), now)).toBe(true);
+  it("accepts only detail timestamps written during the final pass", () => {
+    const startedAt = new Date("2026-08-08T18:00:00.000Z");
+    const liveTimestamp = new Date("2026-08-08T17:59:59.000Z");
+    const finalTimestamp = new Date("2026-08-08T18:00:01.000Z");
+
+    expect(
+      isFinalConsolidationReady(
+        {
+          eventsSyncedAt: liveTimestamp,
+          lineupsComplete: false,
+          lineupsSyncedAt: liveTimestamp,
+          playersSyncedAt: liveTimestamp,
+          statisticsSyncedAt: liveTimestamp
+        },
+        coverage,
+        startedAt
+      )
+    ).toBe(false);
+    expect(
+      isFinalConsolidationReady(
+        {
+          eventsSyncedAt: finalTimestamp,
+          lineupsComplete: false,
+          lineupsSyncedAt: finalTimestamp,
+          playersSyncedAt: finalTimestamp,
+          statisticsSyncedAt: finalTimestamp
+        },
+        coverage,
+        startedAt
+      )
+    ).toBe(true);
+  });
+
+  it.each(["CANC", "ABD"])("does not request unavailable details for %s", (status) => {
+    const decision = applyTerminalFixtureDecision(
+      { ...emptyDecision, events: true, lineups: true, players: true, statistics: true },
+      status,
+      coverage,
+      false
+    );
+
+    expect(Object.values(decision).filter((value) => value === true)).toHaveLength(0);
   });
 });
 

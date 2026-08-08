@@ -1,7 +1,7 @@
-/* eslint-disable @next/next/no-img-element */
 import { Database, PlugZap, UploadCloud } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
+import { FootballLogo } from "@/components/football/football-logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   bulkImportTeamsAction,
@@ -24,7 +24,6 @@ import {
 import { getAdminTeams } from "@/features/admin/data/admin-data";
 import { teamPresetOptions } from "@/features/admin/data/team-presets";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
-import { getTeamLogoSrc } from "@/lib/team-logo";
 
 export const dynamic = "force-dynamic";
 
@@ -46,16 +45,6 @@ const textareaClass =
 
 function formatDate(date: Date) {
   return formatDateTimeInSaoPaulo(date);
-}
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
 }
 
 export default async function AdminTeamsPage({ searchParams }: AdminTeamsPageProps) {
@@ -227,24 +216,18 @@ export default async function AdminTeamsPage({ searchParams }: AdminTeamsPagePro
             </AdminTableHead>
             <AdminTableBody>
               {teams.map((team) => {
-                const logoSrc = getTeamLogoSrc(team);
-
                 return (
                   <tr key={team.id}>
                     <AdminTd>
                       <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-elevated bg-contain bg-center bg-no-repeat text-xs font-bold text-app-foreground">
-                          {logoSrc ? (
-                            <img
-                              alt=""
-                              className="h-8 w-8 object-contain"
-                              referrerPolicy="no-referrer"
-                              src={logoSrc}
-                            />
-                          ) : (
-                            getInitials(team.name)
-                          )}
-                        </span>
+                        <FootballLogo
+                          apiId={team.apiId}
+                          className="p-1"
+                          kind="team"
+                          logo={team.logo}
+                          name={team.name}
+                          size={40}
+                        />
                         <div>
                           <p className="font-semibold">{team.name}</p>
                           <p className="text-xs text-app-muted">{team.shortName || "Sem sigla"}</p>

@@ -6,36 +6,35 @@ import {
 
 export const runtime = "nodejs";
 
-type TeamLogoRouteContext = {
+type ChampionshipLogoRouteContext = {
   params: Promise<{
     apiId: string;
   }>;
 };
 
-export async function GET(_request: Request, context: TeamLogoRouteContext) {
+export async function GET(_request: Request, context: ChampionshipLogoRouteContext) {
   const { apiId: rawApiId } = await context.params;
   const apiId = Number(rawApiId);
 
   if (!Number.isInteger(apiId) || apiId <= 0) {
-    return footballLogoFallback("Time", 400);
+    return footballLogoFallback("Liga", 400);
   }
 
-  const team = await prisma.team.findUnique({
+  const championship = await prisma.championship.findFirst({
     select: {
       logo: true,
-      name: true,
-      shortName: true
+      name: true
     },
     where: {
-      apiId
+      apiId,
+      deletedAt: null
     }
   });
-  const fallbackLabel = team?.shortName || team?.name || `Time ${apiId}`;
 
   return createFootballLogoResponse({
     apiId,
-    fallbackLabel,
-    kind: "teams",
-    storedLogo: team?.logo
+    fallbackLabel: championship?.name || `Liga ${apiId}`,
+    kind: "leagues",
+    storedLogo: championship?.logo
   });
 }
