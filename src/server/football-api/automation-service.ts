@@ -47,7 +47,7 @@ const AUTOMATION_KEY = "api-football-automatic";
 const HISTORY_THROTTLE_KEY = "api-football-history-throttle";
 export const FOOTBALL_MANUAL_TRIGGER = "admin-manual";
 const LOCK_TTL_MS = 10 * 60_000;
-const NEXT_RUN_MS = 60_000;
+const NEXT_RUN_MS = 30_000;
 const MAX_CANDIDATES = 100;
 const MINUTE_MS = 60_000;
 const BACKGROUND_HISTORY_INTERVAL_MS = 30 * MINUTE_MS;
@@ -1038,9 +1038,7 @@ export async function runFootballAutomation(
     const fixtures = new Map<number, ExternalFootballFixture>();
     const fixtureLimit = Math.max(0, Math.min(options.fixtureLimit ?? MAX_CANDIDATES, 20));
     const liveCandidates = candidates.filter(
-      (candidate) =>
-        ["LIVE", "HALFTIME"].includes(candidate.status) &&
-        decisions.get(candidate.apiId as number)?.fixture
+      (candidate) => ["LIVE", "HALFTIME"].includes(candidate.status) && decisions.get(candidate.apiId as number)?.fixture
     );
 
     if (fixtureLimit > 0 && liveCandidates.length > 0) {
@@ -1061,12 +1059,13 @@ export async function runFootballAutomation(
     const dueCandidates = candidates
       .filter((candidate) => {
         const decision = decisions.get(candidate.apiId as number);
+        const isLive = ["LIVE", "HALFTIME"].includes(candidate.status);
         const missedLive =
-          ["LIVE", "HALFTIME"].includes(candidate.status) &&
+          isLive &&
           !fixtures.has(candidate.apiId as number) &&
           (!candidate.liveSyncedAt ||
-            now.getTime() - candidate.liveSyncedAt.getTime() >= 5 * 60_000);
-        return missedLive || shouldQueueFixtureForAutomation(candidate, decision, now);
+            now.getTime() - candidate.liveSyncedAt.getTime() >= 30_000);
+        return missedLive || (isLive && Boolean(decision?.fixture)) || shouldQueueFixtureForAutomation(candidate, decision, now);
       })
       .sort((left, right) => {
         const leftDecision = decisions.get(left.apiId as number);

@@ -69,7 +69,7 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
   }
 
   if (isLive) {
-    const liveIntervalMs = state.liveIntervalMs ?? MINUTE;
+    const liveIntervalMs = state.liveIntervalMs ?? 30_000;
     return {
       events: eventsCovered && olderThan(state.eventsSyncedAt, liveIntervalMs, now),
       fixture: olderThan(state.liveSyncedAt, liveIntervalMs, now),
