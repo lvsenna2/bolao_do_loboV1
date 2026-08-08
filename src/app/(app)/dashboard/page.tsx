@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LiveMatchesCard } from "@/features/matches/components/live-matches-card";
+import { getLiveMatches } from "@/features/matches/data/live-matches-data";
 import { getMatchStatusLabel, getRoundStatusLabel } from "@/features/rounds/data/round-data";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { UserStatCard } from "@/features/user/components/user-stat-card";
@@ -84,6 +86,14 @@ async function DashboardProfileContent({ userId }: { userId: string }) {
       </CardContent>
     </Card>
   );
+}
+
+async function DashboardLiveContent() {
+  const matches = await getLiveMatches();
+
+  if (matches.length === 0) return null;
+
+  return <LiveMatchesCard matches={matches} />;
 }
 
 async function DashboardDataContent({ userId }: { userId: string }) {
@@ -259,6 +269,9 @@ export default async function UserHomePage() {
     >
       <Suspense fallback={<DashboardProfileLoading />}>
         <DashboardProfileContent userId={sessionUser.id} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <DashboardLiveContent />
       </Suspense>
       <Suspense fallback={<DashboardSectionsLoading />}>
         <DashboardDataContent userId={sessionUser.id} />
