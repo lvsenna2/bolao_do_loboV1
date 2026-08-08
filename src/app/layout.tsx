@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 
+import { Analytics } from "@vercel/analytics/next";
 import { ThemeScript } from "@/components/layout/theme-script";
 import { WhatsappContactButton } from "@/components/layout/whatsapp-contact-button";
 import { Providers } from "./providers";
@@ -35,6 +36,7 @@ export default function RootLayout({
       <body className={geist.variable}>
         <Providers>{children}</Providers>
         <WhatsappContactButton />
+        <Analytics />
       </body>
     </html>
   );
