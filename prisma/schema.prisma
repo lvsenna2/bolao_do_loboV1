@@ -285,6 +285,7 @@ model User {
   electionEntries         ElectionEntry[]
   electionResultsEntered  ElectionResult[]         @relation("ElectionResultAdmin")
   electionAudits          ElectionAuditLog[]       @relation("ElectionAuditActor")
+  webAuthnCredentials     WebAuthnCredential[]
 
   @@index([email])
   @@index([phone])
@@ -292,6 +293,37 @@ model User {
   @@index([role])
   @@index([status])
   @@map("users")
+}
+
+model WebAuthnCredential {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  credentialId   String    @unique @map("credential_id") @db.VarChar(400)
+  publicKey      Bytes     @map("public_key")
+  counter        BigInt    @default(0)
+  transports     String[]  @default([])
+  deviceType     String    @default("singleDevice") @map("device_type") @db.VarChar(20)
+  backedUp       Boolean   @default(false) @map("backed_up")
+  label          String    @default("Passkey") @db.VarChar(80)
+  lastUsedAt     DateTime? @map("last_used_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("webauthn_credentials")
+}
+
+model WebAuthnChallenge {
+  id        String   @id @default(uuid()) @db.Uuid
+  challenge String   @db.VarChar(200)
+  type      String   @db.VarChar(20)
+  userId    String?  @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("webauthn_challenges")
 }
 
 model Account {

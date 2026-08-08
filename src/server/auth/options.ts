@@ -6,6 +6,7 @@ import { loginSchema } from "@/features/auth/schemas/auth-schemas";
 import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 import { verifyPassword } from "./password";
+import { verifyPasskeyLogin } from "./webauthn";
 
 type AuthenticatedUser = {
   id: string;
@@ -31,13 +32,42 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   session: {
     strategy: "jwt",
-    maxAge: 60 * 60 * 24 * 7
+    maxAge: 60 * 60 * 24 * 30
   },
   pages: {
     signIn: "/login"
   },
   providers: [
     CredentialsProvider({
+      id: "passkey",
+      name: "Biometria (passkey)",
+      credentials: {
+        challengeId: {
+          label: "Challenge",
+          type: "text"
+        },
+        assertion: {
+          label: "Assertion",
+          type: "text"
+        }
+      },
+      async authorize(credentials): Promise<AuthenticatedUser | null> {
+        if (!credentials?.challengeId || !credentials.assertion) {
+          return null;
+        }
+
+        try {
+          return await verifyPasskeyLogin(
+            credentials.challengeId,
+            JSON.parse(credentials.assertion)
+          );
+        } catch {
+          return null;
+        }
+      }
+    }),
+    CredentialsProvider({
+      id: "credentials",
       name: "E-mail e senha",
       credentials: {
         email: {

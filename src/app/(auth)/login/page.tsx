@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AuthCard } from "@/features/auth/components/auth-card";
 import { LoginForm } from "@/features/auth/components/login-form";
+import { PasskeyLoginButton } from "@/features/auth/components/passkey-login-button";
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -43,6 +44,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         callbackUrl={getSafeCallbackUrl(params.callbackUrl)}
         registered={params.registered === "1"}
       />
+      <PasskeyLoginButton callbackUrl={getSafeCallbackUrl(params.callbackUrl)} />
     </AuthCard>
   );
 }

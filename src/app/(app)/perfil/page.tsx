@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { Download, Shield, Trash2 } from "lucide-react";
+import { Download, Fingerprint, Shield, Trash2 } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Avatar } from "@/components/ui/avatar";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PasskeyManager } from "@/features/auth/components/passkey-manager";
 import { DeleteAccountForm } from "@/features/user/components/delete-account-form";
 import { PasswordForm } from "@/features/user/components/password-form";
 import { ProfileForm } from "@/features/user/components/profile-form";
@@ -15,6 +16,7 @@ import { UserAlert } from "@/features/user/components/user-alert";
 import { XpProgress } from "@/features/user/components/xp-progress";
 import { formatDate, getUserProfileData } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
+import { prisma } from "@/server/db";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,11 @@ export default async function ProfilePage() {
   const sessionUser = await requireUser();
   const result = await getUserProfileData(sessionUser.id);
   const { stats, user, xpProgress } = result.data;
+  const passkeys = await prisma.webAuthnCredential.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true, id: true, label: true, lastUsedAt: true },
+    where: { userId: sessionUser.id }
+  });
 
   return (
     <PageShell
@@ -120,6 +127,28 @@ export default async function ProfilePage() {
               </CardHeader>
               <CardContent>
                 <PasswordForm />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Fingerprint aria-hidden className="h-5 w-5 text-brand-gold" />
+                  Login por biometria
+                </CardTitle>
+                <CardDescription>
+                  Entre com Face ID, digital ou Windows Hello, sem digitar a senha.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PasskeyManager
+                  passkeys={passkeys.map((passkey) => ({
+                    createdAt: passkey.createdAt.toISOString(),
+                    id: passkey.id,
+                    label: passkey.label,
+                    lastUsedAt: passkey.lastUsedAt?.toISOString() ?? null
+                  }))}
+                />
               </CardContent>
             </Card>
 
