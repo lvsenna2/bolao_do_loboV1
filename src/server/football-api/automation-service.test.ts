@@ -260,4 +260,27 @@ describe("football automation priority", () => {
 
     expect(specialRound).toBeLessThan(finished);
   });
+
+  it("prioritizes fixtures in the next 24 hours over finished backlog", () => {
+    const gameDay = getFixtureSyncPriority(
+      {
+        decision: { ...emptyDecision, fixture: true },
+        hasActiveSpecialRound: false,
+        kickoff: new Date("2026-08-09T14:00:00.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+    const finished = getFixtureSyncPriority(
+      {
+        decision: { ...emptyDecision, statistics: true },
+        hasActiveSpecialRound: false,
+        kickoff: new Date("2026-08-07T18:00:00.000Z"),
+        status: "FINISHED"
+      },
+      now
+    );
+
+    expect(gameDay).toBeLessThan(finished);
+  });
 });

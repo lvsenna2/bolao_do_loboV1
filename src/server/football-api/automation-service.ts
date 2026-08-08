@@ -495,6 +495,7 @@ export function getFixtureSyncPriority(
   if (input.decision.lineups) return 2;
   if (untilKickoff <= 60 * MINUTE_MS && untilKickoff >= -2 * 60 * MINUTE_MS) return 3;
   if (input.hasActiveSpecialRound) return 4;
+  if (untilKickoff <= 24 * 60 * MINUTE_MS && untilKickoff > 0) return 5;
   if (input.decision.history && untilKickoff > 0) return 5;
   if (input.status === "FINISHED") return 6;
   return 7;
