@@ -17,11 +17,19 @@ const RP_NAME = "Bolao do Lobo";
 export type PasskeyChallengeType = "authentication" | "registration";
 
 export type RelyingParty = {
-  origin: string;
+  origins: string[];
   rpId: string;
 };
 
-export function resolveRelyingParty(baseUrl = process.env.NEXTAUTH_URL): RelyingParty {
+/**
+ * O rpId usa sempre o dominio sem "www." para que a mesma passkey valha no apex e no
+ * subdominio www. As origens aceitas incluem as duas variantes, porque o navegador envia
+ * exatamente a origem que o usuario acessou e ela precisa bater na verificacao.
+ */
+export function resolveRelyingParty(
+  baseUrl = process.env.NEXTAUTH_URL,
+  extraOrigins = process.env.WEBAUTHN_EXTRA_ORIGINS
+): RelyingParty {
   const fallback = "http://localhost:3000";
   let url: URL;
 
@@ -31,9 +39,17 @@ export function resolveRelyingParty(baseUrl = process.env.NEXTAUTH_URL): Relying
     url = new URL(fallback);
   }
 
+  const rpId = url.hostname.replace(/^www\./, "");
+  const apexOrigin = `${url.protocol}//${rpId}${url.port ? `:${url.port}` : ""}`;
+  const wwwOrigin = `${url.protocol}//www.${rpId}${url.port ? `:${url.port}` : ""}`;
+  const additional = (extraOrigins ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
   return {
-    origin: url.origin,
-    rpId: url.hostname
+    origins: Array.from(new Set([url.origin, apexOrigin, wwwOrigin, ...additional])),
+    rpId
   };
 }
 
@@ -132,10 +148,10 @@ export async function savePasskeyRegistration(input: {
     return { message: "Sessao de cadastro expirada. Tente novamente.", ok: false as const };
   }
 
-  const { origin, rpId } = resolveRelyingParty();
+  const { origins, rpId } = resolveRelyingParty();
   const verification = await verifyRegistrationResponse({
     expectedChallenge: stored.challenge,
-    expectedOrigin: origin,
+    expectedOrigin: origins,
     expectedRPID: rpId,
     requireUserVerification: false,
     response: input.response
@@ -221,7 +237,7 @@ export async function verifyPasskeyLogin(challengeId: string, response: Authenti
 
   if (!credential || credential.user.deletedAt) return null;
 
-  const { origin, rpId } = resolveRelyingParty();
+  const { origins, rpId } = resolveRelyingParty();
 
   let verification;
   try {
@@ -233,7 +249,7 @@ export async function verifyPasskeyLogin(challengeId: string, response: Authenti
         transports: credential.transports as never
       },
       expectedChallenge: stored.challenge,
-      expectedOrigin: origin,
+      expectedOrigin: origins,
       expectedRPID: rpId,
       requireUserVerification: false,
       response

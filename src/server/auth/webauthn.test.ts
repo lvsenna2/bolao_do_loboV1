@@ -3,29 +3,43 @@ import { describe, expect, it } from "vitest";
 import { isChallengeUsable, normalizeTransports, resolveRelyingParty } from "./webauthn";
 
 describe("passkey relying party", () => {
-  it("deriva rpId e origin da URL de producao", () => {
-    expect(resolveRelyingParty("https://bolaodolobo.com.br")).toEqual({
-      origin: "https://bolaodolobo.com.br",
-      rpId: "bolaodolobo.com.br"
-    });
+  it("aceita apex e www quando a URL configurada e o apex", () => {
+    // NEXTAUTH_URL sem www, usuarios acessando com www: as duas origens precisam valer.
+    const { origins, rpId } = resolveRelyingParty("https://simuladorcopa2026.com.br", "");
+
+    expect(rpId).toBe("simuladorcopa2026.com.br");
+    expect(origins).toContain("https://simuladorcopa2026.com.br");
+    expect(origins).toContain("https://www.simuladorcopa2026.com.br");
   });
 
-  it("mantem localhost para desenvolvimento", () => {
-    expect(resolveRelyingParty("http://localhost:3000")).toEqual({
-      origin: "http://localhost:3000",
-      rpId: "localhost"
-    });
+  it("normaliza o rpId quando a URL configurada tem www", () => {
+    const { origins, rpId } = resolveRelyingParty("https://www.simuladorcopa2026.com.br", "");
+
+    expect(rpId).toBe("simuladorcopa2026.com.br");
+    expect(origins).toContain("https://www.simuladorcopa2026.com.br");
+    expect(origins).toContain("https://simuladorcopa2026.com.br");
+  });
+
+  it("inclui origens extras configuradas por ambiente", () => {
+    const { origins } = resolveRelyingParty(
+      "https://simuladorcopa2026.com.br",
+      "https://bolaodolobo.vercel.app, https://preview.exemplo.app"
+    );
+
+    expect(origins).toContain("https://bolaodolobo.vercel.app");
+    expect(origins).toContain("https://preview.exemplo.app");
+  });
+
+  it("mantem localhost com porta para desenvolvimento", () => {
+    const { origins, rpId } = resolveRelyingParty("http://localhost:3000", "");
+
+    expect(rpId).toBe("localhost");
+    expect(origins).toContain("http://localhost:3000");
   });
 
   it("usa fallback seguro quando a URL e invalida ou ausente", () => {
-    expect(resolveRelyingParty("nao-e-url")).toEqual({
-      origin: "http://localhost:3000",
-      rpId: "localhost"
-    });
-    expect(resolveRelyingParty(undefined)).toEqual({
-      origin: "http://localhost:3000",
-      rpId: "localhost"
-    });
+    expect(resolveRelyingParty("nao-e-url", "").rpId).toBe("localhost");
+    expect(resolveRelyingParty(undefined, "").origins).toContain("http://localhost:3000");
   });
 });
 
