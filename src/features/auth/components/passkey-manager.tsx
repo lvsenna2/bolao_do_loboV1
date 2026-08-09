@@ -11,6 +11,11 @@ import {
   removePasskeyAction,
   startPasskeyRegistrationAction
 } from "../actions/passkey-actions";
+import {
+  describePasskeyError,
+  isCancelledPasskeyError,
+  isHostAllowedForRpId
+} from "../utils/passkey-errors";
 import { ActionAlert } from "./action-alert";
 
 export type PasskeySummary = {
@@ -59,6 +64,16 @@ export function PasskeyManager({ passkeys }: PasskeyManagerProps) {
         return;
       }
 
+      const options = started.data.options as { rp?: { id?: string } };
+      const rpId = options.rp?.id;
+
+      if (rpId && !isHostAllowedForRpId(window.location.hostname, rpId)) {
+        setError(
+          `Abra o site em ${rpId} para cadastrar a biometria. Neste endereco o aparelho bloqueia o cadastro.`
+        );
+        return;
+      }
+
       const response = await startRegistration({
         optionsJSON: started.data.options as never
       });
@@ -78,14 +93,11 @@ export function PasskeyManager({ passkeys }: PasskeyManagerProps) {
       );
       router.refresh();
     } catch (cause) {
-      if (cause instanceof Error && cause.name === "InvalidStateError") {
-        setError("Este aparelho ja esta cadastrado para a sua conta.");
-        return;
+      console.error("[passkey] Falha no cadastro", cause);
+      const described = describePasskeyError(cause, "registration", window.location.hostname);
+      if (!isCancelledPasskeyError(described)) {
+        setError(described);
       }
-      if (cause instanceof Error && cause.name === "NotAllowedError") {
-        return;
-      }
-      setError("Nao foi possivel cadastrar a biometria agora. Tente novamente.");
     } finally {
       setIsRegistering(false);
     }

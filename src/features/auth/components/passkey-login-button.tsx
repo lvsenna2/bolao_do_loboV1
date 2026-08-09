@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { LoadingButton } from "@/components/ui/loading-button";
 import { getPostLoginDestinationFromAuthResult } from "../utils/login-destination";
+import { describePasskeyError, isCancelledPasskeyError } from "../utils/passkey-errors";
 import { ActionAlert } from "./action-alert";
 
 type PasskeyLoginButtonProps = {
@@ -59,11 +60,9 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
       );
       window.location.assign(destination);
     } catch (cause) {
-      if (cause instanceof Error && cause.name === "NotAllowedError") {
-        setError(undefined);
-        return;
-      }
-      setError("Nao foi possivel entrar com biometria agora. Use e-mail e senha.");
+      console.error("[passkey] Falha no login", cause);
+      const described = describePasskeyError(cause, "login", window.location.hostname);
+      setError(isCancelledPasskeyError(described) ? undefined : described);
     } finally {
       setIsAuthenticating(false);
     }

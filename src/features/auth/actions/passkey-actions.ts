@@ -33,7 +33,10 @@ export async function startPasskeyRegistrationAction(): Promise<
       message: "Confirme a biometria no seu aparelho.",
       ok: true
     };
-  } catch {
+  } catch (error) {
+    console.error("[passkey] Falha ao gerar opcoes de cadastro", {
+      error: error instanceof Error ? error.message : "Erro desconhecido"
+    });
     return { message: "Nao foi possivel iniciar o cadastro da biometria.", ok: false };
   }
 }
@@ -71,7 +74,10 @@ export async function finishPasskeyRegistrationAction(input: {
     }
 
     return result;
-  } catch {
+  } catch (error) {
+    console.error("[passkey] Falha ao salvar credencial", {
+      error: error instanceof Error ? error.message : "Erro desconhecido"
+    });
     return { message: "Nao foi possivel salvar a biometria deste aparelho.", ok: false };
   }
 }
