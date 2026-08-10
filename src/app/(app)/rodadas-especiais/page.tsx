@@ -21,7 +21,8 @@ export default async function SpecialRoundsPage() {
     canCreateSpecialRound(user.id)
   ]);
   const active = rounds.filter((round) => !["FINALIZED", "CANCELLED"].includes(round.status));
-  const visibleSince = new Date(serverNow().getTime() - 60 * 60_000);
+  // Rodadas encerradas continuam na aba por 48h para que o campeao fique visivel a todos.
+  const visibleSince = new Date(serverNow().getTime() - 48 * 60 * 60_000);
   const closed = rounds.filter((round) => {
     if (!["FINALIZED", "CANCELLED"].includes(round.status)) return false;
     const closedAt = round.finalizedAt ?? round.cancelledAt ?? round.updatedAt;
@@ -80,6 +81,7 @@ export default async function SpecialRoundsPage() {
                 awayTeamApiId={round.match?.awayTeam.apiId}
                 awayTeamLogo={round.awayTeamLogo}
                 awayTeamName={round.awayTeamName}
+                champion={round.champion}
                 entryFee={Number(round.entryFee)}
                 estimatedPrize={round.estimatedPrize}
                 homeTeamApiId={round.match?.homeTeam.apiId}
@@ -109,6 +111,7 @@ export default async function SpecialRoundsPage() {
                 awayTeamApiId={round.match?.awayTeam.apiId}
                 awayTeamLogo={round.awayTeamLogo}
                 awayTeamName={round.awayTeamName}
+                champion={round.champion}
                 entryFee={Number(round.entryFee)}
                 estimatedPrize={round.estimatedPrize}
                 homeTeamApiId={round.match?.homeTeam.apiId}

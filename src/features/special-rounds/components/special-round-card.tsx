@@ -8,10 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { SpecialRoundStatusBadge } from "./status-badge";
 
+export type SpecialRoundChampion = {
+  hits: number;
+  name: string;
+  prize: number | null;
+  totalPoints: number;
+};
+
 type Props = {
   awayTeamApiId?: number | null;
   awayTeamLogo: string | null;
   awayTeamName: string;
+  champion?: SpecialRoundChampion | null;
   entryFee: number;
   estimatedPrize: number;
   homeTeamApiId?: number | null;
@@ -55,6 +63,23 @@ export function SpecialRoundCard(props: Props) {
           <Swords aria-hidden className="h-6 w-6 shrink-0 text-brand-gold" />
           <Team apiId={props.awayTeamApiId} logo={props.awayTeamLogo} name={props.awayTeamName} />
         </div>
+        {props.champion ? (
+          <div className="mt-5 rounded-control border border-brand-gold/45 bg-brand-gold/10 p-3">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-gold">
+              <span aria-hidden>🏆</span> Campeao da rodada
+            </p>
+            <p className="mt-1 truncate text-base font-semibold">{props.champion.name}</p>
+            <p className="text-xs text-app-muted">
+              {props.champion.totalPoints} pts | {props.champion.hits} acertos
+              {props.champion.prize
+                ? ` | ${props.champion.prize.toLocaleString("pt-BR", {
+                    currency: "BRL",
+                    style: "currency"
+                  })}`
+                : ""}
+            </p>
+          </div>
+        ) : null}
         <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
           <div className="flex items-start gap-2">
             <CalendarClock className="h-4 w-4 text-brand-gold" />

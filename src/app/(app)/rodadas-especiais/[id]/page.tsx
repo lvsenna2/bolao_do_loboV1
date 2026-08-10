@@ -45,6 +45,7 @@ export default async function SpecialRoundDetailPage({
     ])
   );
   const paidParticipants = round._count.entries;
+  const champion = round.standings.find((standing) => standing.position === 1) ?? null;
   const pendingPayment: SpecialRoundPaymentView | null =
     entry?.paymentStatus === "PENDING" && entry.qrCode && entry.qrCodeBase64 && entry.transactionId
       ? {
@@ -134,6 +135,23 @@ export default async function SpecialRoundDetailPage({
                 <CardTitle>Classificacao</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
+                {champion ? (
+                  <div className="mb-4 rounded-control border border-brand-gold/45 bg-brand-gold/10 p-4">
+                    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-gold">
+                      <span aria-hidden>🏆</span> Campeao da rodada
+                    </p>
+                    <p className="mt-1 text-lg font-semibold">{champion.entry.user.name}</p>
+                    <p className="text-sm text-app-muted">
+                      {champion.totalPoints} pontos | {champion.hits} acertos
+                      {champion.entry.prize
+                        ? ` | ${Number(champion.entry.prize.amount).toLocaleString("pt-BR", {
+                            currency: "BRL",
+                            style: "currency"
+                          })}`
+                        : ""}
+                    </p>
+                  </div>
+                ) : null}
                 {round.standings.length ? (
                   round.standings.map((standing) => (
                     <div

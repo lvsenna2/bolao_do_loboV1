@@ -18,6 +18,20 @@ export async function getSpecialRoundsForUser(userId: string) {
           awayTeam: { select: { apiId: true, logo: true } },
           homeTeam: { select: { apiId: true, logo: true } }
         }
+      },
+      standings: {
+        select: {
+          entry: {
+            select: {
+              prize: { select: { amount: true } },
+              user: { select: { avatarUrl: true, name: true, username: true } }
+            }
+          },
+          hits: true,
+          totalPoints: true
+        },
+        take: 1,
+        where: { position: 1 }
       }
     },
     orderBy: [{ matchStartsAt: "asc" }]
@@ -61,9 +75,23 @@ export async function getSpecialRoundsForUser(userId: string) {
       poolPercent: Number(round.prizePoolPercent)
     });
 
+    const leader = round.standings[0];
+    const championIsPublic = round.status === "FINALIZED" || Boolean(round.rankingPublishedAt);
+
     return {
       ...round,
       awayTeamLogo: round.match?.awayTeam.logo ?? round.awayTeamLogo,
+      champion:
+        championIsPublic && leader
+          ? {
+              avatarUrl: leader.entry.user.avatarUrl,
+              hits: leader.hits,
+              name: leader.entry.user.name,
+              prize: leader.entry.prize ? Number(leader.entry.prize.amount) : null,
+              totalPoints: leader.totalPoints,
+              username: leader.entry.user.username
+            }
+          : null,
       estimatedPrize: finance.prize,
       homeTeamLogo: round.match?.homeTeam.logo ?? round.homeTeamLogo,
       userEntry: round.entries[0] ?? null

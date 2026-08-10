@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { settleFinishedSpecialRounds } from "@/features/special-rounds/services/settlement-service";
 import { isValidCronRequest } from "@/server/cron/auth";
 import { runFootballAutomation } from "@/server/football-api/automation-service";
 
@@ -28,10 +29,19 @@ async function runCron(request: Request) {
     liveDetailLimit: 2,
     pregameDetailLimit: 2
   });
+  // Com a partida ja atualizada nesta execucao, apura e publica quem venceu cada
+  // Rodada Especial encerrada. Falhas aqui nao invalidam a sincronizacao.
+  const settlement = await settleFinishedSpecialRounds().catch((error: unknown) => {
+    console.error("[football-cron] Falha na apuracao automatica de rodadas especiais", { error });
+    return null;
+  });
   const durationMs = Date.now() - startedAt;
 
   console.info("[football-cron] Execucao concluida", {
     durationMs,
+    specialRoundsFinalized: settlement?.finalized ?? 0,
+    specialRoundsPending: settlement?.pending.length ?? 0,
+    specialRoundsScanned: settlement?.scanned ?? 0,
     locked: result.locked ?? false,
     ok: result.ok,
     ...("summary" in result
@@ -56,7 +66,7 @@ async function runCron(request: Request) {
   });
 
   return NextResponse.json(
-    { ...result, durationMs },
+    { ...result, durationMs, specialRounds: settlement },
     {
       headers: { "Cache-Control": "no-store" },
       status: result.ok ? 200 : 500
