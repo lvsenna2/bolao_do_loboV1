@@ -22,6 +22,7 @@ export default async function SpecialRoundHistoryPage() {
               awayTeamApiId={round.match?.awayTeam.apiId}
               awayTeamLogo={round.awayTeamLogo}
               awayTeamName={round.awayTeamName}
+              champion={round.champion}
               entryFee={Number(round.entryFee)}
               estimatedPrize={round.estimatedPrize}
               homeTeamApiId={round.match?.homeTeam.apiId}

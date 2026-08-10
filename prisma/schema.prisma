@@ -1350,13 +1350,13 @@ model SpecialRoundPrediction {
 model SpecialRoundResult {
   id          String   @id @default(uuid()) @db.Uuid
   marketId    String   @unique @map("market_id") @db.Uuid
-  enteredById String   @map("entered_by_id") @db.Uuid
+  enteredById String?  @map("entered_by_id") @db.Uuid
   answer      Json
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   market    SpecialRoundMarket @relation(fields: [marketId], references: [id], onDelete: Restrict)
-  enteredBy User               @relation("SpecialRoundResultAdmin", fields: [enteredById], references: [id], onDelete: Restrict)
+  enteredBy User?              @relation("SpecialRoundResultAdmin", fields: [enteredById], references: [id], onDelete: Restrict)
 
   @@index([enteredById])
   @@map("special_round_results")
