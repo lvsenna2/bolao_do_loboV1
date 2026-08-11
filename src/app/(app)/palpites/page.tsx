@@ -47,11 +47,7 @@ export default async function GuessesPage() {
   }));
 
   return (
-    <PageShell
-      description="Acompanhe o que falta, revise os palpites salvos e escolha o Coringa de cada rodada."
-      eyebrow="Area do usuario"
-      title="Palpites"
-    >
+    <PageShell className="py-3 sm:py-4" title="Palpites">
       <UserAlert message={!result.ok ? result.message : undefined} />
 
       {result.data.rounds.length > 0 ? (

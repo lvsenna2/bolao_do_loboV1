@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { GuessMatchView, GuessView } from "./data/guess-data";
 import {
+  formatGuessDeadline,
+  formatGuessKickoff,
   formatGuessTimeRemaining,
   getGuessCardState,
   matchesGuessFilter
@@ -97,12 +99,13 @@ describe("guess status", () => {
         now
       )
     ).toBe(true);
+    expect(matchesGuessFilter({ ...baseMatch, canEdit: false }, "FINISHED", now)).toBe(true);
   });
 
   it("formata o prazo sem mudar a regra de bloqueio", () => {
     expect(formatGuessTimeRemaining(baseMatch.kickoff, now)).toBe("45min restantes");
-    expect(formatGuessTimeRemaining("2026-07-16T14:59:00.000Z", now)).toBe(
-      "Prazo encerrado"
-    );
+    expect(formatGuessTimeRemaining("2026-07-16T14:59:00.000Z", now)).toBe("Prazo encerrado");
+    expect(formatGuessDeadline(baseMatch.kickoff, now)).toBe("fecha em 45min");
+    expect(formatGuessKickoff(baseMatch.kickoff, now)).toBe("Hoje · 12:45");
   });
 });
