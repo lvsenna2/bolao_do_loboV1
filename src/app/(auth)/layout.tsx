@@ -23,10 +23,10 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
               Acesso seguro
             </p>
             <h1 className="text-5xl font-black uppercase leading-none text-app-foreground">
-              Bolao do Lobo
+              Bolão do Lobo
             </h1>
             <p className="max-w-lg text-base leading-7 text-app-muted">
-              Monte seu palpite. Mostre que e lobo.
+              Monte seu palpite. Mostre que é lobo.
             </p>
           </div>
           <WolfAuthScene className="max-w-2xl" />

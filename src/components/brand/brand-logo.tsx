@@ -14,13 +14,13 @@ function BrandMark({ compact }: Pick<BrandLogoProps, "compact">) {
   return (
     <span
       className={cn(
-        "brand-logo-mark relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-brand-gold/70 bg-black shadow-sm",
+        "brand-logo-mark relative inline-flex shrink-0 items-center justify-center",
         compact ? "h-9 w-9" : "h-11 w-11"
       )}
     >
       <Image
-        alt={compact ? "Bolao do Lobo" : ""}
-        className="h-full w-full object-cover"
+        alt={compact ? "Bolão do Lobo" : ""}
+        className="h-full w-full object-contain"
         height={44}
         sizes={compact ? "36px" : "44px"}
         src="/brand/bolao-do-lobo-ui.webp"
@@ -36,7 +36,7 @@ function BrandContent({ compact }: Pick<BrandLogoProps, "compact">) {
       <BrandMark compact={compact} />
       {!compact ? (
         <span className="leading-tight">
-          <span className="block text-sm font-semibold text-app-foreground">Bolao do Lobo</span>
+          <span className="block text-sm font-semibold text-app-foreground">Bolão do Lobo</span>
           <span className="block text-xs font-medium text-app-muted">Palpites esportivos</span>
         </span>
       ) : null}

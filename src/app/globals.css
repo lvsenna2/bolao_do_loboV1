@@ -174,9 +174,28 @@ textarea {
 }
 
 .brand-logo-mark {
-  box-shadow:
-    0 0 0 1px rgb(242 185 28 / 0.12),
-    0 10px 28px rgb(0 0 0 / 0.35);
+  filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.5));
+}
+
+.home-logo-stage {
+  position: relative;
+  isolation: isolate;
+}
+
+.home-logo-stage::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 78%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: rgb(242 185 28 / 0.12);
+  filter: blur(64px);
+}
+
+.home-logo-float {
+  filter: drop-shadow(0 28px 36px rgb(0 0 0 / 0.62));
+  animation: home-logo-float 7s ease-in-out infinite;
 }
 
 .dashboard-deferred {
@@ -438,6 +457,17 @@ textarea {
   }
 }
 
+@keyframes home-logo-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
 @keyframes wolf-pulse {
   0%,
   100% {
@@ -493,6 +523,7 @@ textarea {
   .auth-official-logo img,
   .auth-wolf-copy h1,
   .auth-wolf-moon,
+  .home-logo-float,
   .wolf-card-glow::after,
   .wolf-moon,
   .wolf-paw,
@@ -509,6 +540,7 @@ textarea {
   .auth-official-logo img,
   .auth-wolf-copy h1,
   .auth-wolf-moon,
+  .home-logo-float,
   .wolf-card-glow::after,
   .wolf-moon,
   .wolf-paw {

@@ -1,5 +1,5 @@
 export const appConfig = {
-  name: "Bolao do Lobo",
-  description: "Plataforma SaaS para gerenciamento de boloes esportivos online.",
+  name: "Bolão do Lobo",
+  description: "Plataforma SaaS para gerenciamento de bolões esportivos online.",
   defaultLocale: "pt-BR"
 } as const;

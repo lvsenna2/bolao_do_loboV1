@@ -20,8 +20,8 @@ export function WolfAuthScene({ className }: WolfAuthSceneProps) {
       <div className="auth-wolf-stadium" />
       <div className="auth-official-logo absolute inset-0 z-10 flex items-center justify-center p-7 sm:p-10">
         <Image
-          alt="Bolao do Lobo"
-          className="h-auto w-full max-w-[280px] rounded-full object-contain"
+          alt="Bolão do Lobo"
+          className="h-auto w-full max-w-[280px] object-contain"
           height={360}
           priority
           sizes="280px"
