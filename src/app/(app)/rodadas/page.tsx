@@ -10,6 +10,7 @@ import { requireUser } from "@/server/auth/session";
 import { getRoundsPageData } from "@/features/rounds/data/round-data";
 import { RoundCard } from "@/features/rounds/components/round-card";
 import { RoundFilterForm } from "@/features/rounds/components/round-filter-form";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,11 @@ type RoundsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const getCachedRoundsPageData = withShortCache("rounds-page-data", getRoundsPageData);
+
 export default async function RoundsPage({ searchParams }: RoundsPageProps) {
-  const params = await searchParams;
-  const user = await requireUser();
-  const result = await getRoundsPageData(user.id, params);
+  const [params, user] = await Promise.all([searchParams, requireUser()]);
+  const result = await getCachedRoundsPageData(user.id, params);
   const { championships, leagues, rounds, stats } = result.data;
 
   return (

@@ -50,7 +50,7 @@ function Team({ apiId, logo, name }: { apiId?: number | null; logo: string | nul
 
 export function SpecialRoundCard(props: Props) {
   return (
-    <Card className="flex h-full min-w-0 flex-col overflow-hidden border-brand-gold/25">
+    <Card className="performance-card flex h-full min-w-0 flex-col overflow-hidden border-brand-gold/25">
       <CardHeader className="border-b border-app-border bg-black/10">
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="break-words">{props.name}</CardTitle>

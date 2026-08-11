@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { identifyTwoLegMatches } from "@/features/matches/two-leg";
 import { cn } from "@/lib/utils";
 import type { GuessMatchView, GuessRoundView, GuessView } from "../data/guess-data";
 import {
@@ -155,6 +156,7 @@ export function GuessesBoard({ initialRounds }: GuessesBoardProps) {
     [rounds, selectedRoundId]
   );
   const matches = useMemo(() => selectedRound?.matches ?? [], [selectedRound]);
+  const legRoles = useMemo(() => identifyTwoLegMatches(matches), [matches]);
   const pendingMatches = matches.filter((match) => getGuessCardState(match) === "PENDING");
   const submittedCount = matches.filter(hasCompleteGuess).length;
   const blockedCount = matches.filter((match) => !match.canEdit).length;
@@ -270,6 +272,7 @@ export function GuessesBoard({ initialRounds }: GuessesBoardProps) {
           highlighted={highlightedMatchId === match.id}
           jokerLocked={jokerLocked}
           key={match.id}
+          legRole={legRoles.get(match.id)}
           match={match}
           nowMs={nowMs}
           onAdvanceRequested={handleAdvanceRequested}

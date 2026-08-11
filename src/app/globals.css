@@ -184,6 +184,11 @@ textarea {
   contain-intrinsic-size: auto 1200px;
 }
 
+.performance-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}
+
 .wolf-card-glow {
   position: relative;
   overflow: hidden;
@@ -478,10 +483,35 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .auth-card-enter,
+  .auth-card-mark,
+  .auth-official-logo img,
+  .auth-wolf-copy h1,
+  .auth-wolf-moon,
+  .wolf-card-glow::after,
+  .wolf-moon,
+  .wolf-paw,
   .xp-progress-fill::after,
   .xp-medal-breathe,
   .xp-toast {
     animation: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .auth-card-enter,
+  .auth-card-mark,
+  .auth-official-logo img,
+  .auth-wolf-copy h1,
+  .auth-wolf-moon,
+  .wolf-card-glow::after,
+  .wolf-moon,
+  .wolf-paw {
+    animation: none;
+  }
+
+  .wolf-paw {
+    filter: none;
   }
 }
 

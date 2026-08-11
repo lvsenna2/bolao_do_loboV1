@@ -95,9 +95,11 @@ export function XpNotificationToast() {
       }
     }
 
-    void checkLatestXpNotification();
-
-    const interval = window.setInterval(checkLatestXpNotification, 30_000);
+    let interval: number | undefined;
+    const initialCheck = window.setTimeout(() => {
+      void checkLatestXpNotification();
+      interval = window.setInterval(checkLatestXpNotification, 30_000);
+    }, 1_500);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void checkLatestXpNotification();
@@ -108,7 +110,8 @@ export function XpNotificationToast() {
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      window.clearTimeout(initialCheck);
+      if (interval !== undefined) window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);

@@ -16,8 +16,11 @@ import { PixPaymentCard } from "@/features/payments/components/pix-payment-card"
 import { UserAlert } from "@/features/user/components/user-alert";
 import { formatCurrency, formatDate, getUserLeagues } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
+
+const getCachedUserLeagues = withShortCache("user-leagues-page-data", getUserLeagues);
 
 function toNumber(value: Prisma.Decimal | number | null | undefined) {
   return typeof value === "number" ? value : (value?.toNumber() ?? 0);
@@ -37,7 +40,7 @@ function getChampionshipLabel(championship: {
 
 export default async function LeaguesPage() {
   const sessionUser = await requireUser();
-  const result = await getUserLeagues(sessionUser.id);
+  const result = await getCachedUserLeagues(sessionUser.id);
   const { availableLeagues, memberships, ownedLeagues } = result.data;
   const availableLeagueItems = availableLeagues.map((league) => ({
     championshipApiId: league.championship.apiId,

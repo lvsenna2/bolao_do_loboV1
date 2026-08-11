@@ -28,6 +28,7 @@ import {
 } from "@/features/admin/components/admin-table";
 import { getAdminRounds } from "@/features/admin/data/admin-data";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ type FormAction = (formData: FormData) => Promise<void>;
 type AdminRoundsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+const getCachedAdminRounds = withShortCache("admin-rounds-page-data", getAdminRounds);
 
 const createRoundFormAction = createRoundAction as unknown as FormAction;
 const createMatchFormAction = createMatchAction as unknown as FormAction;
@@ -89,7 +92,7 @@ function getTeamLabel(team: { country: string; name: string; shortName: string |
 
 export default async function AdminRoundsPage({ searchParams }: AdminRoundsPageProps) {
   const params = await searchParams;
-  const result = await getAdminRounds(params);
+  const result = await getCachedAdminRounds(params);
   const { items, leagues, roundOptions, seasons, teams } = result.data;
   const championshipOptions = Array.from(
     new Map(seasons.map((season) => [season.championship.id, season.championship.name])).entries()

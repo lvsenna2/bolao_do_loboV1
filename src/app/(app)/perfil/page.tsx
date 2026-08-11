@@ -16,13 +16,16 @@ import { UserAlert } from "@/features/user/components/user-alert";
 import { XpProgress } from "@/features/user/components/xp-progress";
 import { formatDate, getUserProfileData } from "@/features/user/data/user-data";
 import { requireUser } from "@/server/auth/session";
+import { withShortCache } from "@/server/cache/short-cache";
 import { prisma } from "@/server/db";
 
 export const dynamic = "force-dynamic";
 
+const getCachedUserProfileData = withShortCache("user-profile-page-data", getUserProfileData);
+
 export default async function ProfilePage() {
   const sessionUser = await requireUser();
-  const result = await getUserProfileData(sessionUser.id);
+  const result = await getCachedUserProfileData(sessionUser.id);
   const { stats, user, xpProgress } = result.data;
   const passkeys = await prisma.webAuthnCredential.findMany({
     orderBy: { createdAt: "desc" },
