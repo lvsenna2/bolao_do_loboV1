@@ -16,11 +16,17 @@ import {
 } from "@/features/admin/components/admin-table";
 import { getAdminDashboardData } from "@/features/admin/data/admin-data";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
 
+const getCachedAdminDashboardData = withShortCache(
+  "admin-dashboard-page-data",
+  getAdminDashboardData
+);
+
 export default async function AdminDashboardPage() {
-  const result = await getAdminDashboardData();
+  const result = await getCachedAdminDashboardData();
   const data = result.data;
 
   return (

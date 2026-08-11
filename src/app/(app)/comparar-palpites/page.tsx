@@ -8,6 +8,7 @@ import { ComparisonBoard } from "@/features/guesses/components/comparison-board"
 import { getGuessComparisonData } from "@/features/guesses/data/comparison-data";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { requireUser } from "@/server/auth/session";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,14 @@ type CompareGuessesPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const getCachedGuessComparisonData = withShortCache(
+  "guess-comparison-page-data",
+  getGuessComparisonData
+);
+
 export default async function CompareGuessesPage({ searchParams }: CompareGuessesPageProps) {
-  const params = await searchParams;
-  const user = await requireUser();
-  const result = await getGuessComparisonData(user.id, params);
+  const [params, user] = await Promise.all([searchParams, requireUser()]);
+  const result = await getCachedGuessComparisonData(user.id, params);
   const { leagues, rounds, selectedLeagueId } = result.data;
 
   return (

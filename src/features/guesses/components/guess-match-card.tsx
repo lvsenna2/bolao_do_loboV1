@@ -18,6 +18,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { FootballLogo } from "@/components/football/football-logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { MatchLegRole } from "@/features/matches/two-leg";
 import { formatGuessDate, type GuessMatchView, type GuessView } from "../data/guess-data";
 import {
   formatGuessTimeRemaining,
@@ -32,6 +33,7 @@ type GuessMatchCardProps = {
   draftState?: GuessDraftState;
   highlighted: boolean;
   jokerLocked: boolean;
+  legRole?: MatchLegRole;
   match: GuessMatchView;
   nowMs: number;
   onAdvanceRequested: (matchId: string) => void;
@@ -132,6 +134,7 @@ export function GuessMatchCard({
   draftState,
   highlighted,
   jokerLocked,
+  legRole,
   match,
   nowMs,
   onAdvanceRequested,
@@ -141,14 +144,14 @@ export function GuessMatchCard({
   roundJokerMatchId,
   roundJokerMatchName
 }: GuessMatchCardProps) {
-  const [editing, setEditing] = useState(!match.existingGuess);
+  const [editing, setEditing] = useState(!match.existingGuess && legRole !== "VOLTA");
   const state = getGuessCardState(match);
   const status = cardStatus(match, draftState);
   const StatusIcon = status.icon;
   const startingSoon = nowMs > 0 && isStartingSoon(match, nowMs);
   const remainingMs = nowMs > 0 ? new Date(match.kickoff).getTime() - nowMs : null;
   const criticalDeadline = remainingMs !== null && remainingMs > 0 && remainingMs <= 15 * 60_000;
-  const showForm = match.canEdit && (state === "PENDING" || editing);
+  const showForm = match.canEdit && (editing || (state === "PENDING" && legRole !== "VOLTA"));
   const realScore =
     match.homeScore === null || match.awayScore === null
       ? null
@@ -157,7 +160,7 @@ export function GuessMatchCard({
   return (
     <Card
       className={cn(
-        "scroll-mt-28 overflow-hidden transition duration-300",
+        "performance-card scroll-mt-28 overflow-hidden transition duration-300",
         state === "PENDING" ? "border-amber-500/40" : "",
         state === "SAVED" ? "border-emerald-500/30" : "",
         state === "LIVE" ? "border-red-500/40" : "",
@@ -178,6 +181,11 @@ export function GuessMatchCard({
               <StatusIcon aria-hidden className="mr-1 h-3.5 w-3.5" />
               {status.label}
             </Badge>
+            {legRole ? (
+              <Badge tone={legRole === "IDA" ? "info" : "warning"}>
+                Jogo de {legRole === "IDA" ? "ida" : "volta"}
+              </Badge>
+            ) : null}
             {match.existingGuess?.joker ? (
               <Badge tone="warning">
                 <Star aria-hidden className="mr-1 h-3.5 w-3.5 fill-current" />
@@ -271,6 +279,17 @@ export function GuessMatchCard({
           >
             <Pencil aria-hidden className="h-4 w-4" />
             Editar palpite
+          </button>
+        ) : null}
+
+        {legRole === "VOLTA" && state === "PENDING" && !editing ? (
+          <button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-button bg-brand-gold px-4 text-sm font-bold text-slate-950 hover:bg-amber-400"
+            onClick={() => setEditing(true)}
+            type="button"
+          >
+            <Pencil aria-hidden className="h-4 w-4" />
+            Carregar formulario do jogo de volta
           </button>
         ) : null}
 

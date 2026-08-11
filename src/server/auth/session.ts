@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { cache } from "react";
 
 import { authOptions } from "./options";
 import { canAccessAdmin } from "./rbac";
 
-export async function getCurrentSession() {
-  return getServerSession(authOptions);
-}
+export const getCurrentSession = cache(() => getServerSession(authOptions));
 
 export async function requireUser() {
   const session = await getCurrentSession();

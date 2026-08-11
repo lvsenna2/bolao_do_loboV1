@@ -92,58 +92,59 @@ export type GuessesPageData = {
 };
 
 export async function getGuessLeagueAccessData(userId: string) {
-  const [activeMembershipCount, availableLeagues] = await Promise.all([
-    prisma.leagueMember.count({
-      where: {
-        league: {
-          championship: { deletedAt: null },
-          deletedAt: null,
-          status: { not: "ARCHIVED" }
-        },
-        status: "ACTIVE",
-        userId
-      }
-    }),
-    prisma.league.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        _count: { select: { members: true } },
-        championship: {
-          select: {
-            apiId: true,
-            country: true,
-            logo: true,
-            name: true,
-            seasons: {
-              orderBy: { year: "desc" },
-              select: { name: true, year: true },
-              take: 1
-            }
-          }
-        },
-        description: true,
-        entryFee: true,
-        id: true,
-        name: true,
-        owner: { select: { name: true } },
-        status: true,
-        visibility: true
-      },
-      take: 50,
-      where: {
-        championship: { deletedAt: null, status: "ACTIVE" },
+  const activeMembershipCount = await prisma.leagueMember.count({
+    where: {
+      league: {
+        championship: { deletedAt: null },
         deletedAt: null,
-        members: {
-          none: {
-            status: { not: "LEFT" },
-            userId
+        status: { not: "ARCHIVED" }
+      },
+      status: "ACTIVE",
+      userId
+    }
+  });
+  const availableLeagues =
+    activeMembershipCount > 0
+      ? []
+      : await prisma.league.findMany({
+          orderBy: { createdAt: "desc" },
+          select: {
+            _count: { select: { members: true } },
+            championship: {
+              select: {
+                apiId: true,
+                country: true,
+                logo: true,
+                name: true,
+                seasons: {
+                  orderBy: { year: "desc" },
+                  select: { name: true, year: true },
+                  take: 1
+                }
+              }
+            },
+            description: true,
+            entryFee: true,
+            id: true,
+            name: true,
+            owner: { select: { name: true } },
+            status: true,
+            visibility: true
+          },
+          take: 50,
+          where: {
+            championship: { deletedAt: null, status: "ACTIVE" },
+            deletedAt: null,
+            members: {
+              none: {
+                status: { not: "LEFT" },
+                userId
+              }
+            },
+            status: { in: ["OPEN", "ACTIVE"] },
+            visibility: { in: ["PUBLIC", "PRIVATE"] }
           }
-        },
-        status: { in: ["OPEN", "ACTIVE"] },
-        visibility: { in: ["PUBLIC", "PRIVATE"] }
-      }
-    })
-  ]);
+        });
 
   return { activeMembershipCount, availableLeagues };
 }

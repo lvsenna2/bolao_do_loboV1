@@ -10,15 +10,25 @@ import { SpecialRoundCard } from "@/features/special-rounds/components/special-r
 import { requireUser } from "@/server/auth/session";
 import { canCreateSpecialRound } from "@/features/subscriptions/service";
 import { serverNow } from "@/lib/date-time";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
+
+const getCachedElectionRoundSummary = withShortCache(
+  "special-round-election-summary",
+  getElectionRoundSummary
+);
+const getCachedCanCreateSpecialRound = withShortCache(
+  "special-round-can-create",
+  canCreateSpecialRound
+);
 
 export default async function SpecialRoundsPage() {
   const user = await requireUser();
   const [rounds, election, canCreate] = await Promise.all([
     getSpecialRoundsForUser(user.id),
-    getElectionRoundSummary(),
-    canCreateSpecialRound(user.id)
+    getCachedElectionRoundSummary(),
+    getCachedCanCreateSpecialRound(user.id)
   ]);
   const active = rounds.filter((round) => !["FINALIZED", "CANCELLED"].includes(round.status));
   const visibleSince = new Date(serverNow().getTime() - 60 * 60_000);

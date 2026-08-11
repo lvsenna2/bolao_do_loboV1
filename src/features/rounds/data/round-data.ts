@@ -189,7 +189,7 @@ export async function getRoundsPageData(
         : {})
     };
 
-    const [rounds, championships, leagues] = await prisma.$transaction([
+    const [rounds, championships, leagues] = await Promise.all([
       prisma.round.findMany({
         orderBy: [
           {
@@ -226,6 +226,26 @@ export async function getRoundsPageData(
               },
               id: true,
               kickoff: true,
+              guesses: {
+                select: {
+                  awayPrediction: true,
+                  homePrediction: true,
+                  id: true,
+                  joker: true,
+                  leagueId: true,
+                  score: {
+                    select: {
+                      exactScore: true,
+                      totalPoints: true,
+                      winnerHit: true
+                    }
+                  }
+                },
+                where: {
+                  deletedAt: null,
+                  userId
+                }
+              },
               stadium: true,
               status: true
             },
@@ -298,50 +318,10 @@ export async function getRoundsPageData(
     const consistentRounds = rounds.filter(
       (round) => round.league?.championshipId === round.season.championship.id
     );
-    const matchIds = consistentRounds.flatMap((round) => round.matches.map((match) => match.id));
-    const leagueIds = Array.from(
-      new Set(
-        consistentRounds.map((round) => round.league?.id).filter((id): id is string => Boolean(id))
-      )
-    );
-    const userGuesses =
-      matchIds.length > 0 && leagueIds.length > 0
-        ? await prisma.guess.findMany({
-            select: {
-              awayPrediction: true,
-              homePrediction: true,
-              id: true,
-              joker: true,
-              leagueId: true,
-              matchId: true,
-              score: {
-                select: {
-                  exactScore: true,
-                  totalPoints: true,
-                  winnerHit: true
-                }
-              }
-            },
-            where: {
-              deletedAt: null,
-              leagueId: {
-                in: leagueIds
-              },
-              matchId: {
-                in: matchIds
-              },
-              userId
-            }
-          })
-        : [];
-    const guessesByMatchAndLeague = new Map(
-      userGuesses.map((guess) => [`${guess.matchId}:${guess.leagueId}`, guess])
-    );
-
     const mappedRounds = consistentRounds.map((round) => {
       const matches = round.matches.map((match) => {
         const userGuess = round.league?.id
-          ? guessesByMatchAndLeague.get(`${match.id}:${round.league.id}`)
+          ? match.guesses.find((guess) => guess.leagueId === round.league?.id)
           : undefined;
 
         return {

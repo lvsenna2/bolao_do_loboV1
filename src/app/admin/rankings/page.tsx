@@ -22,6 +22,7 @@ import {
 import { getAdminLeagueRankings } from "@/features/admin/data/admin-data";
 import { LeagueEmblemList } from "@/features/xp/components/league-emblem";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,11 @@ type FormAction = (formData: FormData) => Promise<void>;
 type AdminRankingsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+const getCachedAdminLeagueRankings = withShortCache(
+  "admin-league-rankings-page-data",
+  getAdminLeagueRankings
+);
 
 const recalculateLeagueRankingFormAction = recalculateLeagueRankingAction as unknown as FormAction;
 const adjustLeagueRankingFormAction = adjustLeagueRankingAction as unknown as FormAction;
@@ -42,7 +48,7 @@ function formatDate(date: Date) {
 
 export default async function AdminRankingsPage({ searchParams }: AdminRankingsPageProps) {
   const params = await searchParams;
-  const result = await getAdminLeagueRankings(params);
+  const result = await getCachedAdminLeagueRankings(params);
   const { adjustments, leagues, participants, rankings, selectedLeague, selectedLeagueId } =
     result.data;
 

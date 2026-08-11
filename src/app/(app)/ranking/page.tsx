@@ -8,6 +8,7 @@ import { getRankingPageData } from "@/features/ranking/data/ranking-data";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { UserStatCard } from "@/features/user/components/user-stat-card";
 import { requireUser } from "@/server/auth/session";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,11 @@ type RankingPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const getCachedRankingPageData = withShortCache("ranking-page-data", getRankingPageData);
+
 export default async function RankingPage({ searchParams }: RankingPageProps) {
-  const params = await searchParams;
-  const user = await requireUser();
-  const result = await getRankingPageData(user.id, params);
+  const [params, user] = await Promise.all([searchParams, requireUser()]);
+  const result = await getCachedRankingPageData(user.id, params);
   const { filters, leagues, myRanking, rankings, stats } = result.data;
 
   return (
