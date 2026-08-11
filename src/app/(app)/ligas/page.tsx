@@ -1,7 +1,6 @@
 import { Crown, KeyRound, Users } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
-import type { Prisma } from "@prisma/client";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { FootballLogo } from "@/components/football/football-logo";
@@ -15,16 +14,13 @@ import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
 import { PixPaymentCard } from "@/features/payments/components/pix-payment-card";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { formatCurrency, formatDate, getUserLeagues } from "@/features/user/data/user-data";
+import { toMoneyNumber } from "@/lib/money";
 import { requireUser } from "@/server/auth/session";
 import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
 
 const getCachedUserLeagues = withShortCache("user-leagues-page-data", getUserLeagues);
-
-function toNumber(value: Prisma.Decimal | number | null | undefined) {
-  return typeof value === "number" ? value : (value?.toNumber() ?? 0);
-}
 
 function getChampionshipLabel(championship: {
   name: string;
@@ -48,7 +44,7 @@ export default async function LeaguesPage() {
     championshipLabel: getChampionshipLabel(league.championship),
     championshipLogo: league.championship.logo,
     description: league.description,
-    entryFee: toNumber(league.entryFee),
+    entryFee: toMoneyNumber(league.entryFee),
     entryFeeLabel: formatCurrency(league.entryFee),
     id: league.id,
     membersCount: league._count.members,

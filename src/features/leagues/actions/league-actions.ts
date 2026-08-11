@@ -11,6 +11,7 @@ import {
 } from "@/features/xp/services/xp-service";
 import { getPaidLeaguePricingForUser } from "@/features/subscriptions/pricing-service";
 import { serverNow } from "@/lib/date-time";
+import { formatMoney, toMoneyNumber } from "@/lib/money";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import { getMercadoPagoErrorDescription, MercadoPagoApiError } from "@/server/mercado-pago/client";
@@ -200,19 +201,8 @@ type PendingPixPayment = {
 
 type PaidLeaguePricing = Awaited<ReturnType<typeof getPaidLeaguePricingForUser>>;
 
-function getMoneyNumber(value: Prisma.Decimal | number | string) {
-  return Number(typeof value === "object" ? value.toString() : value);
-}
-
-function formatMoney(value: Prisma.Decimal | number | string) {
-  return new Intl.NumberFormat("pt-BR", {
-    currency: "BRL",
-    style: "currency"
-  }).format(getMoneyNumber(value));
-}
-
 function requiresPixPayment(league: JoinableLeague) {
-  return league.visibility !== "PUBLIC" && getMoneyNumber(league.entryFee) > 0;
+  return league.visibility !== "PUBLIC" && toMoneyNumber(league.entryFee) > 0;
 }
 
 function toPaymentIntent(
@@ -263,7 +253,7 @@ async function createPendingPixPayment(
   });
 
   if (existingPayment) {
-    const currentAmount = getMoneyNumber(existingPayment.amount);
+    const currentAmount = toMoneyNumber(existingPayment.amount);
     const isUsable =
       Math.abs(currentAmount - finalAmount) < 0.01 &&
       Boolean(existingPayment.qrCode) &&
@@ -374,7 +364,7 @@ async function joinLeagueForUser(
 
   if (requiresPixPayment(league)) {
     const [pricing, payer] = await Promise.all([
-      getPaidLeaguePricingForUser(userId, getMoneyNumber(league.entryFee)),
+      getPaidLeaguePricingForUser(userId, toMoneyNumber(league.entryFee)),
       prisma.user.findUnique({
         select: { email: true },
         where: { id: userId }

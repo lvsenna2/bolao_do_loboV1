@@ -9,6 +9,7 @@ import type {
 } from "@prisma/client";
 
 import { getSaoPauloDayRangeUtc, serverNow } from "@/lib/date-time";
+import { formatMoney } from "@/lib/money";
 import { prisma } from "@/server/db";
 import {
   FOOTBALL_MANUAL_TRIGGER,
@@ -58,17 +59,7 @@ function emptyResult<T>(message: string, data: T): AdminDataResult<T> {
 }
 
 function toCurrency(value: Prisma.Decimal | number | null | undefined) {
-  const amount =
-    typeof value === "number"
-      ? value
-      : typeof value?.toNumber === "function"
-        ? value.toNumber()
-        : 0;
-
-  return new Intl.NumberFormat("pt-BR", {
-    currency: "BRL",
-    style: "currency"
-  }).format(amount);
+  return formatMoney(value);
 }
 
 export async function getAdminDashboardData() {

@@ -35,7 +35,7 @@ const config: Config = {
         }
       },
       fontFamily: {
-        sans: ["var(--font-geist)", "Arial", "sans-serif"]
+        sans: ["var(--font-geist)"]
       },
       borderRadius: {
         card: "8px",

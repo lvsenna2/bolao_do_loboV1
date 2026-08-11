@@ -36,7 +36,7 @@ body {
   margin: 0;
   background: rgb(var(--color-background));
   color: rgb(var(--color-foreground));
-  font-family: var(--font-geist), Arial, sans-serif;
+  font-family: var(--font-geist);
   font-weight: 400;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

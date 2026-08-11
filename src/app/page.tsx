@@ -1,18 +1,30 @@
 import Link from "next/link";
 
-import { BrandLogo } from "@/components/brand/brand-logo";
 import { SiteHeader } from "@/components/layout/site-header";
 import { buttonVariants } from "@/components/ui/button";
-import { WolfAuthScene } from "@/features/auth/components/wolf-auth-scene";
+
+const benefits = [
+  {
+    description: "Registre seus placares em poucos passos, no celular ou no computador.",
+    title: "Palpites rapidos"
+  },
+  {
+    description: "Veja partidas e rodadas organizadas sem perder o contexto do campeonato.",
+    title: "Rodadas organizadas"
+  },
+  {
+    description: "Acompanhe sua pontuacao e a disputa com os outros participantes.",
+    title: "Ranking atualizado"
+  }
+] as const;
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-app-background text-app-foreground">
       <SiteHeader />
-      <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-7xl items-center px-4 py-10 sm:px-6 lg:px-8">
-        <section className="grid w-full items-center gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-7xl items-center px-4 py-12 sm:px-6 lg:px-8">
+        <section className="w-full">
           <div className="max-w-3xl space-y-6">
-            <BrandLogo className="mb-2" />
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-brand-gold">
               Palpites, rodadas e ranking
             </p>
@@ -36,7 +48,17 @@ export default function HomePage() {
             </div>
           </div>
 
-          <WolfAuthScene className="hidden min-h-[420px] lg:block" />
+          <div className="mt-12 grid gap-3 sm:grid-cols-3" aria-label="Recursos da plataforma">
+            {benefits.map((benefit) => (
+              <article
+                className="rounded-card border border-app-border bg-app-surface p-5"
+                key={benefit.title}
+              >
+                <h2 className="text-base font-semibold text-app-foreground">{benefit.title}</h2>
+                <p className="mt-2 text-sm leading-6 text-app-muted">{benefit.description}</p>
+              </article>
+            ))}
+          </div>
         </section>
       </main>
     </div>
