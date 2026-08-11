@@ -189,6 +189,11 @@ textarea {
   contain-intrinsic-size: auto 420px;
 }
 
+.guess-match-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 190px;
+}
+
 .wolf-card-glow {
   position: relative;
   overflow: hidden;
