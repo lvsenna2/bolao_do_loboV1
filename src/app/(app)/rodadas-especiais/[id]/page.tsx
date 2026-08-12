@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Coins, Eye, LockKeyhole, Trophy, Users } from "lucide-react";
+import { Coins, Eye, Hourglass, LockKeyhole, Trophy, Users } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
@@ -7,10 +7,15 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { JoinSpecialRound } from "@/features/special-rounds/components/join-special-round";
 import type { SpecialRoundPaymentView } from "@/features/special-rounds/components/join-special-round";
+import {
+  isSpecialRoundMatchStarted,
+  SpecialRoundMatchScoreboard
+} from "@/features/special-rounds/components/match-scoreboard";
 import { SpecialRoundPredictionForm } from "@/features/special-rounds/components/prediction-form";
 import { SpecialRoundCountdown } from "@/features/special-rounds/components/countdown";
 import { SpecialRoundStatusBadge } from "@/features/special-rounds/components/status-badge";
 import { getSpecialRoundDetail } from "@/features/special-rounds/data/special-round-data";
+import { formatSpecialRoundAnswer } from "@/features/special-rounds/services/answer-format";
 import {
   getGoalScorerOptionSide,
   getGoalScorerPlayerValue
@@ -72,6 +77,25 @@ export default async function SpecialRoundDetailPage({
       lineup.players.map((item) => [`PLAYER:${item.playerId}`, lineup.team.name] as const)
     )
   );
+  const matchView = {
+    awayScore: round.match?.awayScore ?? null,
+    awayTeamApiId: round.match?.awayTeam.apiId ?? null,
+    awayTeamLogo: round.match?.awayTeam.logo ?? round.awayTeamLogo,
+    awayTeamName: round.awayTeamName,
+    elapsed: round.match?.elapsed ?? null,
+    homeScore: round.match?.homeScore ?? null,
+    homeTeamApiId: round.match?.homeTeam.apiId ?? null,
+    homeTeamLogo: round.match?.homeTeam.logo ?? round.homeTeamLogo,
+    homeTeamName: round.homeTeamName,
+    matchStartsAt: round.matchStartsAt,
+    penaltyAway: round.match?.penaltyAway ?? null,
+    penaltyHome: round.match?.penaltyHome ?? null,
+    status: round.match?.status ?? null
+  };
+  const matchFinished = round.match?.status === "FINISHED";
+  const rankingIsPublic = Boolean(round.rankingPublishedAt) || round.status === "FINALIZED";
+  // O jogo acabou mas a classificacao ainda nao saiu: explique em vez de deixar a tela muda.
+  const showSettlementNotice = matchFinished && !rankingIsPublic && round.status !== "CANCELLED";
   const predictionMarkets = round.markets.map((market) => ({
     answerType: market.answerType,
     description: market.description,
@@ -103,6 +127,25 @@ export default async function SpecialRoundDetailPage({
         <main className="space-y-6">
           <Card className="border-brand-gold/30">
             <CardHeader>
+              <CardTitle>
+                {isSpecialRoundMatchStarted(matchView.status) ? "Placar" : "A partida"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SpecialRoundMatchScoreboard match={matchView} />
+              {showSettlementNotice ? (
+                <p className="mt-3 flex items-start gap-2 rounded-control border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+                  <Hourglass className="mt-0.5 h-4 w-4 shrink-0" />
+                  Jogo encerrado. A apuracao roda automaticamente assim que os dados oficiais da
+                  partida (gols, cartoes, escanteios) sao consolidados e a classificacao aparece
+                  aqui.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className="border-brand-gold/30">
+            <CardHeader>
               <CardTitle>Mercados da rodada</CardTitle>
             </CardHeader>
             <CardContent>
@@ -129,7 +172,7 @@ export default async function SpecialRoundDetailPage({
             </CardContent>
           </Card>
 
-          {round.rankingPublishedAt || round.status === "FINALIZED" ? (
+          {rankingIsPublic ? (
             <Card>
               <CardHeader>
                 <CardTitle>Classificacao</CardTitle>
@@ -203,10 +246,22 @@ export default async function SpecialRoundDetailPage({
                         return (
                           <div className="grid grid-cols-[1fr_auto] gap-x-3" key={market.id}>
                             <span className="text-app-muted">{market.title}</span>
-                            <strong>{prediction ? JSON.stringify(prediction.answer) : "-"}</strong>
+                            <strong>
+                              {prediction
+                                ? formatSpecialRoundAnswer(
+                                    prediction.answer as SpecialRoundAnswer,
+                                    market.options
+                                  )
+                                : "-"}
+                            </strong>
                             <span className="text-xs text-app-muted">Resultado oficial</span>
                             <span className="text-right text-xs font-semibold text-brand-gold">
-                              {market.result ? JSON.stringify(market.result.answer) : "-"}
+                              {market.result
+                                ? formatSpecialRoundAnswer(
+                                    market.result.answer as SpecialRoundAnswer,
+                                    market.options
+                                  )
+                                : "-"}
                             </span>
                           </div>
                         );

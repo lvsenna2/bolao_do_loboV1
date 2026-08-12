@@ -19,18 +19,22 @@ export default async function SpecialRoundHistoryPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {rounds.map((round) => (
             <SpecialRoundCard
+              awayScore={round.match?.awayScore}
               awayTeamApiId={round.match?.awayTeam.apiId}
               awayTeamLogo={round.awayTeamLogo}
               awayTeamName={round.awayTeamName}
               champion={round.champion}
+              elapsed={round.match?.elapsed}
               entryFee={Number(round.entryFee)}
               estimatedPrize={round.estimatedPrize}
+              homeScore={round.match?.homeScore}
               homeTeamApiId={round.match?.homeTeam.apiId}
               homeTeamLogo={round.homeTeamLogo}
               homeTeamName={round.homeTeamName}
               id={round.id}
               key={round.id}
               matchStartsAt={round.matchStartsAt}
+              matchStatus={round.match?.status}
               name={round.name}
               participants={round._count.entries}
               status={round.status}

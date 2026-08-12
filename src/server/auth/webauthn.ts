@@ -116,8 +116,12 @@ export async function createPasskeyRegistrationOptions(user: {
 
   const options = await generateRegistrationOptions({
     attestationType: "none",
+    // O login por biometria nao envia allowCredentials (ninguem digita o usuario antes),
+    // entao a credencial precisa ser descobrivel. Com "preferred" o aparelho podia gravar
+    // uma passkey nao descobrivel e o botao de entrar nao encontrava nada para oferecer.
     authenticatorSelection: {
-      residentKey: "preferred",
+      requireResidentKey: true,
+      residentKey: "required",
       userVerification: "preferred"
     },
     excludeCredentials: existing.map((credential) => ({
@@ -208,7 +212,10 @@ export async function createPasskeyLoginOptions() {
   return { challengeId, options };
 }
 
-export async function verifyPasskeyLogin(challengeId: string, response: AuthenticationResponseJSON) {
+export async function verifyPasskeyLogin(
+  challengeId: string,
+  response: AuthenticationResponseJSON
+) {
   const stored = await consumeChallenge(challengeId, "authentication");
 
   if (!stored) return null;

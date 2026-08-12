@@ -18,6 +18,7 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
   const [isSupported, setIsSupported] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [hint, setHint] = useState<string | undefined>();
 
   useEffect(() => {
     setIsSupported(browserSupportsWebAuthn());
@@ -30,6 +31,7 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
   async function onPasskeyLogin() {
     setIsAuthenticating(true);
     setError(undefined);
+    setHint(undefined);
 
     try {
       const optionsResponse = await fetch("/api/auth/passkey/options", { method: "POST" });
@@ -62,7 +64,15 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
     } catch (cause) {
       console.error("[passkey] Falha no login", cause);
       const described = describePasskeyError(cause, "login", window.location.hostname);
-      setError(isCancelledPasskeyError(described) ? undefined : described);
+      // NotAllowedError cobre tanto "fechei o prompt" quanto "nao existe passkey neste
+      // aparelho" — o navegador nao diferencia. A dica cobre o segundo caso sem assustar.
+      if (isCancelledPasskeyError(described)) {
+        setHint(
+          "Se nenhum pedido de biometria apareceu, entre com e-mail e senha e cadastre a biometria em Perfil, neste mesmo aparelho."
+        );
+      } else {
+        setError(described);
+      }
     } finally {
       setIsAuthenticating(false);
     }
@@ -87,6 +97,11 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
       >
         Entrar com Face ID / digital
       </LoadingButton>
+      {hint ? (
+        <p className="rounded-control border border-app-border bg-app-elevated px-3 py-2 text-xs text-app-muted">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }
