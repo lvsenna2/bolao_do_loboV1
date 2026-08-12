@@ -763,11 +763,11 @@ export async function joinLeagueWithWalletAction(
       visibility: "PRIVATE"
     }
   });
-  if (!league || getMoneyNumber(league.entryFee) <= 0) {
+  if (!league || toMoneyNumber(league.entryFee) <= 0) {
     return { ok: false, message: "Liga paga nao encontrada ou indisponivel." };
   }
 
-  const pricing = await getPaidLeaguePricingForUser(user.id, getMoneyNumber(league.entryFee));
+  const pricing = await getPaidLeaguePricingForUser(user.id, toMoneyNumber(league.entryFee));
   const priceCents = Math.round(pricing.finalAmount * 100);
   try {
     await prisma.$transaction(
