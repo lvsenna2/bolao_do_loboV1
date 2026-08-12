@@ -117,6 +117,19 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum WalletTransactionType {
+  DEPOSIT
+  BET
+  ROULETTE
+  REFUND
+  BONUS
+}
+
+enum RouletteSpinKind {
+  DAILY
+  BONUS
+}
+
 enum SubscriptionPlan {
   PRATA
   OURO
@@ -285,6 +298,11 @@ model User {
   electionEntries         ElectionEntry[]
   electionResultsEntered  ElectionResult[]         @relation("ElectionResultAdmin")
   electionAudits          ElectionAuditLog[]       @relation("ElectionAuditActor")
+  wallet                  Wallet?
+  walletTransactions      WalletTransaction[]
+  walletDeposits          WalletDeposit[]
+  rouletteSpins           DailyRouletteSpin[]
+  rewardBalance           UserRewardBalance?
 
   @@index([email])
   @@index([phone])
@@ -973,6 +991,101 @@ model Payment {
   @@map("payments")
 }
 
+model Wallet {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  balanceCents Int      @default(0) @map("balance_cents")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id                 String                @id @default(uuid()) @db.Uuid
+  userId             String                @map("user_id") @db.Uuid
+  type               WalletTransactionType
+  amountCents        Int                   @map("amount_cents")
+  balanceBeforeCents Int                   @map("balance_before_cents")
+  balanceAfterCents  Int                   @map("balance_after_cents")
+  description        String                @db.VarChar(240)
+  uniqueKey          String                @unique @map("unique_key") @db.VarChar(200)
+  relatedEntityId    String?               @map("related_entity_id") @db.VarChar(120)
+  createdAt          DateTime              @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@map("wallet_transactions")
+}
+
+model WalletDeposit {
+  id                   String         @id @default(uuid()) @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  amountCents          Int            @map("amount_cents")
+  gateway              PaymentGateway @default(MERCADO_PAGO)
+  status               PaymentStatus  @default(PENDING)
+  transactionId        String?        @unique @map("transaction_id")
+  checkoutKey          String         @unique @map("checkout_key") @db.VarChar(180)
+  qrCode               String?        @map("qr_code")
+  qrCodeBase64         String?        @map("qr_code_base64")
+  ticketUrl            String?        @map("ticket_url")
+  providerStatus       String?        @map("provider_status") @db.VarChar(80)
+  providerStatusDetail String?        @map("provider_status_detail") @db.VarChar(120)
+  expiresAt            DateTime?      @map("expires_at")
+  paidAt               DateTime?      @map("paid_at")
+  lastWebhookAt        DateTime?      @map("last_webhook_at")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("wallet_deposits")
+}
+
+model UserRewardBalance {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @unique @map("user_id") @db.Uuid
+  specialFragments      Int       @default(0) @map("special_fragments")
+  specialRoundVouchers  Int       @default(0) @map("special_round_vouchers")
+  leagueVouchers        Int       @default(0) @map("league_vouchers")
+  promoDiscountPercent  Int       @default(0) @map("promo_discount_percent")
+  promoDiscountMaxCents Int       @default(0) @map("promo_discount_max_cents")
+  promoExpiresAt        DateTime? @map("promo_expires_at")
+  bonusSpinDate         String?   @map("bonus_spin_date") @db.VarChar(10)
+  bonusSpinsRemaining   Int       @default(0) @map("bonus_spins_remaining")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("user_reward_balances")
+}
+
+model DailyRouletteSpin {
+  id               String           @id @default(uuid()) @db.Uuid
+  userId           String           @map("user_id") @db.Uuid
+  spinDate         String           @map("spin_date") @db.VarChar(10)
+  spinKind         RouletteSpinKind @default(DAILY) @map("spin_kind")
+  prizeId          String           @map("prize_id") @db.VarChar(60)
+  prizeName        String           @map("prize_name") @db.VarChar(160)
+  prizeValue       Int              @default(0) @map("prize_value")
+  probabilityUnits Int              @map("probability_units")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, spinDate, spinKind])
+  @@index([userId, createdAt])
+  @@index([prizeId, createdAt])
+  @@map("daily_roulette_spins")
+}
+
 model ApiFundingContribution {
   id                   String         @id @default(uuid()) @db.Uuid
   userId               String         @map("user_id") @db.Uuid
@@ -1039,14 +1152,14 @@ model Subscription {
 }
 
 model SubscriptionEvent {
-  id                 String             @id @default(uuid()) @db.Uuid
-  subscriptionId     String             @map("subscription_id") @db.Uuid
-  type               String             @db.VarChar(80)
+  id                 String              @id @default(uuid()) @db.Uuid
+  subscriptionId     String              @map("subscription_id") @db.Uuid
+  type               String              @db.VarChar(80)
   status             SubscriptionStatus?
-  providerResourceId String?            @map("provider_resource_id") @db.VarChar(120)
-  uniqueKey          String             @unique @map("unique_key") @db.VarChar(220)
+  providerResourceId String?             @map("provider_resource_id") @db.VarChar(120)
+  uniqueKey          String              @unique @map("unique_key") @db.VarChar(220)
   metadata           Json?
-  createdAt          DateTime           @default(now()) @map("created_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 

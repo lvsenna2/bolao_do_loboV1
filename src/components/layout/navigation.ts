@@ -2,6 +2,7 @@ import {
   CalendarDays,
   ClipboardList,
   Crown,
+  Dices,
   FileText,
   Flag,
   GitCompareArrows,
@@ -76,6 +77,16 @@ export const mainNavigationItems: NavigationItem[] = [
     href: "/planos",
     icon: Crown,
     label: "Planos"
+  },
+  {
+    href: "/carteira",
+    icon: WalletCards,
+    label: "Carteira"
+  },
+  {
+    href: "/roleta-diaria",
+    icon: Dices,
+    label: "Roleta Diaria"
   }
 ];
 
@@ -85,6 +96,7 @@ export const mobileNavigationItems: NavigationItem[] = [
   mainNavigationItems[3],
   mainNavigationItems[4],
   mainNavigationItems[5],
+  mainNavigationItems[11],
   mainNavigationItems[8],
   mainNavigationItems[9]
 ];

@@ -9,6 +9,7 @@ import { checkApiFundingPaymentAction } from "@/features/api-funding/actions";
 import { checkMercadoPagoPaymentAction } from "@/features/payments/actions/payment-actions";
 import { checkSpecialRoundPaymentAction } from "@/features/special-rounds/actions/special-round-actions";
 import { checkSubscriptionPaymentAction } from "@/features/subscriptions/actions";
+import { checkWalletDepositAction } from "@/features/wallet/actions/wallet-actions";
 
 type PixPaymentCardProps = {
   amountLabel: string;
@@ -26,7 +27,7 @@ type PixPaymentCardProps = {
   qrCodeDataUri: string;
   ticketUrl?: string | null;
   transactionId: string;
-  variant?: "api-funding" | "election" | "league" | "special-round" | "subscription";
+  variant?: "api-funding" | "election" | "league" | "special-round" | "subscription" | "wallet";
 };
 
 export function PixPaymentCard({
@@ -71,7 +72,9 @@ export function PixPaymentCard({
               ? await checkApiFundingPaymentAction(paymentId)
               : variant === "subscription"
                 ? await checkSubscriptionPaymentAction(paymentId)
-                : await checkMercadoPagoPaymentAction(paymentId);
+                : variant === "wallet"
+                  ? await checkWalletDepositAction(paymentId)
+                  : await checkMercadoPagoPaymentAction(paymentId);
       const status = result.ok
         ? "status" in result
           ? result.status
@@ -123,7 +126,9 @@ export function PixPaymentCard({
                 ? "A contribuicao sera contabilizada automaticamente depois que o PIX for confirmado."
                 : variant === "subscription"
                   ? "Os beneficios do plano serao liberados automaticamente depois que o PIX for confirmado."
-                  : `${variant === "league" ? "A liga" : "A participacao"} sera liberada automaticamente depois que o PIX for confirmado.`}
+                  : variant === "wallet"
+                    ? "O saldo sera creditado automaticamente depois que o PIX for confirmado."
+                    : `${variant === "league" ? "A liga" : "A participacao"} sera liberada automaticamente depois que o PIX for confirmado.`}
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">

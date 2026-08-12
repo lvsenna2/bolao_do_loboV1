@@ -1,6 +1,8 @@
 "use client";
 
-import { CreditCard, LogIn } from "lucide-react";
+import { CreditCard, LogIn, WalletCards } from "lucide-react";
+import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -8,7 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { PixPaymentCard } from "@/features/payments/components/pix-payment-card";
-import { joinAvailableLeagueAction } from "../actions/league-actions";
+import { joinAvailableLeagueAction, joinLeagueWithWalletAction } from "../actions/league-actions";
 import type { LeaguePaymentIntent } from "../types/league-action-result";
 
 type JoinAvailableLeagueButtonProps = {
@@ -45,6 +47,22 @@ export function JoinAvailableLeagueButton({
     });
   }
 
+  function onWalletJoin() {
+    setMessage(undefined);
+    setError(undefined);
+    startTransition(() => {
+      void joinLeagueWithWalletAction({ leagueId }).then((result) => {
+        if (!result.ok) {
+          setError(result.message);
+          return;
+        }
+        setMessage(result.message);
+        setPaymentIntent(undefined);
+        router.refresh();
+      });
+    });
+  }
+
   return (
     <div className="space-y-3">
       <LoadingButton
@@ -64,8 +82,26 @@ export function JoinAvailableLeagueButton({
       >
         {requiresPayment ? "Pagar e entrar" : "Entrar"}
       </LoadingButton>
+      {requiresPayment ? (
+        <LoadingButton
+          className={buttonVariants({ size: "sm", variant: "secondary" })}
+          disabled={isPending}
+          icon={<WalletCards aria-hidden className="h-4 w-4" />}
+          isLoading={isPending}
+          loadingLabel="Processando..."
+          onClick={onWalletJoin}
+          type="button"
+        >
+          Usar saldo ou vale
+        </LoadingButton>
+      ) : null}
       <ActionAlert message={message} tone="success" />
       <ActionAlert message={error} />
+      {error?.includes("Saldo insuficiente") ? (
+        <Link className="text-sm font-medium text-brand-gold underline" href={"/carteira" as Route}>
+          Adicionar saldo
+        </Link>
+      ) : null}
       {paymentIntent ? <PixPaymentCard {...paymentIntent} /> : null}
     </div>
   );
