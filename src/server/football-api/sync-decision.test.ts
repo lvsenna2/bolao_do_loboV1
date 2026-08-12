@@ -153,6 +153,44 @@ describe("shouldSyncFixture", () => {
     expect(decision.fixture).toBe(false);
   });
 
+  it("recupera status final publicado com atraso depois do kickoff", () => {
+    const staleDecision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T12:30:00.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:50:00.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+    const recentDecision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T12:30:00.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:58:00.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+
+    expect(staleDecision.fixture).toBe(true);
+    expect(recentDecision.fixture).toBe(false);
+  });
+
+  it("nao consulta indefinidamente status agendado antigo", () => {
+    const decision = shouldSyncFixture(
+      {
+        coverage: fullCoverage,
+        kickoff: new Date("2026-07-16T02:00:00.000Z"),
+        lastSyncedAt: new Date("2026-07-16T14:00:00.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+
+    expect(decision.fixture).toBe(false);
+  });
+
   it("nao aplica a janela critica a partidas adiadas", () => {
     // Cenario H: kickoff adiado atualizado pela API nao pode manter polling por minuto.
     const nearDecision = shouldSyncFixture(

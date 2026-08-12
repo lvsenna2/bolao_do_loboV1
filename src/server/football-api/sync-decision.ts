@@ -8,6 +8,9 @@ const LINEUP_INITIAL_WINDOW = 30 * MINUTE;
 const LINEUP_CONFIRMATION_WINDOW = 10 * MINUTE;
 const CRITICAL_WINDOW_BEFORE_KICKOFF = 15 * MINUTE;
 const CRITICAL_WINDOW_AFTER_KICKOFF = 10 * MINUTE;
+const DELAYED_STATUS_RECOVERY_START = 2 * HOUR;
+const DELAYED_STATUS_RECOVERY_END = 12 * HOUR;
+const DELAYED_STATUS_RECOVERY_INTERVAL = 5 * MINUTE;
 
 export type FixtureSyncState = {
   coverage?: ExternalFootballCoverage | null;
@@ -51,6 +54,14 @@ export function isWithinCriticalKickoffWindow(kickoff: Date, now = new Date()) {
   const untilKickoff = kickoff.getTime() - now.getTime();
   return (
     untilKickoff <= CRITICAL_WINDOW_BEFORE_KICKOFF && untilKickoff >= -CRITICAL_WINDOW_AFTER_KICKOFF
+  );
+}
+
+export function isWithinDelayedStatusRecoveryWindow(kickoff: Date, now = new Date()) {
+  const elapsedSinceKickoff = now.getTime() - kickoff.getTime();
+  return (
+    elapsedSinceKickoff > DELAYED_STATUS_RECOVERY_START &&
+    elapsedSinceKickoff <= DELAYED_STATUS_RECOVERY_END
   );
 }
 
@@ -153,6 +164,21 @@ export function shouldSyncFixture(state: FixtureSyncState, now = new Date()): Fi
       lineups: false,
       players: false,
       reason: "Partida no dia do jogo.",
+      statistics: false
+    };
+  }
+
+  if (
+    state.status === "SCHEDULED" &&
+    isWithinDelayedStatusRecoveryWindow(state.kickoff, now)
+  ) {
+    return {
+      events: false,
+      fixture: olderThan(state.lastSyncedAt, DELAYED_STATUS_RECOVERY_INTERVAL, now),
+      history: false,
+      lineups: false,
+      players: false,
+      reason: "Partida apos o kickoff aguardando status definitivo.",
       statistics: false
     };
   }
