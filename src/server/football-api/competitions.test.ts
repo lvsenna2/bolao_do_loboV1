@@ -40,6 +40,11 @@ describe("footballCompetitionConfigs", () => {
         season: 2026
       },
       {
+        key: "uefa-super-cup",
+        leagueId: 531,
+        season: 2026
+      },
+      {
         key: "copa-do-brasil",
         leagueId: 73,
         season: 2026
@@ -53,6 +58,11 @@ describe("footballCompetitionConfigs", () => {
 
   it("resolve somente campeonatos permitidos na sincronizacao manual", () => {
     expect(getFootballCompetitionConfig("libertadores")?.leagueId).toBe(13);
+    expect(getFootballCompetitionConfig("uefa-super-cup")).toMatchObject({
+      leagueId: 531,
+      season: 2026,
+      type: "CUP"
+    });
     expect(getFootballCompetitionConfig("campeonato-invalido")).toBeNull();
   });
 
