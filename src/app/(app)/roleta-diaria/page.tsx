@@ -2,11 +2,18 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RouletteWheel } from "@/features/roulette/roulette-wheel";
+import { DAILY_ROULETTE_PRIZES } from "@/features/roulette/roulette-config";
 import { getRouletteData } from "@/features/roulette/roulette-service";
 import { formatDateInSaoPaulo } from "@/lib/date-time";
 import { requireUser } from "@/server/auth/session";
 
 export const dynamic = "force-dynamic";
+
+function formatProbability(probabilityUnits: number) {
+  return `${(probabilityUnits / 1_000).toLocaleString("pt-BR", {
+    maximumFractionDigits: 3
+  })}%`;
+}
 
 export default async function DailyRoulettePage() {
   const user = await requireUser();
@@ -61,6 +68,30 @@ export default async function DailyRoulettePage() {
           </Card>
         </div>
       </div>
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>Premiacoes da roleta</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {DAILY_ROULETTE_PRIZES.map((prize) => (
+              <div
+                className="flex min-h-14 items-center justify-between gap-3 rounded-card border border-app-border bg-app-elevated px-4 py-3"
+                key={prize.id}
+              >
+                <span className="text-sm font-medium text-app-foreground">{prize.name}</span>
+                <Badge tone={prize.id === "jackpot" ? "warning" : "neutral"}>
+                  {formatProbability(prize.probabilityUnits)}
+                </Badge>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-app-muted">
+            O premio e definido com seguranca no servidor. As chances podem ser atualizadas em
+            campanhas futuras.
+          </p>
+        </CardContent>
+      </Card>
     </PageShell>
   );
 }

@@ -15,7 +15,6 @@ import {
   Sparkles,
   Swords,
   Trophy,
-  UserRound,
   Users,
   WalletCards
 } from "lucide-react";
@@ -69,11 +68,6 @@ export const mainNavigationItems: NavigationItem[] = [
     label: "Ranking XP"
   },
   {
-    href: "/perfil",
-    icon: UserRound,
-    label: "Perfil"
-  },
-  {
     href: "/planos",
     icon: Crown,
     label: "Planos"
@@ -90,16 +84,19 @@ export const mainNavigationItems: NavigationItem[] = [
   }
 ];
 
-export const mobileNavigationItems: NavigationItem[] = [
-  mainNavigationItems[0],
-  mainNavigationItems[1],
-  mainNavigationItems[3],
-  mainNavigationItems[4],
-  mainNavigationItems[5],
-  mainNavigationItems[11],
-  mainNavigationItems[8],
-  mainNavigationItems[9]
-];
+const mobileNavigationHrefs = new Set([
+  "/dashboard",
+  "/ligas",
+  "/palpites",
+  "/rodadas-especiais",
+  "/comparar-palpites",
+  "/roleta-diaria",
+  "/planos"
+]);
+
+export const mobileNavigationItems = mainNavigationItems.filter((item) =>
+  mobileNavigationHrefs.has(item.href)
+);
 
 export const adminNavigationItems: NavigationItem[] = [
   {

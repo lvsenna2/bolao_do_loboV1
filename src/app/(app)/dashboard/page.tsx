@@ -1,7 +1,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { CalendarClock, ClipboardList, Trophy, Users } from "lucide-react";
+import { CalendarClock, ClipboardList, Trophy, UserRound, Users } from "lucide-react";
 
 import { FootballLogo } from "@/components/football/football-logo";
 import { PageShell } from "@/components/layout/page-shell";
@@ -81,6 +81,7 @@ async function DashboardProfileContent({ userId }: { userId: string }) {
           </div>
         </div>
         <Link className={buttonVariants({ size: "sm", variant: "secondary" })} href="/perfil">
+          <UserRound className="h-4 w-4" />
           Perfil
         </Link>
       </CardContent>
