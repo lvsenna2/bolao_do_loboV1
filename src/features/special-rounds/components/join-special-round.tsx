@@ -27,9 +27,7 @@ export function JoinSpecialRound({
 }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
-  const [payment, setPayment] = useState<SpecialRoundPaymentView | null>(
-    initialPayment ?? null
-  );
+  const [payment, setPayment] = useState<SpecialRoundPaymentView | null>(initialPayment ?? null);
 
   useEffect(() => {
     if (initialPayment) setPayment(initialPayment);

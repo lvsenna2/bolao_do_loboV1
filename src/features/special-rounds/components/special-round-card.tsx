@@ -1,4 +1,4 @@
-import type { SpecialRoundStatus } from "@prisma/client";
+import type { MatchStatus, SpecialRoundStatus } from "@prisma/client";
 import { CalendarClock, Coins, Swords, Users } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
@@ -6,6 +6,8 @@ import type { Route } from "next";
 import { FootballLogo } from "@/components/football/football-logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
+import { cn } from "@/lib/utils";
+import { isSpecialRoundMatchStarted } from "./match-scoreboard";
 import { SpecialRoundStatusBadge } from "./status-badge";
 
 export type SpecialRoundChampion = {
@@ -16,17 +18,21 @@ export type SpecialRoundChampion = {
 };
 
 type Props = {
+  awayScore?: number | null;
   awayTeamApiId?: number | null;
   awayTeamLogo: string | null;
   awayTeamName: string;
   champion?: SpecialRoundChampion | null;
+  elapsed?: number | null;
   entryFee: number;
   estimatedPrize: number;
+  homeScore?: number | null;
   homeTeamApiId?: number | null;
   homeTeamLogo: string | null;
   homeTeamName: string;
   id: string;
   matchStartsAt: Date;
+  matchStatus?: MatchStatus | null;
   name: string;
   participants: number;
   status: SpecialRoundStatus;
@@ -49,6 +55,10 @@ function Team({ apiId, logo, name }: { apiId?: number | null; logo: string | nul
 }
 
 export function SpecialRoundCard(props: Props) {
+  const matchStatus = props.matchStatus ?? null;
+  const started = isSpecialRoundMatchStarted(matchStatus);
+  const isLive = matchStatus === "LIVE" || matchStatus === "HALFTIME";
+
   return (
     <Card className="flex h-full min-w-0 flex-col overflow-hidden border-brand-gold/25">
       <CardHeader className="border-b border-app-border bg-black/10">
@@ -60,7 +70,36 @@ export function SpecialRoundCard(props: Props) {
       <CardContent className="flex flex-1 flex-col pt-5">
         <div className="flex items-center gap-4">
           <Team apiId={props.homeTeamApiId} logo={props.homeTeamLogo} name={props.homeTeamName} />
-          <Swords aria-hidden className="h-6 w-6 shrink-0 text-brand-gold" />
+          {started ? (
+            <div className="flex shrink-0 flex-col items-center gap-1">
+              <span
+                aria-label={`Placar ${props.homeScore ?? 0} a ${props.awayScore ?? 0}`}
+                className={cn(
+                  "whitespace-nowrap text-2xl font-bold tabular-nums",
+                  isLive ? "text-red-400" : "text-brand-gold"
+                )}
+              >
+                {props.homeScore ?? 0}
+                <span aria-hidden className="mx-1.5 text-app-muted">
+                  x
+                </span>
+                {props.awayScore ?? 0}
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-app-muted">
+                {isLive
+                  ? matchStatus === "HALFTIME"
+                    ? "Intervalo"
+                    : typeof props.elapsed === "number"
+                      ? `${props.elapsed}'`
+                      : "Ao vivo"
+                  : matchStatus === "FINISHED"
+                    ? "Encerrado"
+                    : "Interrompido"}
+              </span>
+            </div>
+          ) : (
+            <Swords aria-hidden className="h-6 w-6 shrink-0 text-brand-gold" />
+          )}
           <Team apiId={props.awayTeamApiId} logo={props.awayTeamLogo} name={props.awayTeamName} />
         </div>
         {props.champion ? (

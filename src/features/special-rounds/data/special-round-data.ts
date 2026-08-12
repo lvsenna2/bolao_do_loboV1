@@ -15,8 +15,14 @@ export async function getSpecialRoundsForUser(userId: string) {
       },
       match: {
         select: {
+          awayScore: true,
           awayTeam: { select: { apiId: true, logo: true } },
-          homeTeam: { select: { apiId: true, logo: true } }
+          elapsed: true,
+          homeScore: true,
+          homeTeam: { select: { apiId: true, logo: true } },
+          penaltyAway: true,
+          penaltyHome: true,
+          status: true
         }
       },
       standings: {
@@ -139,12 +145,20 @@ export async function getSpecialRoundDetail(id: string, userId?: string) {
       },
       match: {
         select: {
+          awayScore: true,
+          awayTeam: { select: { apiId: true, logo: true } },
+          elapsed: true,
+          homeScore: true,
+          homeTeam: { select: { apiId: true, logo: true } },
           lineups: {
             select: {
               players: { select: { playerId: true } },
               team: { select: { name: true } }
             }
-          }
+          },
+          penaltyAway: true,
+          penaltyHome: true,
+          status: true
         }
       },
       standings: {
@@ -167,8 +181,12 @@ export function getSpecialRoundPredictionReview(id: string, userId: string) {
   return prisma.specialRoundEntry.findUnique({
     include: {
       predictions: true,
+      prize: true,
+      scores: true,
+      standing: true,
       specialRound: {
         include: {
+          _count: { select: { standings: true } },
           markets: {
             include: {
               options: {
@@ -179,6 +197,18 @@ export function getSpecialRoundPredictionReview(id: string, userId: string) {
             },
             orderBy: { sortOrder: "asc" },
             where: { active: true }
+          },
+          match: {
+            select: {
+              awayScore: true,
+              awayTeam: { select: { apiId: true, logo: true } },
+              elapsed: true,
+              homeScore: true,
+              homeTeam: { select: { apiId: true, logo: true } },
+              penaltyAway: true,
+              penaltyHome: true,
+              status: true
+            }
           }
         }
       }
