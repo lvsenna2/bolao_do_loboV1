@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "setup:notebook": "powershell -ExecutionPolicy Bypass -File ./scripts/setup-notebook.ps1",
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
