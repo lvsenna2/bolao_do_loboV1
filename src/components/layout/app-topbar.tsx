@@ -15,10 +15,16 @@ import { ThemeToggle } from "./theme-toggle";
 type AppTopbarProps = {
   mode?: "user" | "admin";
   notificationBadge?: ReactNode;
+  walletBalance?: ReactNode;
   user: Session["user"];
 };
 
-export function AppTopbar({ mode = "user", notificationBadge, user }: AppTopbarProps) {
+export function AppTopbar({
+  mode = "user",
+  notificationBadge,
+  user,
+  walletBalance
+}: AppTopbarProps) {
   const userMode = mode === "user";
 
   return (
@@ -49,6 +55,7 @@ export function AppTopbar({ mode = "user", notificationBadge, user }: AppTopbarP
         )}
 
         <div className="flex items-center gap-2">
+          {userMode ? walletBalance : null}
           <button
             aria-label="Pesquisar"
             className={cn(

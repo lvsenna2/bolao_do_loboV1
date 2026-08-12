@@ -7,6 +7,7 @@ import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { canAccessAdmin } from "@/server/auth/rbac";
 import { canCreateSpecialRound } from "@/features/subscriptions/service";
+import { debitWalletInTransaction } from "@/features/wallet/services/wallet-service";
 import { prisma } from "@/server/db";
 import { runFootballAutomation } from "@/server/football-api/automation-service";
 import { fetchApiFootballLineups } from "@/server/football-api/client";
@@ -820,7 +821,8 @@ export async function updateSpecialRoundStatusAction(
 }
 
 export async function joinSpecialRoundAction(
-  specialRoundId: string
+  specialRoundId: string,
+  paymentMethod: "PIX" | "WALLET" = "PIX"
 ): Promise<SpecialRoundActionResult<Record<string, unknown>>> {
   const user = await requireUser();
   const id = idSchema.safeParse(specialRoundId);
@@ -837,6 +839,108 @@ export async function joinSpecialRoundAction(
   }
   const payer = await prisma.user.findUnique({ select: { email: true }, where: { id: user.id } });
   if (!payer) return { message: "Usuario nao encontrado.", ok: false };
+
+  if (paymentMethod === "WALLET" && Number(round.entryFee) > 0) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const existing = await tx.specialRoundEntry.findUnique({
+          where: { specialRoundId_userId: { specialRoundId: round.id, userId: user.id } }
+        });
+        if (existing?.paymentStatus === "APPROVED") {
+          throw new Error("SPECIAL_ROUND_ALREADY_JOINED");
+        }
+        if (existing?.transactionId) {
+          throw new Error("SPECIAL_ROUND_PIX_ALREADY_CREATED");
+        }
+
+        const rewards = await tx.userRewardBalance.findUnique({ where: { userId: user.id } });
+        const useVoucher = Boolean(rewards && rewards.specialRoundVouchers > 0);
+        const amountCents = Math.round(Number(round.entryFee) * 100);
+        const promoValid = Boolean(
+          rewards?.promoExpiresAt && rewards.promoExpiresAt > now && rewards.promoDiscountPercent
+        );
+        const promoCents = promoValid
+          ? Math.min(
+              rewards?.promoDiscountMaxCents ?? 0,
+              Math.floor((amountCents * (rewards?.promoDiscountPercent ?? 0)) / 100)
+            )
+          : 0;
+        const chargeCents = Math.max(0, amountCents - promoCents);
+        if (useVoucher) {
+          await tx.userRewardBalance.update({
+            data: { specialRoundVouchers: { decrement: 1 } },
+            where: { userId: user.id }
+          });
+        } else {
+          if (chargeCents > 0) {
+            await debitWalletInTransaction(tx, {
+              amountCents: chargeCents,
+              description: `Entrada na rodada especial ${round.name}`,
+              relatedEntityId: round.id,
+              type: "BET",
+              uniqueKey: `wallet:special-round:${round.id}:user:${user.id}`,
+              userId: user.id
+            });
+          }
+          if (promoCents > 0) {
+            await tx.userRewardBalance.update({
+              data: {
+                promoDiscountMaxCents: 0,
+                promoDiscountPercent: 0,
+                promoExpiresAt: null
+              },
+              where: { userId: user.id }
+            });
+          }
+        }
+        const approved = await tx.specialRoundEntry.upsert({
+          create: {
+            amount: useVoucher ? 0 : chargeCents / 100,
+            confirmedAt: now,
+            paymentGateway: "MANUAL",
+            paymentStatus: "APPROVED",
+            providerStatus: useVoucher ? "voucher" : "wallet",
+            specialRoundId: round.id,
+            userId: user.id
+          },
+          update: {
+            amount: useVoucher ? 0 : chargeCents / 100,
+            confirmedAt: now,
+            paymentGateway: "MANUAL",
+            paymentStatus: "APPROVED",
+            providerStatus: useVoucher ? "voucher" : "wallet"
+          },
+          where: { specialRoundId_userId: { specialRoundId: round.id, userId: user.id } }
+        });
+        await tx.specialRoundAuditLog.create({
+          data: {
+            action: useVoucher
+              ? "special_round.entry_paid_with_voucher"
+              : "special_round.entry_paid_with_wallet",
+            actorId: user.id,
+            entity: "SpecialRoundEntry",
+            entityId: approved.id,
+            newValue: json({ amountCents: useVoucher ? 0 : chargeCents, promoCents }),
+            specialRoundId: round.id
+          }
+        });
+      }, serializable);
+      revalidateSpecialRounds(round.id);
+      revalidatePath("/carteira");
+      return { message: "Participacao liberada com saldo ou vale.", ok: true };
+    } catch (error) {
+      if (error instanceof Error && error.message === "WALLET_INSUFFICIENT_BALANCE") {
+        return { message: "Saldo insuficiente. Adicione saldo para participar.", ok: false };
+      }
+      if (error instanceof Error && error.message === "SPECIAL_ROUND_PIX_ALREADY_CREATED") {
+        return { message: "Ja existe um Pix pendente para esta inscricao.", ok: false };
+      }
+      if (error instanceof Error && error.message === "SPECIAL_ROUND_ALREADY_JOINED") {
+        return { message: "Sua participacao ja esta liberada.", ok: false };
+      }
+      return { message: "Nao foi possivel usar o saldo nesta rodada.", ok: false };
+    }
+  }
 
   const entry = await prisma.$transaction(async (tx) => {
     const existing = await tx.specialRoundEntry.findUnique({
