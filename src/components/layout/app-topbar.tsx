@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { AdminMobileMenu } from "./admin-mobile-menu";
 import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
+import { UserMobileMenu } from "./user-mobile-menu";
 
 type AppTopbarProps = {
   mode?: "user" | "admin";
@@ -32,7 +33,10 @@ export function AppTopbar({ mode = "user", notificationBadge, user }: AppTopbarP
     >
       <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         {userMode ? (
-          <BrandLogo />
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <UserMobileMenu isAdmin={user.role === "ADMIN" || user.role === "SUPER_ADMIN"} />
+            <BrandLogo />
+          </div>
         ) : (
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <AdminMobileMenu />

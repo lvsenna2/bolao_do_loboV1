@@ -15,11 +15,7 @@ type AppShellProps = {
   user: Session["user"];
 };
 
-export function AppShell({
-  children,
-  mode = "user",
-  user
-}: AppShellProps) {
+export function AppShell({ children, mode = "user", user }: AppShellProps) {
   return (
     <div
       className={cn(
