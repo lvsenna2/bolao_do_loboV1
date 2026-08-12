@@ -3,6 +3,7 @@ export type FootballCompetitionKey =
   | "libertadores"
   | "sul-americana"
   | "champions-league"
+  | "uefa-super-cup"
   | "copa-do-brasil";
 
 export type FootballCompetitionType = "LEAGUE" | "CUP";
@@ -47,6 +48,14 @@ export const footballCompetitionConfigs: FootballCompetitionConfig[] = [
     key: "champions-league",
     leagueId: 2,
     name: "UEFA Champions League",
+    season: 2026,
+    type: "CUP"
+  },
+  {
+    countryOrContinent: "Europa",
+    key: "uefa-super-cup",
+    leagueId: 531,
+    name: "UEFA Super Cup",
     season: 2026,
     type: "CUP"
   },

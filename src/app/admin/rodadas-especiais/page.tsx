@@ -11,14 +11,24 @@ import { getAdminSpecialRounds } from "@/features/special-rounds/data/special-ro
 import { canDeleteSpecialRoundEntries } from "@/features/special-rounds/services/state-service";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { requireAdmin } from "@/server/auth/session";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
+
+const getCachedAdminSpecialRounds = withShortCache(
+  "admin-special-rounds-page-data",
+  getAdminSpecialRounds
+);
+const getCachedElectionRoundSummary = withShortCache(
+  "admin-election-round-summary",
+  getElectionRoundSummary
+);
 
 export default async function AdminSpecialRoundsPage() {
   await requireAdmin();
   const [rounds, election] = await Promise.all([
-    getAdminSpecialRounds(),
-    getElectionRoundSummary()
+    getCachedAdminSpecialRounds(),
+    getCachedElectionRoundSummary()
   ]);
   return (
     <PageShell

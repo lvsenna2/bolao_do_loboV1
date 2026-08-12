@@ -9,6 +9,7 @@ import type {
 } from "@prisma/client";
 
 import { getSaoPauloDayRangeUtc, serverNow } from "@/lib/date-time";
+import { formatMoney } from "@/lib/money";
 import { prisma } from "@/server/db";
 import {
   FOOTBALL_MANUAL_TRIGGER,
@@ -58,17 +59,7 @@ function emptyResult<T>(message: string, data: T): AdminDataResult<T> {
 }
 
 function toCurrency(value: Prisma.Decimal | number | null | undefined) {
-  const amount =
-    typeof value === "number"
-      ? value
-      : typeof value?.toNumber === "function"
-        ? value.toNumber()
-        : 0;
-
-  return new Intl.NumberFormat("pt-BR", {
-    currency: "BRL",
-    style: "currency"
-  }).format(amount);
+  return formatMoney(value);
 }
 
 export async function getAdminDashboardData() {
@@ -1417,10 +1408,10 @@ export async function getAdminFootballSyncStatus() {
   };
 
   try {
-    const automationRunning = await isFootballAutomationRunning();
     const competitionKeys = footballCompetitionConfigs.map((competition) => competition.key);
     const requestWindow = getSaoPauloDayRangeUtc();
     const [
+      automationRunning,
       logs,
       championships,
       automation,
@@ -1428,9 +1419,11 @@ export async function getAdminFootballSyncStatus() {
       usage,
       latestManualRun,
       detailMatchesByCompetition,
+      matchCountsByCompetition,
       requestGroups,
       requestSamples
     ] = await Promise.all([
+      isFootballAutomationRunning(),
       prisma.footballSyncLog.findMany({
         orderBy: {
           createdAt: "desc"
@@ -1528,6 +1521,25 @@ export async function getAdminFootballSyncStatus() {
           })
         )
       ),
+      Promise.all(
+        footballCompetitionConfigs.map((competition) =>
+          prisma.match.count({
+            where: {
+              deletedAt: null,
+              round: {
+                leagueId: null,
+                season: {
+                  championship: {
+                    apiId: competition.leagueId,
+                    provider: "api-football"
+                  },
+                  year: competition.season
+                }
+              }
+            }
+          })
+        )
+      ),
       prisma.footballApiRequestLog.groupBy({
         _count: { _all: true },
         _max: { createdAt: true },
@@ -1557,47 +1569,33 @@ export async function getAdminFootballSyncStatus() {
       })
     ]);
 
-    const competitions = await Promise.all(
-      footballCompetitionConfigs.map(async (competition) => {
-        const lastAttempt =
-          logs.find(
-            (log) => log.competitionKey === competition.key && log.season === competition.season
-          ) ?? null;
-        const lastSuccess =
-          logs.find(
-            (log) =>
-              log.competitionKey === competition.key &&
-              log.season === competition.season &&
-              log.status === "SUCCESS"
-          ) ?? null;
-        const championship = championships.find(
-          (item) => item.apiId === competition.leagueId && item.provider === "api-football"
-        );
-        const season = championship?.seasons.find((item) => item.year === competition.season);
-        const matches = season
-          ? await prisma.match.count({
-              where: {
-                deletedAt: null,
-                round: {
-                  leagueId: null,
-                  seasonId: season.id
-                }
-              }
-            })
-          : 0;
-
-        return {
-          ...competition,
-          lastAttempt,
-          lastSuccess,
-          local: {
-            matches,
-            rounds: season?._count.rounds ?? 0,
-            standings: season?._count.standings ?? 0
-          }
-        };
-      })
-    );
+    const competitions = footballCompetitionConfigs.map((competition, index) => {
+      const lastAttempt =
+        logs.find(
+          (log) => log.competitionKey === competition.key && log.season === competition.season
+        ) ?? null;
+      const lastSuccess =
+        logs.find(
+          (log) =>
+            log.competitionKey === competition.key &&
+            log.season === competition.season &&
+            log.status === "SUCCESS"
+        ) ?? null;
+      const championship = championships.find(
+        (item) => item.apiId === competition.leagueId && item.provider === "api-football"
+      );
+      const season = championship?.seasons.find((item) => item.year === competition.season);
+      return {
+        ...competition,
+        lastAttempt,
+        lastSuccess,
+        local: {
+          matches: matchCountsByCompetition[index],
+          rounds: season?._count.rounds ?? 0,
+          standings: season?._count.standings ?? 0
+        }
+      };
+    });
     const cooldownHours = getFootballManualSyncCooldownHours();
     const nextAvailableAt = latestManualRun
       ? new Date(latestManualRun.startedAt.getTime() + cooldownHours * 60 * 60_000)

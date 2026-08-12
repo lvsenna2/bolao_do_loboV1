@@ -3,31 +3,27 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Save, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 
+import { FootballLogo } from "@/components/football/football-logo";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { ActionAlert } from "@/features/auth/components/action-alert";
 import { applyServerFieldErrors } from "@/features/auth/components/form-error-utils";
 import { cn } from "@/lib/utils";
 import { deleteGuessAction, upsertGuessAction } from "../actions/guess-actions";
-import type { GuessView, ScoringDefaults } from "../data/guess-data";
+import type { GuessView, ScoringDefaults, TeamView } from "../data/guess-data";
 import {
   getPredictionFromScore,
   upsertGuessSchema,
-  type GuessPrediction,
   type UpsertGuessInput
 } from "../schemas/guess-schemas";
 import { GuessDialog } from "./guess-dialog";
-
-export type GuessDraftState = {
-  awayFilled: boolean;
-  homeFilled: boolean;
-  incomplete: boolean;
-  isDirty: boolean;
-};
+import { ScoreInput } from "./score-input";
 
 type GuessFormProps = {
+  awayTeam: TeamView;
   existingGuess: GuessView | null;
+  homeTeam: TeamView;
   jokerLimit: number;
   jokerLocked: boolean;
   leagueId: string;
@@ -35,21 +31,20 @@ type GuessFormProps = {
   matchName: string;
   onAdvanceRequested: (matchId: string) => void;
   onDeleted: (matchId: string) => void;
-  onDraftStateChange: (matchId: string, state: GuessDraftState) => void;
   onSaved: (matchId: string, guess: GuessView) => void;
   roundJokerMatchId: string | null;
   roundJokerMatchName: string | null;
   scoring: ScoringDefaults;
 };
 
-const predictionOptions = [
-  { helper: "Mandante", label: "1", value: "HOME" },
-  { helper: "Empate", label: "X", value: "DRAW" },
-  { helper: "Visitante", label: "2", value: "AWAY" }
-] satisfies Array<{ helper: string; label: string; value: GuessPrediction }>;
-
 function emptyScore() {
-  return undefined as unknown as number;
+  return Number.NaN;
+}
+
+function hasSavedScore(existingGuess: GuessView | null) {
+  return Boolean(
+    existingGuess && existingGuess.homePrediction !== null && existingGuess.awayPrediction !== null
+  );
 }
 
 function getDefaultValues(
@@ -57,36 +52,45 @@ function getDefaultValues(
   matchId: string,
   leagueId: string
 ): UpsertGuessInput {
-  const hasSavedScore = Boolean(
-    existingGuess && existingGuess.homePrediction !== null && existingGuess.awayPrediction !== null
-  );
   const homePrediction = existingGuess?.homePrediction ?? emptyScore();
   const awayPrediction = existingGuess?.awayPrediction ?? emptyScore();
+  const complete = Number.isFinite(homePrediction) && Number.isFinite(awayPrediction);
 
   return {
-    awayPrediction: awayPrediction as number,
-    homePrediction: homePrediction as number,
+    awayPrediction,
+    homePrediction,
     joker: existingGuess?.joker ?? false,
     leagueId,
     matchId,
-    prediction: hasSavedScore
-      ? getPredictionFromScore(homePrediction as number, awayPrediction as number)
+    prediction: complete
+      ? getPredictionFromScore(homePrediction, awayPrediction)
       : (existingGuess?.prediction ?? "DRAW")
   };
 }
 
-function isFilledScore(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
-function getPointsPreview(scoring: ScoringDefaults, joker: boolean) {
-  const basePoints = scoring.winnerHit + scoring.exactScoreBonus;
-
-  return joker ? basePoints * scoring.jokerMultiplier : basePoints;
+function TeamScoreRow({ children, team }: { children: React.ReactNode; team: TeamView }) {
+  return (
+    <div className="flex min-h-12 items-center gap-2.5">
+      <FootballLogo
+        apiId={team.apiId}
+        className="p-1"
+        kind="team"
+        logo={team.logo}
+        name={team.shortName || team.name}
+        size={28}
+      />
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-app-foreground">
+        {team.name}
+      </span>
+      {children}
+    </div>
+  );
 }
 
 export function GuessForm({
+  awayTeam,
   existingGuess,
+  homeTeam,
   jokerLimit,
   jokerLocked,
   leagueId,
@@ -94,7 +98,6 @@ export function GuessForm({
   matchName,
   onAdvanceRequested,
   onDeleted,
-  onDraftStateChange,
   onSaved,
   roundJokerMatchId,
   roundJokerMatchName,
@@ -107,11 +110,11 @@ export function GuessForm({
   const [isPending, startTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
   const [jokerDialogOpen, setJokerDialogOpen] = useState(false);
-  const [message, setMessage] = useState<string | undefined>();
-  const [error, setErrorMessage] = useState<string | undefined>();
+  const [saved, setSaved] = useState(hasSavedScore(existingGuess));
+  const [error, setErrorMessage] = useState<string>();
   const {
+    control,
     formState: { errors, isDirty },
-    getValues,
     handleSubmit,
     register,
     reset,
@@ -127,44 +130,29 @@ export function GuessForm({
   const homePrediction = watch("homePrediction");
   const joker = watch("joker");
   const prediction = watch("prediction");
-  const homeFilled = isFilledScore(homePrediction);
-  const awayFilled = isFilledScore(awayPrediction);
-  const pointsPreview = getPointsPreview(scoring, Boolean(joker));
+  const homeFilled = Number.isFinite(homePrediction);
+  const awayFilled = Number.isFinite(awayPrediction);
   const selectingDifferentJoker = Boolean(roundJokerMatchId && roundJokerMatchId !== matchId);
   const jokerDisabled = jokerLimit < 1 || (jokerLocked && selectingDifferentJoker);
 
   useEffect(() => {
     reset(defaultValues);
-  }, [defaultValues, reset]);
+    setSaved(hasSavedScore(existingGuess));
+  }, [defaultValues, existingGuess, reset]);
 
   useEffect(() => {
-    onDraftStateChange(matchId, {
-      awayFilled,
-      homeFilled,
-      incomplete: isDirty && homeFilled !== awayFilled,
-      isDirty
-    });
-  }, [awayFilled, homeFilled, isDirty, matchId, onDraftStateChange]);
+    if (!homeFilled || !awayFilled) return;
 
-  useEffect(() => {
-    const homeScore = Number(homePrediction);
-    const awayScore = Number(awayPrediction);
+    const nextPrediction = getPredictionFromScore(homePrediction, awayPrediction);
 
-    if (Number.isFinite(homeScore) && Number.isFinite(awayScore)) {
-      const nextPrediction = getPredictionFromScore(homeScore, awayScore);
-
-      if (nextPrediction !== prediction) {
-        setValue("prediction", nextPrediction, {
-          shouldDirty: true,
-          shouldValidate: true
-        });
-      }
+    if (nextPrediction !== prediction) {
+      setValue("prediction", nextPrediction, { shouldDirty: true, shouldValidate: true });
     }
-  }, [awayPrediction, homePrediction, prediction, setValue]);
+  }, [awayFilled, awayPrediction, homeFilled, homePrediction, prediction, setValue]);
 
   const onSubmit = useCallback(
     (values: UpsertGuessInput) => {
-      setMessage(undefined);
+      setSaved(false);
       setErrorMessage(undefined);
 
       startTransition(async () => {
@@ -177,52 +165,27 @@ export function GuessForm({
         }
 
         const savedGuess = result.data?.guess;
-        const preview = result.data?.pointsPreview ?? pointsPreview;
 
         if (savedGuess) {
           onSaved(matchId, savedGuess);
           reset(getDefaultValues(savedGuess, matchId, leagueId));
+          setSaved(true);
         }
 
-        setMessage(`${result.message} Previa maxima: ${preview} pontos.`);
         onAdvanceRequested(matchId);
       });
     },
-    [leagueId, matchId, onAdvanceRequested, onSaved, pointsPreview, reset, setError]
+    [leagueId, matchId, onAdvanceRequested, onSaved, reset, setError]
   );
 
-  function selectPrediction(nextPrediction: GuessPrediction) {
-    const currentHome = Number(getValues("homePrediction"));
-    const currentAway = Number(getValues("awayPrediction"));
-    const safeHome = Number.isFinite(currentHome) ? Math.max(0, Math.min(99, currentHome)) : 0;
-    const safeAway = Number.isFinite(currentAway) ? Math.max(0, Math.min(99, currentAway)) : 0;
-
-    if (nextPrediction === "HOME" && safeHome <= safeAway) {
-      const awayScore = Math.min(safeAway, 98);
-      setValue("awayPrediction", awayScore, { shouldDirty: true, shouldValidate: true });
-      setValue("homePrediction", awayScore + 1, { shouldDirty: true, shouldValidate: true });
-    }
-
-    if (nextPrediction === "DRAW") {
-      setValue("homePrediction", safeHome, { shouldDirty: true, shouldValidate: true });
-      setValue("awayPrediction", safeHome, { shouldDirty: true, shouldValidate: true });
-    }
-
-    if (nextPrediction === "AWAY" && safeAway <= safeHome) {
-      const homeScore = Math.min(safeHome, 98);
-      setValue("homePrediction", homeScore, { shouldDirty: true, shouldValidate: true });
-      setValue("awayPrediction", homeScore + 1, { shouldDirty: true, shouldValidate: true });
-    }
-
-    setValue("prediction", nextPrediction, {
-      shouldDirty: true,
-      shouldValidate: true
-    });
+  function updateScore(onChange: (value: number) => void, value: number) {
+    setSaved(false);
+    setErrorMessage(undefined);
+    onChange(value);
   }
 
   function confirmJoker() {
     setJokerDialogOpen(false);
-    setMessage(undefined);
     setErrorMessage(undefined);
 
     if (!homeFilled || !awayFilled) {
@@ -230,23 +193,19 @@ export function GuessForm({
       return;
     }
 
-    const homeScore = Number(getValues("homePrediction"));
-    const awayScore = Number(getValues("awayPrediction"));
     setValue("joker", true, { shouldDirty: true, shouldValidate: true });
-    setValue("prediction", getPredictionFromScore(homeScore, awayScore), {
+    setValue("prediction", getPredictionFromScore(homePrediction, awayPrediction), {
       shouldDirty: true,
       shouldValidate: true
     });
 
-    window.setTimeout(() => {
-      void handleSubmit(onSubmit)();
-    }, 0);
+    window.setTimeout(() => void handleSubmit(onSubmit)(), 0);
   }
 
   function toggleJoker() {
     if (joker) {
+      setSaved(false);
       setValue("joker", false, { shouldDirty: true, shouldValidate: true });
-      setMessage("Coringa removido deste palpite. Salve para confirmar a alteracao.");
       return;
     }
 
@@ -256,9 +215,7 @@ export function GuessForm({
   function onDelete() {
     if (!existingGuess) return;
 
-    setMessage(undefined);
     setErrorMessage(undefined);
-
     startDeleteTransition(async () => {
       const result = await deleteGuessAction({ guessId: existingGuess.id });
 
@@ -268,159 +225,145 @@ export function GuessForm({
       }
 
       reset(getDefaultValues(null, matchId, leagueId));
+      setSaved(false);
       onDeleted(matchId);
-      setMessage(result.message);
     });
   }
 
+  const statusLabel = isPending
+    ? "Salvando..."
+    : error
+      ? "Erro ao salvar"
+      : isDirty
+        ? "Nao salvo"
+        : saved
+          ? "✓ Salvo"
+          : "Pendente";
+
   return (
     <>
-      <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+      <form
+        className="space-y-2"
+        onKeyDown={(event) => {
+          if (
+            event.key !== "Enter" ||
+            !(event.target instanceof HTMLInputElement) ||
+            !event.target.dataset.scoreInput
+          ) {
+            return;
+          }
+
+          const scoreInputs = Array.from(
+            event.currentTarget.querySelectorAll<HTMLInputElement>("input[data-score-input]")
+          );
+
+          if (scoreInputs[0] === event.target) {
+            event.preventDefault();
+            scoreInputs[1]?.focus();
+          }
+        }}
+        onSubmit={handleSubmit(onSubmit)}
+      >
         <input type="hidden" {...register("matchId")} />
         <input type="hidden" {...register("leagueId")} />
         <input type="hidden" {...register("joker")} />
+        <input type="hidden" {...register("prediction")} />
 
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3">
-          <label className="min-w-0 space-y-2">
-            <span className="block truncate text-xs font-semibold uppercase text-app-muted">
-              {existingGuess ? "Mandante" : "Placar mandante"}
-            </span>
-            <input
-              aria-label={`Gols de ${matchName.split(" x ")[0]}`}
-              className={cn(
-                "h-14 w-full rounded-control border border-app-border bg-app-background text-center text-2xl font-bold text-app-foreground outline-none transition focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20",
-                errors.homePrediction
-                  ? "border-brand-red focus:border-brand-red focus:ring-brand-red/20"
-                  : ""
+        <div className="divide-y divide-app-border">
+          <TeamScoreRow team={homeTeam}>
+            <Controller
+              control={control}
+              name="homePrediction"
+              render={({ field }) => (
+                <ScoreInput
+                  ariaLabel={`Gols de ${homeTeam.name}`}
+                  invalid={Boolean(errors.homePrediction)}
+                  onChange={(value) => updateScore(field.onChange, value)}
+                  value={field.value}
+                />
               )}
-              data-score-input
-              inputMode="numeric"
-              max={99}
-              min={0}
-              placeholder="-"
-              type="number"
-              {...register("homePrediction", { valueAsNumber: true })}
             />
-          </label>
-          <span className="pb-4 text-lg font-bold text-app-muted">x</span>
-          <label className="min-w-0 space-y-2">
-            <span className="block truncate text-xs font-semibold uppercase text-app-muted">
-              {existingGuess ? "Visitante" : "Placar visitante"}
-            </span>
-            <input
-              aria-label={`Gols de ${matchName.split(" x ")[1]}`}
-              className={cn(
-                "h-14 w-full rounded-control border border-app-border bg-app-background text-center text-2xl font-bold text-app-foreground outline-none transition focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20",
-                errors.awayPrediction
-                  ? "border-brand-red focus:border-brand-red focus:ring-brand-red/20"
-                  : ""
+          </TeamScoreRow>
+          <TeamScoreRow team={awayTeam}>
+            <Controller
+              control={control}
+              name="awayPrediction"
+              render={({ field }) => (
+                <ScoreInput
+                  ariaLabel={`Gols de ${awayTeam.name}`}
+                  invalid={Boolean(errors.awayPrediction)}
+                  onChange={(value) => updateScore(field.onChange, value)}
+                  value={field.value}
+                />
               )}
-              data-score-input
-              inputMode="numeric"
-              max={99}
-              min={0}
-              placeholder="-"
-              type="number"
-              {...register("awayPrediction", { valueAsNumber: true })}
             />
-          </label>
+          </TeamScoreRow>
         </div>
 
         {errors.homePrediction?.message || errors.awayPrediction?.message ? (
-          <p className="text-sm text-red-600 dark:text-red-300">
+          <p className="text-xs text-red-600 dark:text-red-300">
             {errors.homePrediction?.message ?? errors.awayPrediction?.message}
           </p>
         ) : null}
 
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-app-foreground">Quem vence?</p>
-          <div className="grid grid-cols-3 rounded-control border border-app-border bg-app-background p-1">
-            {predictionOptions.map((option) => (
-              <button
-                aria-pressed={prediction === option.value}
-                className={cn(
-                  "flex min-h-12 flex-col items-center justify-center rounded-control px-2 text-xs font-semibold transition",
-                  prediction === option.value && homeFilled && awayFilled
-                    ? "bg-brand-gold text-slate-950 shadow-soft"
-                    : "text-app-muted hover:bg-app-elevated hover:text-app-foreground"
-                )}
-                key={option.value}
-                onClick={() => selectPrediction(option.value)}
-                type="button"
-              >
-                <span className="text-lg leading-5">{option.label}</span>
-                <span className="mt-1 text-[10px] uppercase leading-none">{option.helper}</span>
-              </button>
-            ))}
-          </div>
-          {errors.prediction?.message ? (
-            <p className="text-sm text-red-600 dark:text-red-300">{errors.prediction.message}</p>
-          ) : null}
-        </div>
-
-        <button
-          aria-pressed={Boolean(joker)}
-          className={cn(
-            "flex w-full items-start gap-3 rounded-control border p-3 text-left transition",
-            joker
-              ? "border-brand-gold bg-brand-gold/10"
-              : "border-app-border bg-app-background hover:border-brand-gold/60",
-            jokerDisabled ? "cursor-not-allowed opacity-60" : ""
-          )}
-          disabled={jokerDisabled}
-          onClick={toggleJoker}
-          type="button"
-        >
-          <Star
-            aria-hidden
-            className={cn(
-              "mt-0.5 h-5 w-5 shrink-0",
-              joker ? "fill-brand-gold text-brand-gold" : "text-brand-gold"
-            )}
-          />
-          <span className="min-w-0 text-sm">
-            <span className="block font-semibold text-app-foreground">
-              {joker ? "Coringa selecionado" : "Usar Coringa nesta partida"}
-            </span>
-            <span className="mt-1 block text-xs leading-5 text-app-muted">
-              {jokerDisabled
-                ? "O Coringa atual ja esta bloqueado."
-                : `A pontuacao deste jogo sera multiplicada por ${scoring.jokerMultiplier}. Previa maxima: ${pointsPreview} pontos.`}
-            </span>
-          </span>
-        </button>
-        {errors.joker?.message ? (
-          <p className="text-sm text-red-600 dark:text-red-300">{errors.joker.message}</p>
-        ) : null}
-
-        <ActionAlert message={message} tone="success" />
-        <ActionAlert message={error} />
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div className="flex flex-wrap items-center gap-2 border-t border-app-border pt-2">
           <LoadingButton
-            className="h-11 rounded-button bg-brand-gold px-4 text-sm font-semibold text-slate-950 hover:bg-amber-400 disabled:pointer-events-none"
-            disabled={isDeleting}
+            className="h-10 rounded-button bg-brand-gold px-3 text-xs font-bold text-slate-950 hover:bg-amber-400"
+            disabled={isDeleting || (!isDirty && Boolean(existingGuess))}
             icon={<Save aria-hidden className="h-4 w-4" />}
             isLoading={isPending}
             loadingLabel="Salvando..."
             type="submit"
           >
-            {existingGuess ? "Salvar alteracoes" : "Salvar palpite"}
+            Salvar
           </LoadingButton>
+          <button
+            aria-label={joker ? "Remover Coringa" : "Usar Coringa nesta partida"}
+            aria-pressed={Boolean(joker)}
+            className={cn(
+              "inline-flex h-10 items-center gap-1.5 rounded-button border px-3 text-xs font-semibold",
+              joker
+                ? "border-brand-gold bg-brand-gold/10 text-brand-gold"
+                : "border-app-border text-app-muted hover:border-brand-gold",
+              jokerDisabled ? "cursor-not-allowed opacity-50" : ""
+            )}
+            disabled={jokerDisabled}
+            onClick={toggleJoker}
+            type="button"
+          >
+            <Star aria-hidden className={cn("h-4 w-4", joker ? "fill-current" : "")} />
+            Coringa
+          </button>
           {existingGuess ? (
             <LoadingButton
-              className="h-11 rounded-button border border-app-border bg-app-surface px-4 text-sm font-semibold text-app-foreground hover:border-brand-gold hover:text-brand-gold disabled:pointer-events-none"
+              aria-label="Excluir palpite"
+              className="h-10 w-10 rounded-button border border-app-border text-app-muted hover:border-brand-red hover:text-brand-red"
               disabled={isPending}
               icon={<Trash2 aria-hidden className="h-4 w-4" />}
               isLoading={isDeleting}
-              loadingLabel="Excluindo..."
+              loadingLabel=""
               onClick={onDelete}
               type="button"
-            >
-              Excluir palpite
-            </LoadingButton>
+            />
           ) : null}
+          <span
+            aria-live="polite"
+            className={cn(
+              "ml-auto text-xs font-semibold",
+              error
+                ? "text-red-600 dark:text-red-300"
+                : isDirty
+                  ? "text-amber-600 dark:text-amber-300"
+                  : saved
+                    ? "text-emerald-600 dark:text-emerald-300"
+                    : "text-app-muted"
+            )}
+          >
+            {statusLabel}
+          </span>
         </div>
+
+        <ActionAlert message={error} />
       </form>
 
       <GuessDialog
@@ -457,7 +400,7 @@ export function GuessForm({
           </p>
         ) : (
           <p>
-            Voce possui apenas um Coringa nesta rodada. Ao confirmar, a pontuacao obtida em
+            Voce possui apenas um Coringa nesta rodada. A pontuacao de
             <strong className="text-app-foreground"> {matchName}</strong> sera multiplicada por{" "}
             {scoring.jokerMultiplier}.
           </p>

@@ -8,6 +8,7 @@ import { AppTopbar } from "./app-topbar";
 import { MobileBottomNav } from "./mobile-bottom-nav";
 import { UnreadNotificationBadge } from "./unread-notification-badge";
 import { XpNotificationToast } from "./xp-notification-toast";
+import { WalletBalanceLink } from "./wallet-balance-link";
 
 type AppShellProps = {
   children: ReactNode;
@@ -53,6 +54,13 @@ export function AppShell({ children, mode = "user", user }: AppShellProps) {
               ) : null
             }
             user={user}
+            walletBalance={
+              mode === "user" ? (
+                <Suspense fallback={null}>
+                  <WalletBalanceLink userId={user.id} />
+                </Suspense>
+              ) : null
+            }
           />
           <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
         </div>

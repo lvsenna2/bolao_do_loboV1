@@ -10,7 +10,9 @@ import {
   syncActiveLeagueMissionProgress
 } from "@/features/xp/services/xp-service";
 import { getPaidLeaguePricingForUser } from "@/features/subscriptions/pricing-service";
+import { debitWalletInTransaction } from "@/features/wallet/services/wallet-service";
 import { serverNow } from "@/lib/date-time";
+import { formatMoney, toMoneyNumber } from "@/lib/money";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import { getMercadoPagoErrorDescription, MercadoPagoApiError } from "@/server/mercado-pago/client";
@@ -200,19 +202,8 @@ type PendingPixPayment = {
 
 type PaidLeaguePricing = Awaited<ReturnType<typeof getPaidLeaguePricingForUser>>;
 
-function getMoneyNumber(value: Prisma.Decimal | number | string) {
-  return Number(typeof value === "object" ? value.toString() : value);
-}
-
-function formatMoney(value: Prisma.Decimal | number | string) {
-  return new Intl.NumberFormat("pt-BR", {
-    currency: "BRL",
-    style: "currency"
-  }).format(getMoneyNumber(value));
-}
-
 function requiresPixPayment(league: JoinableLeague) {
-  return league.visibility !== "PUBLIC" && getMoneyNumber(league.entryFee) > 0;
+  return league.visibility !== "PUBLIC" && toMoneyNumber(league.entryFee) > 0;
 }
 
 function toPaymentIntent(
@@ -263,7 +254,7 @@ async function createPendingPixPayment(
   });
 
   if (existingPayment) {
-    const currentAmount = getMoneyNumber(existingPayment.amount);
+    const currentAmount = toMoneyNumber(existingPayment.amount);
     const isUsable =
       Math.abs(currentAmount - finalAmount) < 0.01 &&
       Boolean(existingPayment.qrCode) &&
@@ -374,7 +365,7 @@ async function joinLeagueForUser(
 
   if (requiresPixPayment(league)) {
     const [pricing, payer] = await Promise.all([
-      getPaidLeaguePricingForUser(userId, getMoneyNumber(league.entryFee)),
+      getPaidLeaguePricingForUser(userId, toMoneyNumber(league.entryFee)),
       prisma.user.findUnique({
         select: { email: true },
         where: { id: userId }
@@ -754,4 +745,147 @@ export async function joinAvailableLeagueAction(
   }
 
   return joinLeagueForUser(user.id, league, "league.available_joined");
+}
+
+export async function joinLeagueWithWalletAction(
+  input: JoinAvailableLeagueInput
+): Promise<LeagueActionResult> {
+  const user = await requireUser();
+  const parsedInput = joinAvailableLeagueSchema.safeParse(input);
+  if (!parsedInput.success) return { ok: false, message: "Liga invalida." };
+
+  const league = await prisma.league.findFirst({
+    where: {
+      championship: { deletedAt: null, status: "ACTIVE" },
+      deletedAt: null,
+      id: parsedInput.data.leagueId,
+      status: { in: ["OPEN", "ACTIVE"] },
+      visibility: "PRIVATE"
+    }
+  });
+  if (!league || toMoneyNumber(league.entryFee) <= 0) {
+    return { ok: false, message: "Liga paga nao encontrada ou indisponivel." };
+  }
+
+  const pricing = await getPaidLeaguePricingForUser(user.id, toMoneyNumber(league.entryFee));
+  const priceCents = Math.round(pricing.finalAmount * 100);
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.leagueMember.findUnique({
+          where: { leagueId_userId: { leagueId: league.id, userId: user.id } }
+        });
+        if (existing?.status === "ACTIVE") throw new Error("LEAGUE_ALREADY_JOINED");
+        if (existing?.status === "BLOCKED") throw new Error("LEAGUE_MEMBER_BLOCKED");
+
+        if ((!existing || existing.status === "LEFT") && league.maxMembers) {
+          const memberCount = await tx.leagueMember.count({
+            where: { leagueId: league.id, status: { not: "LEFT" } }
+          });
+          if (memberCount >= league.maxMembers) throw new Error("LEAGUE_FULL");
+        }
+
+      const rewards = await tx.userRewardBalance.findUnique({ where: { userId: user.id } });
+        const useVoucher = Boolean(rewards && rewards.leagueVouchers > 0);
+        const promoValid = Boolean(
+          rewards?.promoExpiresAt &&
+          rewards.promoExpiresAt > serverNow() &&
+          rewards.promoDiscountPercent
+        );
+        const promoCents = promoValid
+          ? Math.min(
+              rewards?.promoDiscountMaxCents ?? 0,
+              Math.floor((priceCents * (rewards?.promoDiscountPercent ?? 0)) / 100)
+            )
+          : 0;
+      const chargeCents = Math.max(0, priceCents - promoCents);
+      const checkoutKey = `league:${league.id}:user:${user.id}`;
+      const existingPayment = await tx.payment.findUnique({ where: { checkoutKey } });
+      if (existingPayment?.transactionId && existingPayment.status === "PENDING") {
+        throw new Error("LEAGUE_PIX_ALREADY_CREATED");
+      }
+        if (useVoucher) {
+          await tx.userRewardBalance.update({
+            data: { leagueVouchers: { decrement: 1 } },
+            where: { userId: user.id }
+          });
+        } else {
+          if (chargeCents > 0) {
+            await debitWalletInTransaction(tx, {
+              amountCents: chargeCents,
+              description: `Entrada na liga ${league.name}`,
+              relatedEntityId: league.id,
+              type: "BET",
+              uniqueKey: `wallet:league:${league.id}:user:${user.id}`,
+              userId: user.id
+            });
+          }
+          if (promoCents > 0) {
+            await tx.userRewardBalance.update({
+              data: {
+                promoDiscountMaxCents: 0,
+                promoDiscountPercent: 0,
+                promoExpiresAt: null
+              },
+              where: { userId: user.id }
+            });
+          }
+        }
+      await tx.leagueMember.upsert({
+          create: { leagueId: league.id, role: "MEMBER", status: "ACTIVE", userId: user.id },
+          update: { joinedAt: serverNow(), leftAt: null, role: "MEMBER", status: "ACTIVE" },
+        where: { leagueId_userId: { leagueId: league.id, userId: user.id } }
+      });
+      await tx.payment.upsert({
+        create: {
+          amount: chargeCents / 100,
+          checkoutKey,
+          gateway: "MANUAL",
+          leagueId: league.id,
+          paidAt: serverNow(),
+          providerStatus: useVoucher ? "voucher" : "wallet",
+          status: "APPROVED",
+          transactionId: `wallet:${league.id}:${user.id}`,
+          userId: user.id
+        },
+        update: {
+          amount: chargeCents / 100,
+          gateway: "MANUAL",
+          paidAt: serverNow(),
+          providerStatus: useVoucher ? "voucher" : "wallet",
+          status: "APPROVED",
+          transactionId: `wallet:${league.id}:${user.id}`
+        },
+        where: { checkoutKey }
+      });
+        await tx.auditLog.create({
+          data: {
+            action: useVoucher ? "league.joined_with_voucher" : "league.joined_with_wallet",
+            userId: user.id,
+            entity: "League",
+            entityId: league.id,
+            newValue: { amountCents: useVoucher ? 0 : chargeCents, promoCents }
+          }
+        });
+      },
+      { isolationLevel: "Serializable" }
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message === "WALLET_INSUFFICIENT_BALANCE") {
+      return { ok: false, message: "Saldo insuficiente. Adicione saldo para participar." };
+    }
+    if (error instanceof Error && error.message === "LEAGUE_ALREADY_JOINED") {
+      return { ok: false, message: "Voce ja participa desta liga." };
+    }
+    if (error instanceof Error && error.message === "LEAGUE_FULL") {
+      return { ok: false, message: "Esta liga atingiu o limite de participantes." };
+    }
+    if (error instanceof Error && error.message === "LEAGUE_PIX_ALREADY_CREATED") {
+      return { ok: false, message: "Ja existe um Pix pendente para esta liga." };
+    }
+    return { ok: false, message: "Nao foi possivel usar o saldo nesta liga." };
+  }
+  revalidateLeaguePaths();
+  revalidatePath("/carteira");
+  return { ok: true, message: "Entrada confirmada com saldo ou vale." };
 }

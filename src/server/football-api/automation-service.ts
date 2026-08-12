@@ -34,7 +34,11 @@ import {
 } from "./detail-service";
 import { syncApiFootballCompetitionIntoLeagues } from "./league-sync-service";
 import { getFootballApiUsageSnapshot } from "./request";
-import { shouldSyncFixture, type FixtureSyncDecision } from "./sync-decision";
+import {
+  isWithinDelayedStatusRecoveryWindow,
+  shouldSyncFixture,
+  type FixtureSyncDecision
+} from "./sync-decision";
 import { isApiFootballFinalStatus, isApiFootballLiveStatus } from "./status";
 import {
   applyFootballFixture,
@@ -666,6 +670,13 @@ export function getFixtureSyncPriority(
   if (["LIVE", "HALFTIME"].includes(input.status)) return 0;
   if (input.decision.lineups && untilKickoff <= 10 * MINUTE_MS) return 1;
   if (input.decision.lineups) return 2;
+  if (
+    input.status === "SCHEDULED" &&
+    input.decision.fixture &&
+    isWithinDelayedStatusRecoveryWindow(input.kickoff, now)
+  ) {
+    return 3;
+  }
   if (untilKickoff <= 60 * MINUTE_MS && untilKickoff >= -2 * 60 * MINUTE_MS) return 3;
   if (input.hasActiveSpecialRound) return 4;
   if (untilKickoff <= 24 * 60 * MINUTE_MS && untilKickoff > 0) return 5;
@@ -690,6 +701,13 @@ export function shouldQueueFixtureForAutomation(
   const isNearKickoff = untilKickoff <= 24 * 60 * MINUTE_MS && untilKickoff > -2 * 60 * MINUTE_MS;
 
   if (hasActiveSpecialRound) return true;
+  if (
+    candidate.status === "SCHEDULED" &&
+    decision.fixture &&
+    isWithinDelayedStatusRecoveryWindow(candidate.kickoff, now)
+  ) {
+    return true;
+  }
   if (decision.lineups && untilKickoff <= 10 * MINUTE_MS) return true;
   if (untilKickoff <= 60 * MINUTE_MS && untilKickoff >= -2 * 60 * MINUTE_MS) return true;
   if (isNearKickoff && (decision.fixture || decision.history || decision.lineups)) return true;

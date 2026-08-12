@@ -5,6 +5,7 @@ import { CalendarClock, ChevronDown, ClipboardCheck, MapPin, Trophy } from "luci
 import { buttonVariants } from "@/components/ui/button";
 import { FootballLogo } from "@/components/football/football-logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { identifyTwoLegMatches, type MatchLegRole } from "@/features/matches/two-leg";
 import { cn } from "@/lib/utils";
 import {
   formatRoundDate,
@@ -43,9 +44,11 @@ function TeamMark({ apiId, logo, name, shortName }: TeamMarkProps) {
 
 function MatchRow({
   match,
+  legRole,
   roundStatus
 }: {
   match: RoundMatchView;
+  legRole?: MatchLegRole;
   roundStatus: RoundView["status"];
 }) {
   const canGuess = roundStatus === "OPEN" && match.canGuess;
@@ -65,6 +68,11 @@ function MatchRow({
       <TeamMark {...match.awayTeam} />
       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
         <RoundStatusBadge type="match" value={match.status} />
+        {legRole ? (
+          <span className="inline-flex h-6 items-center rounded-full border border-brand-gold/30 bg-brand-gold/10 px-2 text-xs font-semibold text-brand-gold">
+            Jogo de {legRole === "IDA" ? "ida" : "volta"}
+          </span>
+        ) : null}
         {guessScore ? (
           <span className="inline-flex h-6 items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             {guessScore}
@@ -102,8 +110,10 @@ function MatchRow({
 }
 
 export function RoundCard({ round }: RoundCardProps) {
+  const legRoles = identifyTwoLegMatches(round.matches);
+
   return (
-    <Card>
+    <Card className="performance-card">
       <CardHeader className="p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
@@ -137,7 +147,12 @@ export function RoundCard({ round }: RoundCardProps) {
           <div className="space-y-3 border-t border-app-border p-4">
             {round.matches.length > 0 ? (
               round.matches.map((match) => (
-                <MatchRow key={match.id} match={match} roundStatus={round.status} />
+                <MatchRow
+                  key={match.id}
+                  legRole={legRoles.get(match.id)}
+                  match={match}
+                  roundStatus={round.status}
+                />
               ))
             ) : (
               <div className="flex items-center gap-2 rounded-control border border-dashed border-app-border bg-app-background p-4 text-sm text-app-muted">

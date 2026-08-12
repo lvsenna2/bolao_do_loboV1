@@ -15,7 +15,7 @@ Este projeto precisa de um ambiente com Next.js e PostgreSQL. Para testes com us
    - Install command: `pnpm install`
    - Build command: `pnpm build`
    - Start command, se solicitado: `pnpm start`
-   - O proprio `pnpm build` aplica as migrations pendentes (`prisma migrate deploy`)
+   - Aplique migrations uma unica vez com `pnpm prisma:deploy` antes do deploy; o build nao executa migrations para evitar disputa de advisory lock.
      quando `DATABASE_URL` esta definido, entao todo deploy sobe com o banco atualizado.
      Para rodar um build local sem banco, use `SKIP_PRISMA_MIGRATE=1 pnpm build`.
 

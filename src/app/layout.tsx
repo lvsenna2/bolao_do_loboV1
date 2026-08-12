@@ -14,8 +14,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Bolao do Lobo",
-  description: "Plataforma para gerenciamento de boloes esportivos online.",
+  title: "Bolão do Lobo",
+  description: "Plataforma para gerenciamento de bolões esportivos online.",
   icons: {
     apple: "/brand/bolao-do-lobo-apple.png",
     icon: "/brand/bolao-do-lobo-icon.png"

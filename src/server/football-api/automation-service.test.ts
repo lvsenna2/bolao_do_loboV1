@@ -248,6 +248,22 @@ describe("football automation fixture queueing", () => {
       )
     ).toBe(false);
   });
+
+  it("mantem na fila partida agendada com status final publicado tardiamente", () => {
+    const now = new Date("2026-08-08T18:00:00.000Z");
+
+    expect(
+      shouldQueueFixtureForAutomation(
+        {
+          kickoff: new Date("2026-08-08T15:30:00.000Z"),
+          specialRounds: [],
+          status: "SCHEDULED"
+        },
+        { ...emptyDecision, fixture: true },
+        now
+      )
+    ).toBe(true);
+  });
 });
 
 describe("football automation live discovery", () => {

@@ -16,6 +16,7 @@ import {
   recalculateRankingsForMatch
 } from "@/features/ranking/services/ranking-service";
 import { processMatchScores } from "@/features/scoring/services/scoring-service";
+import { creditWalletInTransaction } from "@/features/wallet/services/wallet-service";
 import { grantLeagueBadge, revokeLeagueBadge } from "@/features/xp/services/league-badge-service";
 import {
   evaluateAchievementsForUser,
@@ -3417,6 +3418,16 @@ export async function updatePaymentStatusAction(formData: FormData): Promise<Adm
   const paidAt = parsedInput.data.status === "APPROVED" ? serverNow() : null;
 
   const payment = await prisma.$transaction(async (tx) => {
+    const previousPayment = await tx.payment.findUniqueOrThrow({
+      select: {
+        amount: true,
+        gateway: true,
+        providerStatus: true,
+        status: true,
+        userId: true
+      },
+      where: { id: parsedInput.data.paymentId }
+    });
     const updatedPayment = await tx.payment.update({
       where: {
         id: parsedInput.data.paymentId
@@ -3460,6 +3471,30 @@ export async function updatePaymentStatusAction(formData: FormData): Promise<Adm
           }
         }
       });
+    }
+
+    if (
+      updatedPayment.status === "REFUNDED" &&
+      previousPayment.status === "APPROVED" &&
+      previousPayment.gateway === "MANUAL"
+    ) {
+      const refundCents = Math.round(Number(previousPayment.amount) * 100);
+      if (previousPayment.providerStatus === "voucher") {
+        await tx.userRewardBalance.upsert({
+          create: { leagueVouchers: 1, userId: updatedPayment.userId },
+          update: { leagueVouchers: { increment: 1 } },
+          where: { userId: updatedPayment.userId }
+        });
+      } else if (refundCents > 0) {
+        await creditWalletInTransaction(tx, {
+          amountCents: refundCents,
+          description: "Estorno de entrada em liga",
+          relatedEntityId: updatedPayment.id,
+          type: "REFUND",
+          uniqueKey: `wallet:league:refund:${updatedPayment.id}`,
+          userId: updatedPayment.userId
+        });
+      }
     }
 
     return updatedPayment;

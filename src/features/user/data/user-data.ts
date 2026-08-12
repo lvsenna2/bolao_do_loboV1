@@ -1,10 +1,10 @@
-import type { Prisma } from "@prisma/client";
 import { cache } from "react";
 
 import { prisma } from "@/server/db";
 import { getCachedActiveXpLevels } from "@/features/xp/data/xp-level-cache";
 import { getActiveXpLevels, getXpProgressFromLevels } from "@/features/xp/services/xp-service";
 import { formatDateTimeInSaoPaulo, serverNow } from "@/lib/date-time";
+import { formatMoney, type MoneyValue } from "@/lib/money";
 import type { UserDataResult } from "../types/user-action-result";
 
 function emptyResult<T>(message: string, data: T): UserDataResult<T> {
@@ -19,18 +19,8 @@ export function formatDate(date: Date | null | undefined) {
   return formatDateTimeInSaoPaulo(date);
 }
 
-export function formatCurrency(value: Prisma.Decimal | number | null | undefined) {
-  const amount =
-    typeof value === "number"
-      ? value
-      : typeof value?.toNumber === "function"
-        ? value.toNumber()
-        : 0;
-
-  return new Intl.NumberFormat("pt-BR", {
-    currency: "BRL",
-    style: "currency"
-  }).format(amount);
+export function formatCurrency(value: MoneyValue) {
+  return formatMoney(value);
 }
 
 const loadUserDashboardIdentity = cache(async (userId: string) => {

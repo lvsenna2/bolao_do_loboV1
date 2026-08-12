@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
+import type { Route } from "next";
 
 import { LoadingButton } from "@/components/ui/loading-button";
 import { PixPaymentCard } from "@/features/payments/components/pix-payment-card";
@@ -33,9 +35,9 @@ export function JoinSpecialRound({
     if (initialPayment) setPayment(initialPayment);
   }, [initialPayment]);
 
-  function join() {
+  function join(paymentMethod: "PIX" | "WALLET") {
     startTransition(async () => {
-      const result = await joinSpecialRoundAction(specialRoundId);
+      const result = await joinSpecialRoundAction(specialRoundId, paymentMethod);
       setMessage(result.message);
       if (result.ok && result.data?.paymentId) {
         setPayment(result.data as SpecialRoundPaymentView);
@@ -46,19 +48,34 @@ export function JoinSpecialRound({
   return (
     <div className="space-y-4">
       {!payment ? (
-        <LoadingButton
-          className="h-12 w-full rounded-button bg-brand-gold px-5 font-semibold text-black hover:bg-amber-300"
-          isLoading={pending}
-          loadingLabel="Gerando inscricao..."
-          onClick={join}
-        >
-          Participar
-        </LoadingButton>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <LoadingButton
+            className="h-12 w-full rounded-button bg-brand-gold px-5 font-semibold text-black hover:bg-amber-300"
+            isLoading={pending}
+            loadingLabel="Gerando Pix..."
+            onClick={() => join("PIX")}
+          >
+            Pagar com Pix
+          </LoadingButton>
+          <LoadingButton
+            className="h-12 w-full rounded-button border border-brand-gold px-5 font-semibold text-brand-gold"
+            isLoading={pending}
+            loadingLabel="Processando..."
+            onClick={() => join("WALLET")}
+          >
+            Usar saldo ou vale
+          </LoadingButton>
+        </div>
       ) : null}
       {message ? (
         <p aria-live="polite" className="text-sm text-app-muted">
           {message}
         </p>
+      ) : null}
+      {message.includes("Saldo insuficiente") ? (
+        <Link className="text-sm font-medium text-brand-gold underline" href={"/carteira" as Route}>
+          Adicionar saldo
+        </Link>
       ) : null}
       {payment ? <PixPaymentCard {...payment} leagueName={name} variant="special-round" /> : null}
     </div>

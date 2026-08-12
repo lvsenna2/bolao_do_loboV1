@@ -17,6 +17,7 @@ import {
   type MercadoPagoPayment
 } from "./client";
 import { reconcileSpecialRoundPayment } from "@/features/special-rounds/services/payment-service";
+import { reconcileWalletDepositPayment } from "@/features/wallet/services/deposit-service";
 
 const PIX_EXPIRATION_HOURS = 24;
 
@@ -125,6 +126,8 @@ export async function reconcileMercadoPagoPayment(providerPayment: MercadoPagoPa
     if (subscriptionPayment) return subscriptionPayment;
     const apiFundingPayment = await reconcileApiFundingPayment(providerPayment);
     if (apiFundingPayment) return apiFundingPayment;
+    const walletDeposit = await reconcileWalletDepositPayment(providerPayment);
+    if (walletDeposit) return walletDeposit;
     throw new Error("MERCADO_PAGO_PAYMENT_NOT_FOUND");
   }
 

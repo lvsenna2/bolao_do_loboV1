@@ -1,12 +1,12 @@
 import type { SpecialRoundStatus } from "@prisma/client";
 
 import { serverNow } from "@/lib/date-time";
+import { withShortCache } from "@/server/cache/short-cache";
 import { prisma } from "@/server/db";
 import { calculateSpecialRoundPrizePool } from "../services/prize-service";
 
-export async function getSpecialRoundsForUser(userId: string) {
-  const now = serverNow();
-  const rounds = await prisma.specialRound.findMany({
+function loadSpecialRoundsForUser(userId: string) {
+  return prisma.specialRound.findMany({
     include: {
       _count: { select: { entries: { where: { paymentStatus: "APPROVED" } } } },
       entries: {
@@ -42,6 +42,16 @@ export async function getSpecialRoundsForUser(userId: string) {
     },
     orderBy: [{ matchStartsAt: "asc" }]
   });
+}
+
+const getCachedSpecialRoundsForUser = withShortCache(
+  "special-rounds-user-page-data",
+  loadSpecialRoundsForUser
+);
+
+export async function getSpecialRoundsForUser(userId: string) {
+  const now = serverNow();
+  const rounds = await getCachedSpecialRoundsForUser(userId);
 
   const reminderLimit = new Date(now.getTime() + 60 * 60 * 1000);
   await Promise.all(

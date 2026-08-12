@@ -17,3 +17,4 @@ Em caso de conflito, o SDD tem prioridade.
 ## Operacao
 
 - [Automacao da API-Football](docs/API_FOOTBALL_AUTOMATION.md)
+- [Configurar o projeto em outro notebook](docs/NOTEBOOK_SETUP.md)

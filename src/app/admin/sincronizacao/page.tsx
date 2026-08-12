@@ -15,9 +15,15 @@ import { AdminAlert } from "@/features/admin/components/admin-alert";
 import { ManualFootballSyncForm } from "@/features/admin/components/manual-football-sync-form";
 import { getAdminFootballSyncStatus } from "@/features/admin/data/admin-data";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
+import { withShortCache } from "@/server/cache/short-cache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+const getCachedAdminFootballSyncStatus = withShortCache(
+  "admin-football-sync-page-data",
+  getAdminFootballSyncStatus
+);
 
 function formatDate(date: Date | null | undefined) {
   return date ? formatDateTimeInSaoPaulo(date) : "Nunca";
@@ -96,7 +102,7 @@ function triggerLabel(trigger: string) {
 }
 
 export default async function AdminFootballSyncPage() {
-  const result = await getAdminFootballSyncStatus();
+  const result = await getCachedAdminFootballSyncStatus();
   const {
     apiConfigured,
     automation,
