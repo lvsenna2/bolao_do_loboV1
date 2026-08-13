@@ -12,15 +12,16 @@ type AdminStatusBadgeProps = {
   value: AccountStatus | ChampionshipStatus | LeagueStatus | PaymentStatus | UserRole | string;
 };
 
-const successValues = new Set(["ACTIVE", "APPROVED", "OPEN", "SUPER_ADMIN", "ADMIN"]);
+const successValues = new Set(["ACTIVE", "APPROVED", "OPEN", "PAID", "SUPER_ADMIN", "ADMIN"]);
 const warningValues = new Set([
   "PENDING",
   "PENDING_EMAIL",
   "PENDING_PAYMENT",
   "DRAFT",
+  "REQUESTED",
   "SCHEDULED"
 ]);
-const dangerValues = new Set(["BLOCKED", "DELETED", "FAILED", "CANCELLED"]);
+const dangerValues = new Set(["BLOCKED", "DELETED", "FAILED", "CANCELLED", "REJECTED"]);
 const infoValues = new Set(["ORGANIZER", "MODERATOR", "LIVE"]);
 
 function getTone(value: string) {
