@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { prismaMock, txMock } = vi.hoisted(() => {
+const { creditWalletMock, prismaMock, txMock } = vi.hoisted(() => {
   const txMock = {
     notification: { createMany: vi.fn() },
     specialRound: {
@@ -12,7 +12,9 @@ const { prismaMock, txMock } = vi.hoisted(() => {
     specialRoundPrize: {
       create: vi.fn(),
       deleteMany: vi.fn(),
-      findFirst: vi.fn()
+      findFirst: vi.fn(),
+      findMany: vi.fn(async (): Promise<unknown[]> => []),
+      update: vi.fn()
     },
     specialRoundScore: { createMany: vi.fn(), deleteMany: vi.fn() },
     specialRoundStanding: {
@@ -23,6 +25,7 @@ const { prismaMock, txMock } = vi.hoisted(() => {
   };
 
   return {
+    creditWalletMock: vi.fn(async () => ({})),
     prismaMock: {
       $transaction: vi.fn(async (input: unknown) =>
         typeof input === "function"
@@ -43,6 +46,10 @@ const { prismaMock, txMock } = vi.hoisted(() => {
 });
 
 vi.mock("@/server/db", () => ({ prisma: prismaMock }));
+vi.mock("@/features/wallet/services/wallet-service", () => ({
+  creditWalletInTransaction: creditWalletMock,
+  formatCents: (value: number) => `R$ ${(value / 100).toFixed(2)}`
+}));
 
 import {
   isSpecialRoundMatchReadyForSettlement,
@@ -166,7 +173,9 @@ describe("settleFinishedSpecialRounds", () => {
       match: { ...round.match, homeScore: null }
     });
 
-    const summary = await settleFinishedSpecialRounds(new Date(kickoff.getTime() + 3 * 60 * 60_000));
+    const summary = await settleFinishedSpecialRounds(
+      new Date(kickoff.getTime() + 3 * 60 * 60_000)
+    );
 
     expect(summary.finalized).toBe(0);
     expect(summary.pending[0]?.reason).toContain("catalogo");
@@ -217,14 +226,25 @@ describe("settleFinishedSpecialRounds", () => {
       })
       .mockResolvedValueOnce({ id: "round-1", name: "Rodada teste", status: "CALCULATING" });
     txMock.specialRoundPrize.findFirst.mockResolvedValue(null);
+    txMock.specialRoundPrize.findMany.mockResolvedValue([
+      {
+        amount: 10,
+        confirmedAt: null,
+        entry: { userId: "user-1" },
+        id: "prize-1",
+        specialRoundId: "round-1"
+      }
+    ]);
     txMock.specialRoundEntry.findMany.mockResolvedValue([
-      { id: "entry-1", prize: null, userId: "user-1" }
+      { id: "entry-1", prize: { amount: 10, id: "prize-1" }, userId: "user-1" }
     ]);
     txMock.specialRoundStanding.findFirst.mockResolvedValue({
       entry: { user: { name: "Joao Pedro" } }
     });
 
-    const summary = await settleFinishedSpecialRounds(new Date(kickoff.getTime() + 3 * 60 * 60_000));
+    const summary = await settleFinishedSpecialRounds(
+      new Date(kickoff.getTime() + 3 * 60 * 60_000)
+    );
 
     expect(summary).toMatchObject({ finalized: 1, pending: [], scanned: 1 });
     expect(prismaMock.specialRound.update).toHaveBeenCalledWith(
@@ -240,6 +260,91 @@ describe("settleFinishedSpecialRounds", () => {
       expect.objectContaining({
         data: expect.arrayContaining([
           expect.objectContaining({ body: expect.stringContaining("Campeao: Joao Pedro") })
+        ])
+      })
+    );
+  });
+
+  it("credita o premio na carteira do ganhador e marca como pago", async () => {
+    prismaMock.specialRound.findMany.mockResolvedValue([
+      {
+        id: "round-1",
+        match: { fullySyncedAt: kickoff, kickoff, status: "FINISHED" },
+        name: "Rodada teste"
+      }
+    ]);
+    prismaMock.specialRound.findUnique.mockResolvedValue(catalogRound());
+    txMock.specialRound.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        adminFeePercent: 0,
+        entries: [
+          {
+            amount: 10,
+            id: "entry-1",
+            predictions: [
+              {
+                answer: "HOME",
+                marketId: "market-1",
+                submittedAt: new Date("2026-08-09T17:00:00Z")
+              }
+            ],
+            standing: null
+          }
+        ],
+        fixedPrize: null,
+        id: "round-1",
+        markets: [
+          {
+            id: "market-1",
+            kind: "MATCH_RESULT",
+            line: null,
+            points: 10,
+            result: { answer: "HOME" }
+          }
+        ],
+        prizeDistribution: [{ percent: 100, position: 1 }],
+        prizeMode: "POOL",
+        prizePoolPercent: 100,
+        status: "AWAITING_RESULT"
+      })
+      .mockResolvedValueOnce({ id: "round-1", name: "Rodada teste", status: "CALCULATING" });
+    txMock.specialRoundPrize.findFirst.mockResolvedValue(null);
+    txMock.specialRoundPrize.findMany.mockResolvedValue([
+      {
+        amount: 10,
+        confirmedAt: null,
+        entry: { userId: "user-1" },
+        id: "prize-1",
+        specialRoundId: "round-1"
+      }
+    ]);
+    txMock.specialRoundEntry.findMany.mockResolvedValue([
+      { id: "entry-1", prize: { amount: 10, id: "prize-1" }, userId: "user-1" }
+    ]);
+    txMock.specialRoundStanding.findFirst.mockResolvedValue({
+      entry: { user: { name: "Joao Pedro" } }
+    });
+
+    await settleFinishedSpecialRounds(new Date(kickoff.getTime() + 3 * 60 * 60_000));
+
+    expect(creditWalletMock).toHaveBeenCalledWith(
+      txMock,
+      expect.objectContaining({
+        amountCents: 1000,
+        uniqueKey: "wallet:special-round:prize:prize-1",
+        userId: "user-1"
+      })
+    );
+    expect(txMock.specialRoundPrize.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "PAID" }),
+        where: { id: "prize-1" }
+      })
+    );
+    expect(txMock.notification.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({ body: expect.stringContaining("carteira") })
         ])
       })
     );

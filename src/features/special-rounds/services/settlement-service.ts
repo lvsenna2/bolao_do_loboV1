@@ -1,5 +1,6 @@
 import type { Prisma, SpecialRoundStatus } from "@prisma/client";
 
+import { creditWalletInTransaction, formatCents } from "@/features/wallet/services/wallet-service";
 import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 
@@ -56,6 +57,44 @@ export async function getSpecialRoundChampionName(
   return champion?.entry.user.name ?? null;
 }
 
+/**
+ * Credita cada premio na carteira do ganhador assim que a classificacao e publicada e marca
+ * o premio como pago. O uniqueKey por premio garante que reprocessar a rodada nao credite
+ * duas vezes.
+ */
+export async function creditSpecialRoundPrizesToWallets(
+  client: Prisma.TransactionClient,
+  round: { id: string; name: string }
+) {
+  const prizes = await client.specialRoundPrize.findMany({
+    include: { entry: { select: { userId: true } } },
+    where: { specialRoundId: round.id, status: { in: ["PENDING", "CONFIRMED"] } }
+  });
+  const now = serverNow();
+  let credited = 0;
+
+  for (const prize of prizes) {
+    const amountCents = Math.round(Number(prize.amount) * 100);
+    if (amountCents <= 0) continue;
+
+    await creditWalletInTransaction(client, {
+      amountCents,
+      description: `Premio da Rodada Especial ${round.name}`,
+      relatedEntityId: prize.id,
+      type: "BONUS",
+      uniqueKey: `wallet:special-round:prize:${prize.id}`,
+      userId: prize.entry.userId
+    });
+    await client.specialRoundPrize.update({
+      data: { confirmedAt: prize.confirmedAt ?? now, paidAt: now, status: "PAID" },
+      where: { id: prize.id }
+    });
+    credited += 1;
+  }
+
+  return credited;
+}
+
 export async function createSpecialRoundFinalizedNotifications(
   client: Prisma.TransactionClient,
   round: { id: string; name: string }
@@ -86,9 +125,9 @@ export async function createSpecialRoundFinalizedNotifications(
       ...(entry.prize
         ? [
             {
-              body: `Parabens! Voce recebeu uma premiacao em ${round.name}.`,
+              body: `Parabens! ${formatCents(Math.round(Number(entry.prize.amount) * 100))} de ${round.name} ja estao no saldo da sua carteira.`,
               icon: "special-round-prize",
-              message: `Parabens! Voce recebeu uma premiacao em ${round.name}.`,
+              message: `Parabens! ${formatCents(Math.round(Number(entry.prize.amount) * 100))} de ${round.name} ja estao no saldo da sua carteira.`,
               relatedEntityId: entry.prize.id,
               title: "Usuario premiado",
               type: "SPECIAL_ROUND" as const,
@@ -370,6 +409,22 @@ export async function finalizeSpecialRound(input: {
           specialRoundId: current.id
         }
       });
+      const credited = await creditSpecialRoundPrizesToWallets(tx, {
+        id: current.id,
+        name: current.name
+      });
+      if (credited > 0) {
+        await tx.specialRoundAuditLog.create({
+          data: {
+            action: "special_round.prizes_credited_to_wallet",
+            actorId: input.actorId,
+            entity: "SpecialRound",
+            entityId: current.id,
+            metadata: json({ prizes: credited }),
+            specialRoundId: current.id
+          }
+        });
+      }
       await createSpecialRoundFinalizedNotifications(tx, { id: current.id, name: current.name });
     }, serializable);
   } catch (error) {

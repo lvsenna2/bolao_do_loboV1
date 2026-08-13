@@ -128,8 +128,8 @@ export default async function SpecialRoundPredictionReviewPage({
                 {prize ? (
                   <p className="text-xs text-app-muted">
                     {prize.status === "PAID"
-                      ? `Pago em ${formatDateTimeInSaoPaulo(prize.paidAt ?? prize.updatedAt)}`
-                      : "Pagamento em processamento pela organizacao."}
+                      ? `Creditado na sua carteira em ${formatDateTimeInSaoPaulo(prize.paidAt ?? prize.updatedAt)}`
+                      : "O valor cai na sua carteira assim que a apuracao for publicada."}
                   </p>
                 ) : null}
               </div>

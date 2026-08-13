@@ -7,7 +7,10 @@ import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { canAccessAdmin } from "@/server/auth/rbac";
 import { canCreateSpecialRound } from "@/features/subscriptions/service";
-import { debitWalletInTransaction } from "@/features/wallet/services/wallet-service";
+import {
+  creditWalletInTransaction,
+  debitWalletInTransaction
+} from "@/features/wallet/services/wallet-service";
 import { prisma } from "@/server/db";
 import { runFootballAutomation } from "@/server/football-api/automation-service";
 import { fetchApiFootballLineups } from "@/server/football-api/client";
@@ -1522,9 +1525,28 @@ export async function markSpecialRoundPrizePaidAction(
   const admin = await requireAdmin();
   const id = idSchema.safeParse(prizeId);
   if (!id.success) return { message: "Premio invalido.", ok: false };
-  const prize = await prisma.specialRoundPrize.findUnique({ where: { id: id.data } });
+  const prize = await prisma.specialRoundPrize.findUnique({
+    include: {
+      entry: { select: { userId: true } },
+      specialRound: { select: { name: true } }
+    },
+    where: { id: id.data }
+  });
   if (!prize) return { message: "Premio nao encontrado.", ok: false };
+  const amountCents = Math.round(Number(prize.amount) * 100);
   await prisma.$transaction(async (tx) => {
+    // Rodadas finalizadas antes do credito automatico ainda passam por aqui; o uniqueKey
+    // do premio impede credito duplicado se ele ja tiver caido na carteira.
+    if (amountCents > 0) {
+      await creditWalletInTransaction(tx, {
+        amountCents,
+        description: `Premio da Rodada Especial ${prize.specialRound.name}`,
+        relatedEntityId: prize.id,
+        type: "BONUS",
+        uniqueKey: `wallet:special-round:prize:${prize.id}`,
+        userId: prize.entry.userId
+      });
+    }
     await tx.specialRoundPrize.update({
       data: { confirmedAt: prize.confirmedAt ?? serverNow(), paidAt: serverNow(), status: "PAID" },
       where: { id: prize.id }
@@ -1540,7 +1562,8 @@ export async function markSpecialRoundPrizePaidAction(
     });
   }, serializable);
   revalidateSpecialRounds(prize.specialRoundId);
-  return { message: "Premio marcado como pago.", ok: true };
+  revalidatePath("/carteira");
+  return { message: "Premio creditado na carteira do ganhador.", ok: true };
 }
 
 export async function deleteSpecialRoundAction(
