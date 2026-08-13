@@ -1426,6 +1426,7 @@ export async function syncAndHomologateSpecialRoundAction(
 
   const sync = await runFootballAutomation("special-round-manual", {
     fixtureLimit: 1,
+    forceResultDetails: true,
     historyBudget: 0,
     includeCatalog: false,
     matchId: match.id

@@ -74,6 +74,7 @@ export type FootballAutomationOptions = {
   detailLimit?: number;
   detailMode?: "full" | "lineups-history";
   fixtureLimit?: number;
+  forceResultDetails?: boolean;
   historyBudget?: number;
   includeCatalog?: boolean;
   matchId?: string;
@@ -578,14 +579,15 @@ export function applyDetailMode(
 
 export function forceSelectedFixtureDetails(
   decision: FixtureSyncDecision,
-  coverage: ExternalFootballCoverage | null
+  coverage: ExternalFootballCoverage | null,
+  forceResultDetails = false
 ): FixtureSyncDecision {
   return {
     ...decision,
-    events: coverage?.events !== false,
+    events: forceResultDetails || coverage?.events !== false,
     fixture: true,
     reason: "Sincronizacao manual de uma partida.",
-    statistics: coverage?.statisticsFixtures !== false
+    statistics: forceResultDetails || coverage?.statisticsFixtures !== false
   };
 }
 
@@ -593,7 +595,8 @@ export function applyTerminalFixtureDecision(
   decision: FixtureSyncDecision,
   statusShort: string,
   coverage: ExternalFootballCoverage | null,
-  lineupsComplete: boolean
+  lineupsComplete: boolean,
+  forceResultDetails = false
 ): FixtureSyncDecision {
   if (statusShort === "CANC" || statusShort === "ABD") {
     return {
@@ -611,12 +614,12 @@ export function applyTerminalFixtureDecision(
 
   return {
     ...decision,
-    events: coverage?.events !== false,
+    events: forceResultDetails || coverage?.events !== false,
     fixture: true,
     lineups: coverage?.lineups !== false && !lineupsComplete,
     players: coverage?.statisticsPlayers !== false,
     reason: "Partida encerrada aguardando consolidacao final.",
-    statistics: coverage?.statisticsFixtures !== false
+    statistics: forceResultDetails || coverage?.statisticsFixtures !== false
   };
 }
 
@@ -650,7 +653,8 @@ function decisionForCandidate(
   candidate: Candidate,
   remaining: number | null,
   now: Date,
-  forceSelectedDetails = false
+  forceSelectedDetails = false,
+  forceResultDetails = false
 ): FixtureSyncDecision {
   const decision = shouldSyncFixture(
     {
@@ -679,7 +683,11 @@ function decisionForCandidate(
     now.getTime() - candidate.historySyncedAt.getTime() >= 12 * 60 * 60_000;
 
   return {
-    ...forceSelectedFixtureDetails(decision, parseCoverage(candidate.round.season.coverage)),
+    ...forceSelectedFixtureDetails(
+      decision,
+      parseCoverage(candidate.round.season.coverage),
+      forceResultDetails
+    ),
     history: candidate.status !== "CANCELLED" && historyExpired
   };
 }
@@ -1020,7 +1028,13 @@ export async function runFootballAutomation(
     const rawDecisions = candidates.map((candidate) => [
       candidate.apiId as number,
       applyDetailMode(
-        decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId)),
+        decisionForCandidate(
+          candidate,
+          usage.dailyRemaining,
+          now,
+          Boolean(options.matchId),
+          options.forceResultDetails
+        ),
         options.detailMode
       )
     ] as const);
@@ -1145,7 +1159,8 @@ export async function runFootballAutomation(
           baseDecision,
           fixture.statusShort,
           parseCoverage(candidate.round.season.coverage),
-          candidate.lineups.length >= 2 && candidate.lineups.every((lineup) => lineup.complete)
+          candidate.lineups.length >= 2 && candidate.lineups.every((lineup) => lineup.complete),
+          options.forceResultDetails || candidate.specialRounds.length > 0
         );
         if (fixture.statusShort === "CANC" || fixture.statusShort === "ABD") {
           await markFixturesFullySynced(applied.matchIds);
