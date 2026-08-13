@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { creditWalletMock, prismaMock, txMock } = vi.hoisted(() => {
+const { creditWalletMock, prismaMock, resolveMatchMock, txMock } = vi.hoisted(() => {
   const txMock = {
     notification: { createMany: vi.fn() },
     specialRound: {
@@ -26,7 +26,9 @@ const { creditWalletMock, prismaMock, txMock } = vi.hoisted(() => {
 
   return {
     creditWalletMock: vi.fn(async () => ({})),
+    resolveMatchMock: vi.fn(async (): Promise<{ id: string } | null> => null),
     prismaMock: {
+      match: { findUnique: vi.fn() },
       $transaction: vi.fn(async (input: unknown) =>
         typeof input === "function"
           ? (input as (client: typeof txMock) => Promise<unknown>)(txMock)
@@ -46,6 +48,9 @@ const { creditWalletMock, prismaMock, txMock } = vi.hoisted(() => {
 });
 
 vi.mock("@/server/db", () => ({ prisma: prismaMock }));
+vi.mock("./match-link-service", () => ({
+  resolveApiBackedSpecialRoundMatch: resolveMatchMock
+}));
 vi.mock("@/features/wallet/services/wallet-service", () => ({
   creditWalletInTransaction: creditWalletMock,
   formatCents: (value: number) => `R$ ${(value / 100).toFixed(2)}`
@@ -156,6 +161,44 @@ describe("settleFinishedSpecialRounds", () => {
 
     expect(summary).toMatchObject({ finalized: 0, scanned: 1 });
     expect(summary.pending).toHaveLength(1);
+    expect(prismaMock.specialRound.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("vincula a partida sozinha quando a rodada foi criada sem catalogo", async () => {
+    prismaMock.specialRound.findMany.mockResolvedValue([
+      { id: "round-1", match: null, name: "Rodada teste" }
+    ]);
+    resolveMatchMock.mockResolvedValue({ id: "match-1" });
+    prismaMock.match.findUnique.mockResolvedValue({
+      fullySyncedAt: kickoff,
+      kickoff,
+      status: "FINISHED"
+    });
+    prismaMock.specialRound.findUnique.mockResolvedValue({
+      ...catalogRound(),
+      match: { ...catalogRound().match, homeScore: null }
+    });
+
+    const summary = await settleFinishedSpecialRounds(
+      new Date(kickoff.getTime() + 3 * 60 * 60_000)
+    );
+
+    expect(resolveMatchMock).toHaveBeenCalledWith("round-1");
+    expect(summary.pending[0]?.reason).toContain("catalogo");
+  });
+
+  it("deixa pendente a rodada sem partida encontrada no catalogo", async () => {
+    prismaMock.specialRound.findMany.mockResolvedValue([
+      { id: "round-1", match: null, name: "Rodada teste" }
+    ]);
+    resolveMatchMock.mockResolvedValue(null);
+
+    const summary = await settleFinishedSpecialRounds(
+      new Date(kickoff.getTime() + 3 * 60 * 60_000)
+    );
+
+    expect(summary.finalized).toBe(0);
+    expect(summary.pending[0]?.reason).toContain("nao localizada");
     expect(prismaMock.specialRound.findUnique).not.toHaveBeenCalled();
   });
 

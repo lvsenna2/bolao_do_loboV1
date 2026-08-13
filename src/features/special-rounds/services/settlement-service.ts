@@ -6,6 +6,7 @@ import { prisma } from "@/server/db";
 
 import type { PrizeDistributionItem, SpecialRoundAnswer } from "../types";
 import { deriveCatalogResults } from "./catalog-result-service";
+import { resolveApiBackedSpecialRoundMatch } from "./match-link-service";
 import { calculateSpecialRoundPrizePool, distributeSpecialRoundPrize } from "./prize-service";
 import { evaluateSpecialRoundAnswer, rankSpecialRoundEntries } from "./scoring-service";
 import { assertSpecialRoundTransition } from "./state-service";
@@ -478,6 +479,12 @@ export type AutoSettlementSummary = {
   scanned: number;
 };
 
+// Rodada criada antes de a competicao entrar no catalogo fica sem partida vinculada. Depois
+// do apito inicial a partida ja existe no banco, entao vale tentar o vinculo automatico —
+// sem isso a rodada nunca entra na varredura e o campeao nunca sai.
+const RELINK_AFTER_KICKOFF_MS = 2 * 60 * 60_000;
+const RELINK_MAX_AGE_MS = 14 * 24 * 60 * 60_000;
+
 /**
  * Apura e publica automaticamente toda Rodada Especial cuja partida ja terminou.
  * Rodadas sem dados suficientes ficam pendentes e sao tentadas na proxima execucao.
@@ -494,7 +501,16 @@ export async function settleFinishedSpecialRounds(
     },
     take: 20,
     where: {
-      match: { status: "FINISHED" },
+      OR: [
+        { match: { status: "FINISHED" } },
+        {
+          matchId: null,
+          matchStartsAt: {
+            gte: new Date(now.getTime() - RELINK_MAX_AGE_MS),
+            lte: new Date(now.getTime() - RELINK_AFTER_KICKOFF_MS)
+          }
+        }
+      ],
       status: { in: [...settleableSpecialRoundStatuses] }
     }
   });
@@ -502,13 +518,31 @@ export async function settleFinishedSpecialRounds(
   const summary: AutoSettlementSummary = { finalized: 0, pending: [], scanned: rounds.length };
 
   for (const round of rounds) {
+    let match = round.match;
+
+    if (!match) {
+      const linked = await resolveApiBackedSpecialRoundMatch(round.id).catch(() => null);
+      match = linked
+        ? await prisma.match.findUnique({
+            select: { fullySyncedAt: true, kickoff: true, status: true },
+            where: { id: linked.id }
+          })
+        : null;
+      if (!match) {
+        summary.pending.push({
+          name: round.name,
+          reason: "Partida ainda nao localizada no catalogo da API-Football."
+        });
+        continue;
+      }
+    }
+
     if (
-      !round.match ||
       !isSpecialRoundMatchReadyForSettlement({
-        fullySyncedAt: round.match.fullySyncedAt,
-        kickoff: round.match.kickoff,
+        fullySyncedAt: match.fullySyncedAt,
+        kickoff: match.kickoff,
         now,
-        status: round.match.status
+        status: match.status
       })
     ) {
       summary.pending.push({ name: round.name, reason: "Aguardando consolidacao da partida." });
