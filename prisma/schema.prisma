@@ -123,6 +123,23 @@ enum WalletTransactionType {
   ROULETTE
   REFUND
   BONUS
+  WITHDRAWAL
+}
+
+enum WalletWithdrawalStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum PixKeyType {
+  CPF
+  CNPJ
+  EMAIL
+  PHONE
+  RANDOM
 }
 
 enum RouletteSpinKind {
@@ -302,6 +319,8 @@ model User {
   wallet                  Wallet?
   walletTransactions      WalletTransaction[]
   walletDeposits          WalletDeposit[]
+  walletWithdrawals       WalletWithdrawal[]       @relation("WalletWithdrawalUser")
+  walletWithdrawalsReviewed WalletWithdrawal[]     @relation("WalletWithdrawalReviewer")
   rouletteSpins           DailyRouletteSpin[]
   rewardBalance           UserRewardBalance?
 
@@ -1078,6 +1097,35 @@ model WalletDeposit {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@map("wallet_deposits")
+}
+
+/**
+ * Pedido de saque. O saldo sai da carteira no momento do pedido (fica retido) e so
+ * volta se o saque for recusado ou cancelado. O pagamento em si e feito por fora,
+ * pelo painel admin, ate existir API de transferencia Pix contratada.
+ */
+model WalletWithdrawal {
+  id              String                 @id @default(uuid()) @db.Uuid
+  userId          String                 @map("user_id") @db.Uuid
+  amountCents     Int                    @map("amount_cents")
+  status          WalletWithdrawalStatus @default(REQUESTED)
+  pixKeyType      PixKeyType             @map("pix_key_type")
+  pixKey          String                 @map("pix_key") @db.VarChar(140)
+  pixKeyOwnerName String                 @map("pix_key_owner_name") @db.VarChar(120)
+  reviewedById    String?                @map("reviewed_by_id") @db.Uuid
+  reviewedAt      DateTime?              @map("reviewed_at")
+  paidAt          DateTime?              @map("paid_at")
+  receiptRef      String?                @map("receipt_ref") @db.VarChar(180)
+  adminNote       String?                @map("admin_note") @db.VarChar(240)
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  user       User  @relation("WalletWithdrawalUser", fields: [userId], references: [id], onDelete: Restrict)
+  reviewedBy User? @relation("WalletWithdrawalReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("wallet_withdrawals")
 }
 
 model UserRewardBalance {

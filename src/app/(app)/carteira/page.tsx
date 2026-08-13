@@ -5,16 +5,32 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DepositForm } from "@/features/wallet/components/deposit-form";
+import { WithdrawalForm } from "@/features/wallet/components/withdrawal-form";
 import { getWalletPageData } from "@/features/wallet/data/wallet-data";
 import { formatCents } from "@/features/wallet/services/wallet-service";
+import {
+  MIN_WITHDRAWAL_CENTS,
+  MAX_WITHDRAWAL_CENTS
+} from "@/features/wallet/services/withdrawal-service";
 import { formatDateTimeInSaoPaulo } from "@/lib/date-time";
 import { requireUser } from "@/server/auth/session";
 
 export const dynamic = "force-dynamic";
 
+const WITHDRAWAL_STATUS_LABEL: Record<string, string> = {
+  APPROVED: "aprovado, aguardando o Pix",
+  CANCELLED: "cancelado",
+  PAID: "pago",
+  REJECTED: "recusado",
+  REQUESTED: "em analise"
+};
+
 export default async function WalletPage() {
   const user = await requireUser();
   const data = await getWalletPageData(user.id);
+  const open = data.withdrawals.find(
+    (item) => item.status === "REQUESTED" || item.status === "APPROVED"
+  );
 
   return (
     <PageShell
@@ -42,6 +58,67 @@ export default async function WalletPage() {
           <DepositForm />
         </CardContent>
       </Card>
+
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>Sacar via Pix</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WithdrawalForm
+            balanceLabel={formatCents(data.balanceCents)}
+            maxCents={Math.min(data.balanceCents, MAX_WITHDRAWAL_CENTS)}
+            minCents={MIN_WITHDRAWAL_CENTS}
+            minLabel={formatCents(MIN_WITHDRAWAL_CENTS)}
+            openWithdrawal={
+              open
+                ? {
+                    amountLabel: formatCents(open.amountCents),
+                    id: open.id,
+                    isCancellable: open.status === "REQUESTED",
+                    statusLabel: WITHDRAWAL_STATUS_LABEL[open.status] ?? open.status
+                  }
+                : null
+            }
+          />
+        </CardContent>
+      </Card>
+
+      {data.withdrawals.length ? (
+        <Card className="mt-5">
+          <CardHeader>
+            <CardTitle>Meus saques</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {data.withdrawals.map((item) => (
+              <div
+                className="flex items-center justify-between gap-3 rounded-control border border-app-border p-3"
+                key={item.id}
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-app-foreground">
+                    {formatCents(item.amountCents)} para {item.pixKey}
+                  </p>
+                  <p className="text-xs text-app-muted">
+                    {formatDateTimeInSaoPaulo(item.createdAt)}
+                    {item.adminNote ? ` | ${item.adminNote}` : ""}
+                  </p>
+                </div>
+                <Badge
+                  tone={
+                    item.status === "PAID"
+                      ? "success"
+                      : item.status === "REJECTED" || item.status === "CANCELLED"
+                        ? "danger"
+                        : "warning"
+                  }
+                >
+                  {WITHDRAWAL_STATUS_LABEL[item.status] ?? item.status}
+                </Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="mt-5">
         <CardHeader>

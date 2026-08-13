@@ -1,4 +1,5 @@
 import {
+  Banknote,
   CalendarDays,
   ClipboardList,
   Crown,
@@ -153,6 +154,11 @@ export const adminNavigationItems: NavigationItem[] = [
     href: "/admin/pagamentos",
     icon: WalletCards,
     label: "Pagamentos"
+  },
+  {
+    href: "/admin/saques",
+    icon: Banknote,
+    label: "Saques"
   },
   {
     href: "/admin/palpites",

@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { Download, Fingerprint, Shield, Trash2 } from "lucide-react";
+import { Download, Fingerprint, LifeBuoy, Mail, Shield, Trash2 } from "lucide-react";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Avatar } from "@/components/ui/avatar";
@@ -15,6 +15,7 @@ import { ProfileForm } from "@/features/user/components/profile-form";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { XpProgress } from "@/features/user/components/xp-progress";
 import { formatDate, getUserProfileData } from "@/features/user/data/user-data";
+import { SUPPORT_EMAIL, supportMailtoUrl } from "@/lib/support";
 import { requireUser } from "@/server/auth/session";
 import { withShortCache } from "@/server/cache/short-cache";
 import { prisma } from "@/server/db";
@@ -152,6 +153,30 @@ export default async function ProfilePage() {
                     lastUsedAt: passkey.lastUsedAt?.toISOString() ?? null
                   }))}
                 />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LifeBuoy aria-hidden className="h-5 w-5 text-brand-gold" />
+                  Ajuda e suporte
+                </CardTitle>
+                <CardDescription>
+                  Problema com saldo, saque, palpite ou login? Escreva para a gente.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <a
+                  className={buttonVariants({ size: "sm", variant: "secondary" })}
+                  href={supportMailtoUrl(`Suporte - @${user.username}`)}
+                >
+                  <Mail aria-hidden className="h-4 w-4" />
+                  {SUPPORT_EMAIL}
+                </a>
+                <p className="text-xs text-app-muted">
+                  Responda sempre do e-mail cadastrado na conta para agilizarmos o atendimento.
+                </p>
               </CardContent>
             </Card>
 
