@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 
 type BrandLogoProps = {
   className?: string;
-  compact?: boolean;
+  /** `true` esconde o nome sempre; `"mobile"` esconde so abaixo de 640px. */
+  compact?: boolean | "mobile";
   href?: string;
 };
 
@@ -15,14 +16,16 @@ function BrandMark({ compact }: Pick<BrandLogoProps, "compact">) {
     <span
       className={cn(
         "brand-logo-mark relative inline-flex shrink-0 items-center justify-center",
-        compact ? "h-9 w-9" : "h-11 w-11"
+        compact === true ? "h-9 w-9" : "",
+        compact === "mobile" ? "h-9 w-9 sm:h-11 sm:w-11" : "",
+        compact === false ? "h-11 w-11" : ""
       )}
     >
       <Image
-        alt={compact ? "Bolão do Lobo" : ""}
+        alt="Bolão do Lobo"
         className="h-full w-full object-contain"
         height={44}
-        sizes={compact ? "36px" : "44px"}
+        sizes={compact === false ? "44px" : "36px"}
         src="/brand/bolao-do-lobo-ui.webp"
         width={44}
       />
@@ -34,12 +37,12 @@ function BrandContent({ compact }: Pick<BrandLogoProps, "compact">) {
   return (
     <>
       <BrandMark compact={compact} />
-      {!compact ? (
-        <span className="leading-tight">
+      {compact === true ? null : (
+        <span className={cn("leading-tight", compact === "mobile" ? "hidden sm:block" : "")}>
           <span className="block text-sm font-semibold text-app-foreground">Bolão do Lobo</span>
           <span className="block text-xs font-medium text-app-muted">Palpites esportivos</span>
         </span>
-      ) : null}
+      )}
     </>
   );
 }
@@ -47,7 +50,10 @@ function BrandContent({ compact }: Pick<BrandLogoProps, "compact">) {
 export function BrandLogo({ className, compact = false, href = "/" }: BrandLogoProps) {
   return (
     <Link
-      className={cn("inline-flex items-center gap-3 rounded-button focus:outline-none", className)}
+      className={cn(
+        "inline-flex min-w-0 items-center gap-2 rounded-button focus:outline-none sm:gap-3",
+        className
+      )}
       href={href as Route}
     >
       <BrandContent compact={compact} />

@@ -41,7 +41,7 @@ export function AppTopbar({
         {userMode ? (
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <UserMobileMenu isAdmin={user.role === "ADMIN" || user.role === "SUPER_ADMIN"} />
-            <BrandLogo />
+            <BrandLogo compact="mobile" />
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
@@ -58,7 +58,7 @@ export function AppTopbar({
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {userMode ? walletBalance : null}
           <button
             aria-label="Pesquisar"

@@ -14,7 +14,8 @@ import {
 import {
   describePasskeyError,
   isCancelledPasskeyError,
-  isHostAllowedForRpId
+  isHostAllowedForRpId,
+  officialSiteUrl
 } from "../utils/passkey-errors";
 import { ActionAlert } from "./action-alert";
 
@@ -46,6 +47,7 @@ export function PasskeyManager({ passkeys }: PasskeyManagerProps) {
   const [removingId, setRemovingId] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | undefined>();
+  const [officialUrl, setOfficialUrl] = useState<string | undefined>();
 
   useEffect(() => {
     setIsSupported(browserSupportsWebAuthn());
@@ -55,6 +57,7 @@ export function PasskeyManager({ passkeys }: PasskeyManagerProps) {
     setIsRegistering(true);
     setError(undefined);
     setMessage(undefined);
+    setOfficialUrl(undefined);
 
     try {
       const started = await startPasskeyRegistrationAction();
@@ -69,8 +72,9 @@ export function PasskeyManager({ passkeys }: PasskeyManagerProps) {
 
       if (rpId && !isHostAllowedForRpId(window.location.hostname, rpId)) {
         setError(
-          `Abra o site em ${rpId} para cadastrar a biometria. Neste endereco o aparelho bloqueia o cadastro.`
+          `Voce abriu o app em ${window.location.hostname}. A biometria so pode ser cadastrada em ${rpId} — o proprio aparelho bloqueia em outro endereco.`
         );
+        setOfficialUrl(officialSiteUrl(rpId, window.location.pathname));
         return;
       }
 
@@ -133,6 +137,14 @@ export function PasskeyManager({ passkeys }: PasskeyManagerProps) {
     <div className="space-y-4">
       <ActionAlert message={message} tone="success" />
       <ActionAlert message={error} />
+      {officialUrl ? (
+        <a
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button border border-brand-gold/40 px-4 text-sm font-semibold text-brand-gold transition hover:bg-brand-gold/10"
+          href={officialUrl}
+        >
+          Abrir no endereco oficial e cadastrar
+        </a>
+      ) : null}
       {passkeys.length > 0 ? (
         <ul className="space-y-2">
           {passkeys.map((passkey) => (

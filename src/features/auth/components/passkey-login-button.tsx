@@ -7,7 +7,12 @@ import { useEffect, useState } from "react";
 
 import { LoadingButton } from "@/components/ui/loading-button";
 import { getPostLoginDestinationFromAuthResult } from "../utils/login-destination";
-import { describePasskeyError, isCancelledPasskeyError } from "../utils/passkey-errors";
+import {
+  describePasskeyError,
+  isCancelledPasskeyError,
+  isHostAllowedForRpId,
+  officialSiteUrl
+} from "../utils/passkey-errors";
 import { ActionAlert } from "./action-alert";
 
 type PasskeyLoginButtonProps = {
@@ -19,6 +24,7 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [hint, setHint] = useState<string | undefined>();
+  const [officialUrl, setOfficialUrl] = useState<string | undefined>();
 
   useEffect(() => {
     setIsSupported(browserSupportsWebAuthn());
@@ -32,6 +38,7 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
     setIsAuthenticating(true);
     setError(undefined);
     setHint(undefined);
+    setOfficialUrl(undefined);
 
     try {
       const optionsResponse = await fetch("/api/auth/passkey/options", { method: "POST" });
@@ -39,6 +46,16 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
 
       if (!optionsResponse.ok || !optionsPayload.ok) {
         setError("Nao foi possivel iniciar o login por biometria.");
+        return;
+      }
+
+      const rpId = optionsPayload.options?.rpId as string | undefined;
+
+      if (rpId && !isHostAllowedForRpId(window.location.hostname, rpId)) {
+        setError(
+          `Voce abriu o app em ${window.location.hostname}. A biometria so funciona em ${rpId}.`
+        );
+        setOfficialUrl(officialSiteUrl(rpId, window.location.pathname));
         return;
       }
 
@@ -86,6 +103,14 @@ export function PasskeyLoginButton({ callbackUrl }: PasskeyLoginButtonProps) {
         <span className="h-px flex-1 bg-white/10" />
       </div>
       <ActionAlert message={error} />
+      {officialUrl ? (
+        <a
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button border border-brand-gold/40 px-4 text-sm font-semibold text-brand-gold transition hover:bg-brand-gold/10"
+          href={officialUrl}
+        >
+          Abrir no endereco oficial
+        </a>
+      ) : null}
       <LoadingButton
         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button border border-brand-gold/40 bg-transparent px-4 text-sm font-semibold text-brand-gold transition hover:bg-brand-gold/10 disabled:cursor-not-allowed disabled:opacity-70"
         disabled={isAuthenticating}

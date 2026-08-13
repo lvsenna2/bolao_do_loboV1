@@ -50,6 +50,14 @@ export function isHostAllowedForRpId(hostname: string, rpId: string) {
   return hostname === rpId || hostname.endsWith(`.${rpId}`);
 }
 
+/**
+ * Endereco para onde mandar quem abriu o app fora do dominio da passkey. Preserva o
+ * caminho atual para a pessoa cair na mesma tela, ja no host que o aparelho aceita.
+ */
+export function officialSiteUrl(rpId: string, pathname = "/") {
+  return `https://${rpId}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+}
+
 export function isCancelledPasskeyError(value: string | typeof CANCELLED): value is typeof CANCELLED {
   return value === CANCELLED;
 }
