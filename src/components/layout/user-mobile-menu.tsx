@@ -1,6 +1,6 @@
 "use client";
 
-import { History, Menu, ShieldCheck, X } from "lucide-react";
+import { History, Menu, ShieldCheck, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
@@ -68,6 +68,13 @@ export function UserMobileMenu({ isAdmin = false }: { isAdmin?: boolean }) {
                 <div className="flex-1 overflow-y-auto px-3 py-4">
                   <NavigationList className="[&_a]:h-11" items={mainNavigationItems} />
                   <div className="mt-4 space-y-1 border-t border-white/10 pt-4">
+                    <Link
+                      className="flex h-11 items-center gap-3 rounded-button px-3 text-sm font-medium text-white/75 transition hover:bg-white/5 hover:text-brand-gold"
+                      href={"/perfil" as Route}
+                    >
+                      <UserRound className="h-4 w-4" />
+                      Meu perfil
+                    </Link>
                     <Link
                       className="flex h-11 items-center gap-3 rounded-button px-3 text-sm font-medium text-white/75 transition hover:bg-white/5 hover:text-brand-gold"
                       href={"/rodadas-especiais/historico" as Route}
