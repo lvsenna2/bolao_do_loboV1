@@ -59,6 +59,9 @@ const STANDINGS_INTERVAL_MS = 30 * MINUTE_MS;
 const LIVE_DISCOVERY_LOOKBACK_MS = 4 * 60 * MINUTE_MS;
 const LIVE_DISCOVERY_LOOKAHEAD_MS = MINUTE_MS;
 const EMPTY_EVENTS_GRACE_AFTER_KICKOFF_MS = 150 * MINUTE_MS;
+// Partida de Rodada Especial nao disputa o orcamento de detalhes com o backlog: ganha vagas
+// proprias por execucao. O teto evita que um estado estranho consuma a cota diaria da API.
+const SPECIAL_ROUND_DETAIL_BUDGET = 3;
 
 export type AutomationSummary = {
   backlogIsCapped: boolean;
@@ -82,6 +85,7 @@ export type AutomationSummary = {
   pregameDetailsProcessed: number;
   pregameWaitingForBudget: number;
   remainingCandidates: number;
+  specialRoundDetailsForced: number;
   trackedMatches: number;
 };
 
@@ -137,14 +141,13 @@ function emptySummary(): AutomationSummary {
     pregameDetailsProcessed: 0,
     pregameWaitingForBudget: 0,
     remainingCandidates: 0,
+    specialRoundDetailsForced: 0,
     trackedMatches: 0
   };
 }
 
 type HistoryThrottleStore = {
-  create(input: {
-    data: { key: string; lockedUntil: Date; ownerToken: string };
-  }): Promise<unknown>;
+  create(input: { data: { key: string; lockedUntil: Date; ownerToken: string } }): Promise<unknown>;
   updateMany(input: {
     data: { lockedUntil: Date; ownerToken: string };
     where: { key: string; lockedUntil: { lte: Date } };
@@ -526,7 +529,9 @@ export function selectLiveSyncCandidates<
     if (candidate.apiId === null) return false;
     if (!["SCHEDULED", "SUSPENDED"].includes(candidate.status)) return false;
     const sinceKickoff = now.getTime() - candidate.kickoff.getTime();
-    return sinceKickoff >= -LIVE_DISCOVERY_LOOKAHEAD_MS && sinceKickoff <= LIVE_DISCOVERY_LOOKBACK_MS;
+    return (
+      sinceKickoff >= -LIVE_DISCOVERY_LOOKAHEAD_MS && sinceKickoff <= LIVE_DISCOVERY_LOOKBACK_MS
+    );
   });
 
   return {
@@ -633,6 +638,27 @@ export function resolveDetailBudgets(
   };
 }
 
+/**
+ * Decide se a partida pode consumir uma chamada de detalhes agora. Quem alimenta uma Rodada
+ * Especial ativa tem vaga propria, entao nunca fica esperando o orcamento da categoria —
+ * era ai que a apuracao empacava quando havia backlog de jogos encerrados.
+ */
+export function resolveDetailAllowance(input: {
+  budget: number;
+  hasActiveSpecialRound: boolean;
+  specialRoundBudget?: number;
+  specialRoundUsed: number;
+  used: number;
+}): { allowed: boolean; forcedBySpecialRound: boolean } {
+  if (input.used < input.budget) return { allowed: true, forcedBySpecialRound: false };
+  if (!input.hasActiveSpecialRound) return { allowed: false, forcedBySpecialRound: false };
+
+  const specialRoundBudget = input.specialRoundBudget ?? SPECIAL_ROUND_DETAIL_BUDGET;
+  return input.specialRoundUsed < specialRoundBudget
+    ? { allowed: true, forcedBySpecialRound: true }
+    : { allowed: false, forcedBySpecialRound: false };
+}
+
 export type DetailFetchPlan = {
   fetchEvents: boolean;
   fetchLineups: boolean;
@@ -668,17 +694,20 @@ export function getFixtureSyncPriority(
   const untilKickoff = input.kickoff.getTime() - now.getTime();
 
   if (["LIVE", "HALFTIME"].includes(input.status)) return 0;
-  if (input.decision.lineups && untilKickoff <= 10 * MINUTE_MS) return 1;
-  if (input.decision.lineups) return 2;
+  // Uma Rodada Especial so apura com os dados desta partida, e a rodada fica travada ate
+  // eles chegarem. Por isso ela passa na frente de todo o resto da fila — antes ficava
+  // atras de qualquer jogo proximo do apito e podia esperar varias execucoes.
+  if (input.hasActiveSpecialRound) return 1;
+  if (input.decision.lineups && untilKickoff <= 10 * MINUTE_MS) return 2;
+  if (input.decision.lineups) return 3;
   if (
     input.status === "SCHEDULED" &&
     input.decision.fixture &&
     isWithinDelayedStatusRecoveryWindow(input.kickoff, now)
   ) {
-    return 3;
+    return 4;
   }
-  if (untilKickoff <= 60 * MINUTE_MS && untilKickoff >= -2 * 60 * MINUTE_MS) return 3;
-  if (input.hasActiveSpecialRound) return 4;
+  if (untilKickoff <= 60 * MINUTE_MS && untilKickoff >= -2 * 60 * MINUTE_MS) return 4;
   if (untilKickoff <= 24 * 60 * MINUTE_MS && untilKickoff > 0) return 5;
   if (input.decision.history && untilKickoff > 0) return 5;
   if (input.status === "FINISHED") return 6;
@@ -693,7 +722,13 @@ export function shouldQueueFixtureForAutomation(
   if (!decision) return false;
 
   if (["LIVE", "HALFTIME"].includes(candidate.status)) {
-    return Boolean(decision.fixture || decision.lineups || decision.events || decision.players || decision.statistics);
+    return Boolean(
+      decision.fixture ||
+      decision.lineups ||
+      decision.events ||
+      decision.players ||
+      decision.statistics
+    );
   }
 
   const untilKickoff = candidate.kickoff.getTime() - now.getTime();
@@ -712,7 +747,13 @@ export function shouldQueueFixtureForAutomation(
   if (untilKickoff <= 60 * MINUTE_MS && untilKickoff >= -2 * 60 * MINUTE_MS) return true;
   if (isNearKickoff && (decision.fixture || decision.history || decision.lineups)) return true;
   if (candidate.status === "FINISHED") {
-    return Boolean(decision.fixture || decision.events || decision.lineups || decision.players || decision.statistics);
+    return Boolean(
+      decision.fixture ||
+      decision.events ||
+      decision.lineups ||
+      decision.players ||
+      decision.statistics
+    );
   }
 
   return false;
@@ -1214,13 +1255,16 @@ export async function runFootballAutomation(
       (candidate) => candidate.status === "FINISHED" && !candidate.fullySyncedAt
     ).length;
 
-    const rawDecisions = candidates.map((candidate) => [
-      candidate.apiId as number,
-      applyDetailMode(
-        decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId)),
-        options.detailMode
-      )
-    ] as const);
+    const rawDecisions = candidates.map(
+      (candidate) =>
+        [
+          candidate.apiId as number,
+          applyDetailMode(
+            decisionForCandidate(candidate, usage.dailyRemaining, now, Boolean(options.matchId)),
+            options.detailMode
+          )
+        ] as const
+    );
     const historyRequested = rawDecisions.some(([, decision]) => decision.history);
     const historyHasBudget =
       (usage.dailyRemaining === null || usage.dailyRemaining > 35) &&
@@ -1261,9 +1305,12 @@ export async function runFootballAutomation(
         const missedLive =
           isLive &&
           !fixtures.has(candidate.apiId as number) &&
-          (!candidate.liveSyncedAt ||
-            now.getTime() - candidate.liveSyncedAt.getTime() >= 30_000);
-        return missedLive || (isLive && Boolean(decision?.fixture)) || shouldQueueFixtureForAutomation(candidate, decision, now);
+          (!candidate.liveSyncedAt || now.getTime() - candidate.liveSyncedAt.getTime() >= 30_000);
+        return (
+          missedLive ||
+          (isLive && Boolean(decision?.fixture)) ||
+          shouldQueueFixtureForAutomation(candidate, decision, now)
+        );
       })
       .sort((left, right) => {
         const leftDecision = decisions.get(left.apiId as number);
@@ -1357,7 +1404,13 @@ export async function runFootballAutomation(
             localStatus: candidate.status,
             statusShort: fixture.statusShort
           });
-          if (detailCounts[category] < detailBudgets[category]) {
+          const allowance = resolveDetailAllowance({
+            budget: detailBudgets[category],
+            hasActiveSpecialRound: candidate.specialRounds.length > 0,
+            specialRoundUsed: summary.specialRoundDetailsForced,
+            used: detailCounts[category]
+          });
+          if (allowance.allowed) {
             const historyAllowed = decision.history && historyBudget > 0;
             if (historyAllowed) historyBudget -= 1;
             await syncDetails({
@@ -1371,6 +1424,7 @@ export async function runFootballAutomation(
             });
             detailCounts[category] += 1;
             summary.detailsProcessed += 1;
+            if (allowance.forcedBySpecialRound) summary.specialRoundDetailsForced += 1;
           } else if (category === "pregame") {
             summary.pregameWaitingForBudget += 1;
           }

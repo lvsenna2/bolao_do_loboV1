@@ -60,6 +60,7 @@ async function runCron(request: Request) {
           localRecordsReviewed: result.summary.fixturesUpdated,
           pregameDetailsProcessed: result.summary.pregameDetailsProcessed,
           pregameWaitingForBudget: result.summary.pregameWaitingForBudget,
+          specialRoundDetailsForced: result.summary.specialRoundDetailsForced,
           trackedMatches: result.summary.trackedMatches
         }
       : {})

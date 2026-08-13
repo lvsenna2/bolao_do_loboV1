@@ -14,6 +14,7 @@ import {
   isFinalConsolidationReady,
   planDetailFetches,
   reconcileLiveFixtures,
+  resolveDetailAllowance,
   resolveDetailBudgets,
   selectLiveSyncCandidates,
   shouldQueueFixtureForAutomation,
@@ -69,7 +70,13 @@ describe("football automation history throttle", () => {
         lockedUntil = data.lockedUntil;
       }),
       updateMany: vi.fn(
-        async ({ data, where }: { data: { lockedUntil: Date }; where: { lockedUntil: { lte: Date } } }) => {
+        async ({
+          data,
+          where
+        }: {
+          data: { lockedUntil: Date };
+          where: { lockedUntil: { lte: Date } };
+        }) => {
           if (!lockedUntil || lockedUntil > where.lockedUntil.lte) return { count: 0 };
           lockedUntil = data.lockedUntil;
           return { count: 1 };
@@ -78,9 +85,9 @@ describe("football automation history throttle", () => {
     };
 
     expect(await claimBackgroundHistorySlot(now, store)).toBe(true);
-    expect(
-      await claimBackgroundHistorySlot(new Date("2026-08-08T18:29:59.999Z"), store)
-    ).toBe(false);
+    expect(await claimBackgroundHistorySlot(new Date("2026-08-08T18:29:59.999Z"), store)).toBe(
+      false
+    );
 
     const nextWindow = new Date("2026-08-08T18:30:00.000Z");
     const concurrent = await Promise.all([
@@ -503,15 +510,12 @@ describe("football automation embedded payload reuse", () => {
 
   it("busca somente o que estiver pendente", () => {
     // Cenario F: consolidacao final consulta apenas os conjuntos ausentes.
-    const plan = planDetailFetches(
-      { ...fullDecision, lineups: false },
-      {
-        events: [],
-        lineups: [],
-        playerStatistics: [{}],
-        statistics: []
-      } as unknown as ExternalFootballFixture
-    );
+    const plan = planDetailFetches({ ...fullDecision, lineups: false }, {
+      events: [],
+      lineups: [],
+      playerStatistics: [{}],
+      statistics: []
+    } as unknown as ExternalFootballFixture);
 
     expect(plan).toEqual({
       fetchEvents: true,
@@ -531,6 +535,53 @@ describe("football automation empty events grace", () => {
 
   it("aceita eventos vazios como definitivos depois da janela de tolerancia", () => {
     expect(canAcceptEmptyEventsAsFinal(new Date("2026-08-08T15:00:00.000Z"), now)).toBe(true);
+  });
+});
+
+describe("orcamento de detalhes", () => {
+  it("respeita o orcamento normal enquanto houver vaga", () => {
+    expect(
+      resolveDetailAllowance({
+        budget: 1,
+        hasActiveSpecialRound: false,
+        specialRoundUsed: 0,
+        used: 0
+      })
+    ).toEqual({ allowed: true, forcedBySpecialRound: false });
+  });
+
+  it("segura a partida comum quando o orcamento da categoria acabou", () => {
+    expect(
+      resolveDetailAllowance({
+        budget: 1,
+        hasActiveSpecialRound: false,
+        specialRoundUsed: 0,
+        used: 1
+      })
+    ).toEqual({ allowed: false, forcedBySpecialRound: false });
+  });
+
+  it("libera vaga extra para a partida de rodada especial", () => {
+    expect(
+      resolveDetailAllowance({
+        budget: 1,
+        hasActiveSpecialRound: true,
+        specialRoundUsed: 0,
+        used: 1
+      })
+    ).toEqual({ allowed: true, forcedBySpecialRound: true });
+  });
+
+  it("limita quantas vagas extras a rodada especial consome por execucao", () => {
+    expect(
+      resolveDetailAllowance({
+        budget: 1,
+        hasActiveSpecialRound: true,
+        specialRoundBudget: 2,
+        specialRoundUsed: 2,
+        used: 1
+      })
+    ).toEqual({ allowed: false, forcedBySpecialRound: false });
   });
 });
 
@@ -595,6 +646,39 @@ describe("football automation priority", () => {
     );
 
     expect(specialRound).toBeLessThan(finished);
+  });
+
+  it("coloca a partida da rodada especial na frente de tudo que nao esta ao vivo", () => {
+    const specialRound = getFixtureSyncPriority(
+      {
+        decision: { ...emptyDecision, events: true, statistics: true },
+        hasActiveSpecialRound: true,
+        kickoff: new Date("2026-08-08T15:00:00.000Z"),
+        status: "FINISHED"
+      },
+      now
+    );
+    const imminentLineup = getFixtureSyncPriority(
+      {
+        decision: { ...emptyDecision, lineups: true },
+        hasActiveSpecialRound: false,
+        kickoff: new Date("2026-08-08T18:05:00.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+    const nearKickoff = getFixtureSyncPriority(
+      {
+        decision: { ...emptyDecision, fixture: true },
+        hasActiveSpecialRound: false,
+        kickoff: new Date("2026-08-08T18:30:00.000Z"),
+        status: "SCHEDULED"
+      },
+      now
+    );
+
+    expect(specialRound).toBeLessThan(imminentLineup);
+    expect(specialRound).toBeLessThan(nearKickoff);
   });
 
   it("prioritizes fixtures in the next 24 hours over finished backlog", () => {
