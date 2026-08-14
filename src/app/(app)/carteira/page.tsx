@@ -21,16 +21,19 @@ const WITHDRAWAL_STATUS_LABEL: Record<string, string> = {
   APPROVED: "aprovado, aguardando o Pix",
   CANCELLED: "cancelado",
   PAID: "pago",
+  PIX_FAILED: "aprovado, Pix em nova tentativa",
+  PIX_PROCESSING: "Pix a caminho",
   REJECTED: "recusado",
   REQUESTED: "em analise"
 };
 
+/** Estados em que o dinheiro ainda esta retido e o usuario nao pode abrir outro pedido. */
+const OPEN_WITHDRAWAL_STATUSES = ["REQUESTED", "APPROVED", "PIX_PROCESSING", "PIX_FAILED"];
+
 export default async function WalletPage() {
   const user = await requireUser();
   const data = await getWalletPageData(user.id);
-  const open = data.withdrawals.find(
-    (item) => item.status === "REQUESTED" || item.status === "APPROVED"
-  );
+  const open = data.withdrawals.find((item) => OPEN_WITHDRAWAL_STATUSES.includes(item.status));
 
   return (
     <PageShell

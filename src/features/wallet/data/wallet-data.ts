@@ -44,12 +44,16 @@ export function getPendingWithdrawalsForAdmin() {
       pixKeyOwnerName: true,
       pixKeyType: true,
       receiptRef: true,
+      transferError: true,
+      transferId: true,
+      transferProvider: true,
+      transferStatus: true,
       reviewedAt: true,
       status: true,
       user: { select: { email: true, id: true, name: true, username: true } }
     },
     take: 100,
-    where: { status: { in: ["REQUESTED", "APPROVED"] } }
+    where: { status: { in: ["REQUESTED", "APPROVED", "PIX_PROCESSING", "PIX_FAILED"] } }
   });
 }
 
@@ -66,6 +70,10 @@ export function getReviewedWithdrawalsForAdmin() {
       pixKeyOwnerName: true,
       pixKeyType: true,
       receiptRef: true,
+      transferError: true,
+      transferId: true,
+      transferProvider: true,
+      transferStatus: true,
       reviewedAt: true,
       status: true,
       user: { select: { email: true, id: true, name: true, username: true } }
