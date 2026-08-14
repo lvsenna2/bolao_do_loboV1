@@ -166,6 +166,13 @@ export function deriveCatalogResults(match: CatalogMatch, markets: readonly Resu
       case "TEAM_MOST_SHOTS":
         answer = compareTeams(homeShots, awayShots);
         break;
+      // Mercado da Rodada Promocional: o lado cobrado vem na unica opcao do mercado
+      // ("HOME" ou "AWAY") e a resposta oficial e so "esse time marcou?".
+      case "TEAM_TO_SCORE": {
+        const side = market.options[0]?.value;
+        answer = side === "AWAY" ? awayScore > 0 : side === "HOME" ? homeScore > 0 : undefined;
+        break;
+      }
       default:
         break;
     }

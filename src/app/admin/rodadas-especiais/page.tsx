@@ -1,4 +1,4 @@
-import { Landmark, Plus } from "lucide-react";
+import { Flame, Landmark, Plus } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 
@@ -33,12 +33,20 @@ export default async function AdminSpecialRoundsPage() {
   return (
     <PageShell
       actions={
-        <Link
-          className="inline-flex h-11 items-center gap-2 rounded-button bg-brand-gold px-4 font-semibold text-black"
-          href={"/admin/rodadas-especiais/nova" as Route}
-        >
-          <Plus className="h-4 w-4" /> Nova rodada
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            className="inline-flex h-11 items-center gap-2 rounded-button border border-brand-gold/40 px-4 font-semibold text-brand-gold"
+            href={"/admin/rodadas-especiais/promocional" as Route}
+          >
+            <Flame className="h-4 w-4" /> Nova promocao
+          </Link>
+          <Link
+            className="inline-flex h-11 items-center gap-2 rounded-button bg-brand-gold px-4 font-semibold text-black"
+            href={"/admin/rodadas-especiais/nova" as Route}
+          >
+            <Plus className="h-4 w-4" /> Nova rodada
+          </Link>
+        </div>
       }
       description="Inscricoes, mercados, apuracao e premiacao independentes das ligas."
       eyebrow="Administracao"
@@ -80,14 +88,22 @@ export default async function AdminSpecialRoundsPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                {round.format === "PROMO_SINGLE_SELECTION" ? (
+                  <p className="mb-2 inline-flex items-center gap-1.5 rounded-button bg-brand-gold px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-black">
+                    <Flame className="h-3 w-3" /> Promocional | odd{" "}
+                    {Number(round.promoOdds ?? 0).toFixed(2)} | /rodadas-especiais/
+                    {round.promoSlug}
+                  </p>
+                ) : null}
                 <p className="text-sm text-app-muted">
                   {round.homeTeamName} x {round.awayTeamName} |{" "}
                   {formatDateTimeInSaoPaulo(round.matchStartsAt)}
                 </p>
                 <p className="mt-3 text-sm">
-                  {paid.length} pagos | {round._count.markets} mercados |{" "}
+                  {paid.length} {round.format === "PROMO_SINGLE_SELECTION" ? "apostas" : "pagos"} |{" "}
+                  {round._count.markets} mercados |{" "}
                   {collected.toLocaleString("pt-BR", { currency: "BRL", style: "currency" })}{" "}
-                  arrecadados
+                  {round.format === "PROMO_SINGLE_SELECTION" ? "apostados" : "arrecadados"}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link

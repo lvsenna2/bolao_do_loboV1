@@ -287,3 +287,46 @@ describe("catalog special round results", () => {
     expect(result.missing).toEqual([]);
   });
 });
+
+describe("selecao unica da rodada promocional", () => {
+  const promoMarket = (side: "AWAY" | "HOME") => [
+    {
+      answerType: "BOOLEAN",
+      id: "promo",
+      kind: "TEAM_TO_SCORE" as const,
+      options: [{ value: side }],
+      title: "Marcar pelo menos 1 gol"
+    }
+  ];
+
+  const finishedMatch = (homeScore: number, awayScore: number) => ({
+    awayScore,
+    awayTeamId: "away",
+    events: [],
+    homeScore,
+    homeTeamId: "home",
+    statistics: [],
+    status: "FINISHED"
+  });
+
+  it("acerta quando o mandante cobrado marca", () => {
+    const result = deriveCatalogResults(finishedMatch(2, 1), promoMarket("HOME"));
+    expect(result.answers).toEqual({ promo: true });
+    expect(result.missing).toEqual([]);
+  });
+
+  it("erra quando o mandante cobrado nao marca", () => {
+    expect(deriveCatalogResults(finishedMatch(0, 3), promoMarket("HOME")).answers).toEqual({
+      promo: false
+    });
+  });
+
+  it("le o lado visitante da opcao do mercado", () => {
+    expect(deriveCatalogResults(finishedMatch(2, 0), promoMarket("AWAY")).answers).toEqual({
+      promo: false
+    });
+    expect(deriveCatalogResults(finishedMatch(2, 1), promoMarket("AWAY")).answers).toEqual({
+      promo: true
+    });
+  });
+});

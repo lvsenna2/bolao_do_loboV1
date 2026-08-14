@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Route } from "next";
 
 import { PageShell } from "@/components/layout/page-shell";
+import { AdminPromoRoundSummary } from "@/features/special-rounds/components/admin-promo-round-summary";
 import { AdminSpecialRoundWorkspace } from "@/features/special-rounds/components/admin-round-workspace";
 import { SpecialRoundStatusBadge } from "@/features/special-rounds/components/status-badge";
 import { getAdminSpecialRoundDetail } from "@/features/special-rounds/data/special-round-data";
@@ -36,6 +37,19 @@ export default async function AdminSpecialRoundDetailPage({
       eyebrow="Administracao"
       title={round.name}
     >
+      {round.format === "PROMO_SINGLE_SELECTION" ? (
+        <AdminPromoRoundSummary
+          entries={round.entries.map((entry) => ({
+            amount: Number(entry.amount),
+            bonusAmount: Number(entry.bonusAmount),
+            paymentStatus: entry.paymentStatus
+          }))}
+          maxStakeCents={round.promoMaxStakeCents ?? 0}
+          odds={Number(round.promoOdds ?? 0)}
+          selectionLabel={round.promoSelectionLabel ?? ""}
+          slug={round.promoSlug ?? ""}
+        />
+      ) : null}
       <AdminSpecialRoundWorkspace
         entries={round.entries.map((entry) => ({
           blockedAt: entry.blockedAt,

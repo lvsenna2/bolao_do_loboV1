@@ -7,10 +7,7 @@ import { serverNow } from "@/lib/date-time";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { canAccessAdmin } from "@/server/auth/rbac";
 import { canCreateSpecialRound } from "@/features/subscriptions/service";
-import {
-  creditWalletInTransaction,
-  debitWalletInTransaction
-} from "@/features/wallet/services/wallet-service";
+import { debitWalletInTransaction } from "@/features/wallet/services/wallet-service";
 import { prisma } from "@/server/db";
 import { runFootballAutomation } from "@/server/football-api/automation-service";
 import { fetchApiFootballLineups } from "@/server/football-api/client";
@@ -20,6 +17,8 @@ import { createSpecialRoundPix, reconcileSpecialRoundPayment } from "../services
 import {
   calculateSpecialRound,
   createSpecialRoundFinalizedNotifications,
+  creditSpecialRoundPrizeToWallet,
+  refundPromoRoundEntries,
   settleSpecialRoundFromCatalog
 } from "../services/settlement-service";
 import {
@@ -616,6 +615,9 @@ export async function updateSpecialRoundAction(
   if (!current || !["DRAFT", "REGISTRATION_OPEN"].includes(current.status)) {
     return { message: "A rodada nao pode mais ser editada.", ok: false };
   }
+  if (current.format === "PROMO_SINGLE_SELECTION") {
+    return { message: "Use o formulario da promocao para editar esta rodada.", ok: false };
+  }
   const value = parsed.data;
   await prisma.$transaction(async (tx) => {
     await tx.specialRound.update({
@@ -786,20 +788,30 @@ export async function updateSpecialRoundStatusAction(
       }
       if (status === "FINALIZED") {
         await createSpecialRoundFinalizedNotifications(tx, {
+          format: current.format,
           id: specialRoundId,
           name: current.name
         });
       }
       if (status === "CANCELLED") {
+        // A promocao e paga so com saldo da carteira, entao o estorno e automatico e volta
+        // para o balde de origem. Rodada normal continua com reembolso manual via gateway.
+        const isPromo = current.format === "PROMO_SINGLE_SELECTION";
+        if (isPromo) {
+          await refundPromoRoundEntries(tx, { id: specialRoundId, name: current.name });
+        }
+        const cancelledBody = isPromo
+          ? `${current.name} foi cancelada e o valor apostado voltou para a sua carteira.`
+          : `${current.name} foi cancelada. Pagamentos aprovados devem ser reembolsados pelo administrador.`;
         const entries = await tx.specialRoundEntry.findMany({
           select: { id: true, userId: true },
           where: { specialRoundId }
         });
         await tx.notification.createMany({
           data: entries.map((entry) => ({
-            body: `${current.name} foi cancelada. Pagamentos aprovados devem ser reembolsados pelo administrador.`,
+            body: cancelledBody,
             icon: "special-round-cancelled",
-            message: `${current.name} foi cancelada. Pagamentos aprovados devem ser reembolsados pelo administrador.`,
+            message: cancelledBody,
             relatedEntityId: specialRoundId,
             title: "Rodada cancelada",
             type: "SPECIAL_ROUND" as const,
@@ -832,6 +844,10 @@ export async function joinSpecialRoundAction(
   if (!id.success) return { message: "Rodada invalida.", ok: false };
   const now = serverNow();
   const round = await prisma.specialRound.findUnique({ where: { id: id.data } });
+  if (round?.format === "PROMO_SINGLE_SELECTION") {
+    // Promocao nao tem inscricao: a entrada e a propria aposta, em placePromoBetAction.
+    return { message: "Esta rodada usa o fluxo da promocao.", ok: false };
+  }
   if (
     !round ||
     !["REGISTRATION_OPEN", "PREDICTIONS_OPEN"].includes(round.status) ||
@@ -1050,6 +1066,10 @@ export async function submitSpecialRoundPredictionsAction(
         }
       });
       if (!entry || entry.paymentStatus !== "APPROVED" || entry.blockedAt) {
+        throw new Error("SPECIAL_ROUND_ENTRY_NOT_ALLOWED");
+      }
+      // Na promocao o palpite e a propria selecao unica, gravada na hora da aposta.
+      if (entry.specialRound.format === "PROMO_SINGLE_SELECTION") {
         throw new Error("SPECIAL_ROUND_ENTRY_NOT_ALLOWED");
       }
       if (
@@ -1527,30 +1547,16 @@ export async function markSpecialRoundPrizePaidAction(
   if (!id.success) return { message: "Premio invalido.", ok: false };
   const prize = await prisma.specialRoundPrize.findUnique({
     include: {
-      entry: { select: { userId: true } },
-      specialRound: { select: { name: true } }
+      entry: { select: { amount: true, bonusAmount: true, userId: true } },
+      specialRound: { select: { format: true, id: true, name: true, promoOdds: true } }
     },
     where: { id: id.data }
   });
   if (!prize) return { message: "Premio nao encontrado.", ok: false };
-  const amountCents = Math.round(Number(prize.amount) * 100);
   await prisma.$transaction(async (tx) => {
     // Rodadas finalizadas antes do credito automatico ainda passam por aqui; o uniqueKey
     // do premio impede credito duplicado se ele ja tiver caido na carteira.
-    if (amountCents > 0) {
-      await creditWalletInTransaction(tx, {
-        amountCents,
-        description: `Premio da Rodada Especial ${prize.specialRound.name}`,
-        relatedEntityId: prize.id,
-        type: "BONUS",
-        uniqueKey: `wallet:special-round:prize:${prize.id}`,
-        userId: prize.entry.userId
-      });
-    }
-    await tx.specialRoundPrize.update({
-      data: { confirmedAt: prize.confirmedAt ?? serverNow(), paidAt: serverNow(), status: "PAID" },
-      where: { id: prize.id }
-    });
+    await creditSpecialRoundPrizeToWallet(tx, prize.specialRound, prize);
     await tx.specialRoundAuditLog.create({
       data: {
         action: "special_round.prize_paid",

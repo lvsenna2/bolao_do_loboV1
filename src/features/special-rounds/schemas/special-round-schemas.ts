@@ -2,6 +2,7 @@ import {
   SpecialRoundAnswerType,
   SpecialRoundMarketKind,
   SpecialRoundPrizeMode,
+  SpecialRoundPromoSide,
   SpecialRoundStatus
 } from "@prisma/client";
 import { z } from "zod";
@@ -153,6 +154,13 @@ export const specialRoundMarketSchema = z
         path: ["answerType"]
       });
     }
+    if (value.kind === "TEAM_TO_SCORE" && value.answerType !== "BOOLEAN") {
+      context.addIssue({
+        code: "custom",
+        message: "Time marcar gol deve usar resposta sim ou nao.",
+        path: ["answerType"]
+      });
+    }
     if (value.kind === "BOTH_TEAMS_SCORE" && value.answerType !== "BOOLEAN") {
       context.addIssue({
         code: "custom",
@@ -168,6 +176,60 @@ export const specialRoundMarketSchema = z
       });
     }
   });
+
+/**
+ * Rodada Especial Promocional de Selecao Unica. Nao tem inscricao, mercados montados nem
+ * ranking: o admin define UMA selecao, a odd e o teto por usuario, e o resto e aposta direta.
+ */
+export const promoSpecialRoundSchema = z
+  .object({
+    awayTeamLogo: z.string().url().or(z.literal("")).optional(),
+    awayTeamName: z.string().trim().min(2).max(120),
+    description: z.string().trim().max(3000).optional(),
+    homeTeamLogo: z.string().url().or(z.literal("")).optional(),
+    homeTeamName: z.string().trim().min(2).max(120),
+    matchId: z.string().uuid().or(z.literal("")).optional(),
+    matchStartsAt: dateTime,
+    name: z.string().trim().min(3).max(140),
+    promoBannerUrl: z.string().url().or(z.literal("")).optional(),
+    promoBetsCloseAt: dateTime,
+    promoBetsOpenAt: dateTime,
+    promoHeadline: z.string().trim().max(160).optional(),
+    promoMaxStakeCents: z.coerce.number().int().min(100).max(1_000_000),
+    promoMinStakeCents: z.coerce.number().int().min(100).max(1_000_000),
+    promoOdds: z.coerce.number().min(1.01).max(100),
+    promoSelectionLabel: z.string().trim().min(3).max(160),
+    promoSide: z.nativeEnum(SpecialRoundPromoSide),
+    promoSlug: z
+      .string()
+      .trim()
+      .min(3)
+      .max(80)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use apenas letras minusculas, numeros e hifen."),
+    rules: z.string().trim().max(10_000).optional()
+  })
+  .superRefine((value, context) => {
+    if (value.promoBetsOpenAt >= value.promoBetsCloseAt) {
+      context.addIssue({
+        code: "custom",
+        message: "O encerramento deve ocorrer depois da abertura.",
+        path: ["promoBetsCloseAt"]
+      });
+    }
+    if (value.promoMinStakeCents > value.promoMaxStakeCents) {
+      context.addIssue({
+        code: "custom",
+        message: "O valor minimo nao pode ser maior que o limite por usuario.",
+        path: ["promoMinStakeCents"]
+      });
+    }
+  });
+
+export const promoStakeSchema = z.object({
+  // Centavos inteiros: valor em reais nunca chega no backend como float.
+  stakeCents: z.coerce.number().int().min(100).max(1_000_000),
+  specialRoundId: idSchema
+});
 
 export const predictionBatchSchema = z.object({
   answers: z.record(

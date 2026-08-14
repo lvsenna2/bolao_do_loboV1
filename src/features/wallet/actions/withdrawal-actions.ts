@@ -50,8 +50,14 @@ export async function requestWithdrawalAction(input: unknown) {
 
   const wallet = await getWalletBalance(user.id);
 
-  if ((wallet?.balanceCents ?? 0) < parsed.data.amountCents) {
-    return { message: "Saldo insuficiente para esse saque.", ok: false as const };
+  // Saque so enxerga o saldo normal: o bonus aparece no total mas nao pode ser sacado.
+  if (wallet.balanceCents < parsed.data.amountCents) {
+    return {
+      message: wallet.bonusBalanceCents
+        ? "Saldo insuficiente para esse saque. O saldo bonus nao pode ser sacado."
+        : "Saldo insuficiente para esse saque.",
+      ok: false as const
+    };
   }
 
   try {

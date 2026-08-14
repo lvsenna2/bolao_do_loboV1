@@ -191,6 +191,21 @@ enum SpecialRoundStatus {
   CANCELLED
 }
 
+/**
+ * STANDARD e a Rodada Especial classica: varios mercados, palpite montado pelo usuario e
+ * premiacao por ranking. PROMO_SINGLE_SELECTION e o formato promocional de trafego pago:
+ * uma unica selecao ja escolhida, odd fixa, limite por usuario e lucro pago em saldo bonus.
+ */
+enum SpecialRoundFormat {
+  STANDARD
+  PROMO_SINGLE_SELECTION
+}
+
+enum SpecialRoundPromoSide {
+  HOME
+  AWAY
+}
+
 enum SpecialRoundMarketKind {
   EXACT_SCORE
   MATCH_RESULT
@@ -204,6 +219,7 @@ enum SpecialRoundMarketKind {
   TEAM_MOST_CORNERS
   TEAM_MOST_CARDS
   TEAM_MOST_SHOTS
+  TEAM_TO_SCORE
   CUSTOM
 }
 
@@ -1042,23 +1058,35 @@ model Payment {
   @@map("payments")
 }
 
+/**
+ * `balanceCents` e o saldo normal, o unico que pode ser sacado. `bonusBalanceCents` e o saldo
+ * bonus (promocoes): aparece no saldo total, pode ser gasto em apostas e boloes, mas nunca sai
+ * por saque. Aposta consome bonus primeiro; saque so enxerga `balanceCents`.
+ */
 model Wallet {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @unique @map("user_id") @db.Uuid
-  balanceCents Int      @default(0) @map("balance_cents")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @map("user_id") @db.Uuid
+  balanceCents      Int      @default(0) @map("balance_cents")
+  bonusBalanceCents Int      @default(0) @map("bonus_balance_cents")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@map("wallets")
 }
 
+/**
+ * `balanceBeforeCents`/`balanceAfterCents` guardam o saldo TOTAL (normal + bonus), que e o
+ * numero mostrado no extrato. `bonusAmountCents` e a parte do movimento que tocou o bonus,
+ * com o mesmo sinal de `amountCents`.
+ */
 model WalletTransaction {
   id                 String                @id @default(uuid()) @db.Uuid
   userId             String                @map("user_id") @db.Uuid
   type               WalletTransactionType
   amountCents        Int                   @map("amount_cents")
+  bonusAmountCents   Int                   @default(0) @map("bonus_amount_cents")
   balanceBeforeCents Int                   @map("balance_before_cents")
   balanceAfterCents  Int                   @map("balance_after_cents")
   description        String                @db.VarChar(240)
@@ -1386,6 +1414,15 @@ model SpecialRound {
   winnerCount          Int                   @default(1) @map("winner_count")
   prizeDistribution    Json                  @map("prize_distribution")
   finalPrize           Decimal?              @map("final_prize") @db.Decimal(10, 2)
+  format               SpecialRoundFormat    @default(STANDARD)
+  promoSlug            String?               @unique @map("promo_slug") @db.VarChar(80)
+  promoHeadline        String?               @map("promo_headline") @db.VarChar(160)
+  promoSelectionLabel  String?               @map("promo_selection_label") @db.VarChar(160)
+  promoSide            SpecialRoundPromoSide? @map("promo_side")
+  promoOdds            Decimal?              @map("promo_odds") @db.Decimal(6, 2)
+  promoMinStakeCents   Int?                  @map("promo_min_stake_cents")
+  promoMaxStakeCents   Int?                  @map("promo_max_stake_cents")
+  promoBannerUrl       String?               @map("promo_banner_url")
   status               SpecialRoundStatus    @default(DRAFT)
   rankingPublishedAt   DateTime?             @map("ranking_published_at")
   finalizedAt          DateTime?             @map("finalized_at")
@@ -1405,6 +1442,7 @@ model SpecialRound {
   @@index([matchStartsAt])
   @@index([createdById])
   @@index([matchId])
+  @@index([format, status])
   @@map("special_rounds")
 }
 
@@ -1413,6 +1451,9 @@ model SpecialRoundEntry {
   specialRoundId       String         @map("special_round_id") @db.Uuid
   userId               String         @map("user_id") @db.Uuid
   amount               Decimal        @db.Decimal(10, 2)
+  /// Parte de `amount` que saiu do saldo bonus. Na devolucao cada parte volta para o balde
+  /// de origem, senao o bonus viraria saldo sacavel.
+  bonusAmount          Decimal        @default(0) @map("bonus_amount") @db.Decimal(10, 2)
   paymentStatus        PaymentStatus  @default(PENDING) @map("payment_status")
   paymentGateway       PaymentGateway @default(MERCADO_PAGO) @map("payment_gateway")
   transactionId        String?        @unique @map("transaction_id")

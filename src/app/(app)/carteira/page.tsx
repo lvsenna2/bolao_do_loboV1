@@ -39,14 +39,36 @@ export default async function WalletPage() {
       title="Carteira"
     >
       <Card className="border-brand-gold/40 bg-black">
-        <CardContent className="flex items-center justify-between p-5">
-          <div>
-            <p className="text-sm text-app-muted">Saldo disponivel</p>
-            <p className="mt-1 text-3xl font-semibold text-brand-gold">
-              {formatCents(data.balanceCents)}
-            </p>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-app-muted">Saldo total</p>
+              <p className="mt-1 text-3xl font-semibold text-brand-gold">
+                {formatCents(data.totalCents)}
+              </p>
+            </div>
+            <WalletCards className="h-9 w-9 text-brand-gold" aria-hidden />
           </div>
-          <WalletCards className="h-9 w-9 text-brand-gold" aria-hidden />
+          <dl className="mt-4 grid gap-3 border-t border-app-border pt-4 sm:grid-cols-3">
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-app-muted">Saldo normal</dt>
+              <dd className="mt-1 text-lg font-semibold">{formatCents(data.balanceCents)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-app-muted">Saldo bonus</dt>
+              <dd className="mt-1 text-lg font-semibold">{formatCents(data.bonusBalanceCents)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-app-muted">Pode sacar</dt>
+              <dd className="mt-1 text-lg font-semibold">{formatCents(data.balanceCents)}</dd>
+            </div>
+          </dl>
+          {data.bonusBalanceCents > 0 ? (
+            <p className="mt-3 text-xs text-app-muted">
+              O saldo bonus vale em qualquer aposta ou bolao da plataforma, mas nao pode ser
+              sacado. Apostas gastam o bonus primeiro.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -64,6 +86,7 @@ export default async function WalletPage() {
           <CardTitle>Sacar via Pix</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* O formulario so conhece o saldo normal: o bonus nunca entra num saque. */}
           <WithdrawalForm
             balanceLabel={formatCents(data.balanceCents)}
             maxCents={Math.min(data.balanceCents, MAX_WITHDRAWAL_CENTS)}
@@ -143,6 +166,9 @@ export default async function WalletPage() {
                     </p>
                     <p className="text-xs text-app-muted">
                       {formatDateTimeInSaoPaulo(item.createdAt)}
+                      {item.bonusAmountCents !== 0
+                        ? ` | bonus ${formatCents(Math.abs(item.bonusAmountCents))}`
+                        : ""}
                     </p>
                   </div>
                 </div>
