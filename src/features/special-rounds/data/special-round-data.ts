@@ -4,13 +4,14 @@ import { serverNow } from "@/lib/date-time";
 import { withShortCache } from "@/server/cache/short-cache";
 import { prisma } from "@/server/db";
 import { calculateSpecialRoundPrizePool } from "../services/prize-service";
+import { isUuid } from "../services/promo-service";
 
 function loadSpecialRoundsForUser(userId: string) {
   return prisma.specialRound.findMany({
     include: {
       _count: { select: { entries: { where: { paymentStatus: "APPROVED" } } } },
       entries: {
-        select: { id: true, paymentStatus: true },
+        select: { amount: true, id: true, paymentStatus: true },
         where: { userId }
       },
       match: {
@@ -113,6 +114,47 @@ export async function getSpecialRoundsForUser(userId: string) {
       userEntry: round.entries[0] ?? null
     };
   });
+}
+
+/**
+ * Carrega uma Rodada Especial Promocional pelo id OU pelo slug da campanha, que e o que vai
+ * na URL de trafego pago (`/rodadas-especiais/flamengo-cruzeiro`).
+ */
+export async function getPromoRoundForUser(idOrSlug: string, userId: string) {
+  const round = await prisma.specialRound.findFirst({
+    include: {
+      _count: { select: { entries: { where: { paymentStatus: "APPROVED" } } } },
+      entries: {
+        select: { amount: true, bonusAmount: true, id: true, paymentStatus: true, prize: true },
+        where: { userId }
+      },
+      match: {
+        select: {
+          awayScore: true,
+          awayTeam: { select: { apiId: true, logo: true } },
+          elapsed: true,
+          homeScore: true,
+          homeTeam: { select: { apiId: true, logo: true } },
+          status: true
+        }
+      }
+    },
+    where: {
+      format: "PROMO_SINGLE_SELECTION",
+      ...(isUuid(idOrSlug) ? { id: idOrSlug } : { promoSlug: idOrSlug })
+    }
+  });
+  if (!round) return null;
+
+  const entry = round.entries[0] ?? null;
+  return {
+    ...round,
+    awayTeamLogo: round.match?.awayTeam.logo ?? round.awayTeamLogo,
+    homeTeamLogo: round.match?.homeTeam.logo ?? round.homeTeamLogo,
+    userEntry: entry,
+    userStakedCents:
+      entry && entry.paymentStatus === "APPROVED" ? Math.round(Number(entry.amount) * 100) : 0
+  };
 }
 
 export async function getSpecialRoundDetail(id: string, userId?: string) {

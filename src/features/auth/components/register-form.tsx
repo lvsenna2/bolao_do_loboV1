@@ -13,7 +13,7 @@ import { ActionAlert } from "./action-alert";
 import { AuthField } from "./auth-field";
 import { applyServerFieldErrors } from "./form-error-utils";
 
-export function RegisterForm() {
+export function RegisterForm({ callbackUrl }: { callbackUrl?: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | undefined>();
@@ -48,7 +48,11 @@ export function RegisterForm() {
           return;
         }
 
-        router.push("/login?registered=1");
+        // O callbackUrl carrega o destino e os parametros de campanha (UTM) desde o clique
+        // no anuncio, entao ele precisa sobreviver ao cadastro.
+        const query = new URLSearchParams({ registered: "1" });
+        if (callbackUrl) query.set("callbackUrl", callbackUrl);
+        router.push(`/login?${query.toString()}`);
       });
     });
   }

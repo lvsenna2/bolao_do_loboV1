@@ -14,7 +14,12 @@ import {
 import { SpecialRoundPredictionForm } from "@/features/special-rounds/components/prediction-form";
 import { SpecialRoundCountdown } from "@/features/special-rounds/components/countdown";
 import { SpecialRoundStatusBadge } from "@/features/special-rounds/components/status-badge";
-import { getSpecialRoundDetail } from "@/features/special-rounds/data/special-round-data";
+import { PromoRoundView } from "@/features/special-rounds/components/promo-round-view";
+import {
+  getPromoRoundForUser,
+  getSpecialRoundDetail
+} from "@/features/special-rounds/data/special-round-data";
+import { isUuid } from "@/features/special-rounds/services/promo-service";
 import { formatSpecialRoundAnswer } from "@/features/special-rounds/services/answer-format";
 import {
   getGoalScorerOptionSide,
@@ -32,6 +37,13 @@ export default async function SpecialRoundDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const [user, route] = await Promise.all([requireUser(), params]);
+
+  // A URL de trafego pago usa o slug da campanha (/rodadas-especiais/flamengo-cruzeiro), entao
+  // o mesmo segmento aceita uuid ou slug e a promocao ganha uma pagina propria.
+  const promo = await getPromoRoundForUser(route.id, user.id);
+  if (promo) return <PromoRoundView round={promo} userId={user.id} />;
+  if (!isUuid(route.id)) notFound();
+
   const round = await getSpecialRoundDetail(route.id, user.id);
   if (!round) notFound();
   const now = serverNow();

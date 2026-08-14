@@ -12,7 +12,7 @@ export async function WalletBalanceLink({ userId }: { userId: string }) {
       href={"/carteira" as Route}
     >
       <WalletCards className="h-4 w-4" aria-hidden />
-      <span className="hidden sm:inline">Saldo:</span> {formatCents(wallet?.balanceCents ?? 0)}
+      <span className="hidden sm:inline">Saldo:</span> {formatCents(wallet.totalCents)}
     </Link>
   );
 }

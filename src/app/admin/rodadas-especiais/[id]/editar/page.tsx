@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
+import { AdminPromoRoundForm } from "@/features/special-rounds/components/admin-promo-round-form";
 import { AdminSpecialRoundForm } from "@/features/special-rounds/components/admin-round-form";
 import {
   getAdminSpecialRoundDetail,
@@ -21,6 +22,47 @@ export default async function EditSpecialRoundPage({
     getSpecialRoundMatchOptions()
   ]);
   if (!round) notFound();
+
+  if (round.format === "PROMO_SINGLE_SELECTION") {
+    return (
+      <PageShell
+        description="Selecao, odd e limite travam assim que a primeira aposta entra."
+        title={`Editar ${round.name}`}
+      >
+        <Card>
+          <CardContent className="pt-5">
+            <AdminPromoRoundForm
+              initial={{
+                awayTeamLogo: round.awayTeamLogo,
+                awayTeamName: round.awayTeamName,
+                description: round.description,
+                hasEntries: round.entries.length > 0,
+                homeTeamLogo: round.homeTeamLogo,
+                homeTeamName: round.homeTeamName,
+                id: round.id,
+                matchId: round.matchId,
+                matchStartsAt: round.matchStartsAt,
+                name: round.name,
+                promoBannerUrl: round.promoBannerUrl,
+                promoBetsCloseAt: round.registrationClosesAt,
+                promoBetsOpenAt: round.registrationOpensAt,
+                promoHeadline: round.promoHeadline,
+                promoMaxStakeCents: round.promoMaxStakeCents ?? 1000,
+                promoMinStakeCents: round.promoMinStakeCents ?? 100,
+                promoOdds: Number(round.promoOdds ?? 2),
+                promoSelectionLabel: round.promoSelectionLabel ?? "",
+                promoSide: round.promoSide ?? "HOME",
+                promoSlug: round.promoSlug ?? "",
+                rules: round.rules
+              }}
+              matches={matches}
+            />
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell
       description="Edicao permitida antes da abertura dos palpites."

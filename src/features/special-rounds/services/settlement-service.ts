@@ -1,4 +1,4 @@
-import type { Prisma, SpecialRoundStatus } from "@prisma/client";
+import type { Prisma, SpecialRoundFormat, SpecialRoundStatus } from "@prisma/client";
 
 import { creditWalletInTransaction, formatCents } from "@/features/wallet/services/wallet-service";
 import { serverNow } from "@/lib/date-time";
@@ -8,6 +8,7 @@ import type { PrizeDistributionItem, SpecialRoundAnswer } from "../types";
 import { deriveCatalogResults } from "./catalog-result-service";
 import { resolveApiBackedSpecialRoundMatch } from "./match-link-service";
 import { calculateSpecialRoundPrizePool, distributeSpecialRoundPrize } from "./prize-service";
+import { promoReturnCents, splitPromoPayout } from "./promo-service";
 import { evaluateSpecialRoundAnswer, rankSpecialRoundEntries } from "./scoring-service";
 import { assertSpecialRoundTransition } from "./state-service";
 
@@ -23,6 +24,13 @@ export const settleableSpecialRoundStatuses = [
   "PREDICTIONS_CLOSED",
   "AWAITING_RESULT",
   "CALCULATING"
+] as const satisfies readonly SpecialRoundStatus[];
+
+// A promocao aceita aposta ja em REGISTRATION_OPEN e nao passa pelas fases de palpite, entao
+// ela tambem precisa entrar na varredura automatica a partir desse status.
+export const settleablePromoRoundStatuses = [
+  "REGISTRATION_OPEN",
+  ...settleableSpecialRoundStatuses
 ] as const satisfies readonly SpecialRoundStatus[];
 
 export type SpecialRoundSettlementResult = {
@@ -62,22 +70,66 @@ export async function getSpecialRoundChampionName(
  * Credita cada premio na carteira do ganhador assim que a classificacao e publicada e marca
  * o premio como pago. O uniqueKey por premio garante que reprocessar a rodada nao credite
  * duas vezes.
+ *
+ * Na Rodada Promocional o premio e o retorno da propria aposta: o valor apostado volta para o
+ * balde de onde saiu e so o lucro vira saldo bonus.
  */
-export async function creditSpecialRoundPrizesToWallets(
+export type SpecialRoundPrizeRoundInfo = {
+  format?: SpecialRoundFormat;
+  id: string;
+  name: string;
+  promoOdds?: Prisma.Decimal | null;
+};
+
+type CreditablePrize = {
+  amount: Prisma.Decimal;
+  confirmedAt: Date | null;
+  entry: { amount: Prisma.Decimal; bonusAmount: Prisma.Decimal; userId: string };
+  id: string;
+};
+
+/**
+ * Credita um premio e marca como pago. E o unico caminho de credito de premio — a apuracao
+ * automatica e o botao manual do admin passam os dois por aqui, para a promocao nunca pagar
+ * lucro como saldo sacavel.
+ */
+export async function creditSpecialRoundPrizeToWallet(
   client: Prisma.TransactionClient,
-  round: { id: string; name: string }
+  round: SpecialRoundPrizeRoundInfo,
+  prize: CreditablePrize
 ) {
-  const prizes = await client.specialRoundPrize.findMany({
-    include: { entry: { select: { userId: true } } },
-    where: { specialRoundId: round.id, status: { in: ["PENDING", "CONFIRMED"] } }
-  });
-  const now = serverNow();
-  let credited = 0;
+  const amountCents = Math.round(Number(prize.amount) * 100);
+  if (amountCents <= 0) return false;
 
-  for (const prize of prizes) {
-    const amountCents = Math.round(Number(prize.amount) * 100);
-    if (amountCents <= 0) continue;
-
+  if (round.format === "PROMO_SINGLE_SELECTION") {
+    const payout = splitPromoPayout({
+      bonusStakeCents: Math.round(Number(prize.entry.bonusAmount) * 100),
+      odds: Number(round.promoOdds ?? 0),
+      stakeCents: Math.round(Number(prize.entry.amount) * 100)
+    });
+    if (payout.realCreditCents > 0) {
+      await creditWalletInTransaction(client, {
+        amountCents: payout.realCreditCents,
+        bucket: "REAL",
+        description: `Valor apostado devolvido - ${round.name}`,
+        relatedEntityId: prize.id,
+        type: "REFUND",
+        uniqueKey: `wallet:special-round:prize:${prize.id}:real`,
+        userId: prize.entry.userId
+      });
+    }
+    if (payout.bonusCreditCents > 0) {
+      await creditWalletInTransaction(client, {
+        amountCents: payout.bonusCreditCents,
+        bucket: "BONUS",
+        description: `Bonus da promocao ${round.name}`,
+        relatedEntityId: prize.id,
+        type: "BONUS",
+        uniqueKey: `wallet:special-round:prize:${prize.id}:bonus`,
+        userId: prize.entry.userId
+      });
+    }
+  } else {
     await creditWalletInTransaction(client, {
       amountCents,
       description: `Premio da Rodada Especial ${round.name}`,
@@ -86,58 +138,140 @@ export async function creditSpecialRoundPrizesToWallets(
       uniqueKey: `wallet:special-round:prize:${prize.id}`,
       userId: prize.entry.userId
     });
-    await client.specialRoundPrize.update({
-      data: { confirmedAt: prize.confirmedAt ?? now, paidAt: now, status: "PAID" },
-      where: { id: prize.id }
-    });
-    credited += 1;
+  }
+
+  const now = serverNow();
+  await client.specialRoundPrize.update({
+    data: { confirmedAt: prize.confirmedAt ?? now, paidAt: now, status: "PAID" },
+    where: { id: prize.id }
+  });
+  return true;
+}
+
+export async function creditSpecialRoundPrizesToWallets(
+  client: Prisma.TransactionClient,
+  round: SpecialRoundPrizeRoundInfo
+) {
+  const prizes = await client.specialRoundPrize.findMany({
+    include: { entry: { select: { amount: true, bonusAmount: true, userId: true } } },
+    where: { specialRoundId: round.id, status: { in: ["PENDING", "CONFIRMED"] } }
+  });
+  let credited = 0;
+
+  for (const prize of prizes) {
+    if (await creditSpecialRoundPrizeToWallet(client, round, prize)) credited += 1;
   }
 
   return credited;
 }
 
-export async function createSpecialRoundFinalizedNotifications(
+/**
+ * Devolve o valor apostado numa promocao cancelada, cada parte para o balde de onde saiu e
+ * sem nenhum bonus promocional.
+ */
+export async function refundPromoRoundEntries(
   client: Prisma.TransactionClient,
   round: { id: string; name: string }
 ) {
+  const entries = await client.specialRoundEntry.findMany({
+    where: { paymentStatus: "APPROVED", specialRoundId: round.id }
+  });
+  const now = serverNow();
+  let refunded = 0;
+
+  for (const entry of entries) {
+    const stakeCents = Math.round(Number(entry.amount) * 100);
+    const bonusCents = Math.min(Math.round(Number(entry.bonusAmount) * 100), stakeCents);
+    const realCents = stakeCents - bonusCents;
+    if (stakeCents <= 0) continue;
+
+    if (realCents > 0) {
+      await creditWalletInTransaction(client, {
+        amountCents: realCents,
+        bucket: "REAL",
+        description: `Estorno da promocao ${round.name}`,
+        relatedEntityId: entry.id,
+        type: "REFUND",
+        uniqueKey: `wallet:promo-round:refund:${entry.id}:real`,
+        userId: entry.userId
+      });
+    }
+    if (bonusCents > 0) {
+      await creditWalletInTransaction(client, {
+        amountCents: bonusCents,
+        bucket: "BONUS",
+        description: `Estorno da promocao ${round.name}`,
+        relatedEntityId: entry.id,
+        type: "REFUND",
+        uniqueKey: `wallet:promo-round:refund:${entry.id}:bonus`,
+        userId: entry.userId
+      });
+    }
+    await client.specialRoundEntry.update({
+      data: { paymentStatus: "REFUNDED", refundedAt: now },
+      where: { id: entry.id }
+    });
+    refunded += 1;
+  }
+
+  return refunded;
+}
+
+export async function createSpecialRoundFinalizedNotifications(
+  client: Prisma.TransactionClient,
+  round: { format?: SpecialRoundFormat; id: string; name: string }
+) {
+  const isPromo = round.format === "PROMO_SINGLE_SELECTION";
   const [entries, championName] = await Promise.all([
     client.specialRoundEntry.findMany({
       include: { prize: true },
       where: { paymentStatus: "APPROVED", specialRoundId: round.id }
     }),
-    getSpecialRoundChampionName(client, round.id)
+    isPromo ? Promise.resolve(null) : getSpecialRoundChampionName(client, round.id)
   ]);
-  const resultBody = championName
-    ? `A classificacao de ${round.name} foi publicada. Campeao: ${championName}.`
-    : `A classificacao de ${round.name} foi publicada.`;
+  const resultBody = isPromo
+    ? `${round.name} foi encerrada e os resultados ja estao na sua carteira.`
+    : championName
+      ? `A classificacao de ${round.name} foi publicada. Campeao: ${championName}.`
+      : `A classificacao de ${round.name} foi publicada.`;
 
   await client.notification.createMany({
-    data: entries.flatMap((entry) => [
-      {
-        body: resultBody,
-        icon: "special-round-result",
-        message: resultBody,
-        relatedEntityId: round.id,
-        title: "Resultado publicado",
-        type: "SPECIAL_ROUND" as const,
-        uniqueKey: `special-round:result:${round.id}:${entry.userId}`,
-        userId: entry.userId
-      },
-      ...(entry.prize
-        ? [
-            {
-              body: `Parabens! ${formatCents(Math.round(Number(entry.prize.amount) * 100))} de ${round.name} ja estao no saldo da sua carteira.`,
-              icon: "special-round-prize",
-              message: `Parabens! ${formatCents(Math.round(Number(entry.prize.amount) * 100))} de ${round.name} ja estao no saldo da sua carteira.`,
-              relatedEntityId: entry.prize.id,
-              title: "Usuario premiado",
-              type: "SPECIAL_ROUND" as const,
-              uniqueKey: `special-round:prize:${entry.prize.id}`,
-              userId: entry.userId
-            }
-          ]
-        : [])
-    ]),
+    data: entries.flatMap((entry) => {
+      const prizeBody = entry.prize
+        ? isPromo
+          ? `Sua aposta em ${round.name} bateu! ${formatCents(
+              Math.round(Number(entry.prize.amount) * 100)
+            )} ja estao na sua carteira, com o lucro em saldo bonus.`
+          : `Parabens! ${formatCents(Math.round(Number(entry.prize.amount) * 100))} de ${round.name} ja estao no saldo da sua carteira.`
+        : null;
+
+      return [
+        {
+          body: resultBody,
+          icon: "special-round-result",
+          message: resultBody,
+          relatedEntityId: round.id,
+          title: isPromo ? "Promocao encerrada" : "Resultado publicado",
+          type: "SPECIAL_ROUND" as const,
+          uniqueKey: `special-round:result:${round.id}:${entry.userId}`,
+          userId: entry.userId
+        },
+        ...(entry.prize && prizeBody
+          ? [
+              {
+                body: prizeBody,
+                icon: "special-round-prize",
+                message: prizeBody,
+                relatedEntityId: entry.prize.id,
+                title: isPromo ? "Aposta premiada" : "Usuario premiado",
+                type: "SPECIAL_ROUND" as const,
+                uniqueKey: `special-round:prize:${entry.prize.id}`,
+                userId: entry.userId
+              }
+            ]
+          : [])
+      ];
+    }),
     skipDuplicates: true
   });
 }
@@ -319,38 +453,68 @@ export async function calculateSpecialRound(input: {
             data: ranked.map((standing) => ({ ...standing, specialRoundId: round.id }))
           });
         }
-        const paidAmounts = round.entries.map((entry) => Number(entry.amount));
-        const pool = calculateSpecialRoundPrizePool({
-          adminFeePercent: Number(round.adminFeePercent),
-          confirmedAmounts: paidAmounts,
-          fixedPrize: round.fixedPrize ? Number(round.fixedPrize) : null,
-          mode: round.prizeMode,
-          poolPercent: Number(round.prizePoolPercent)
-        });
-        const distribution = distributeSpecialRoundPrize(
-          pool.prize,
-          round.prizeDistribution as unknown as PrizeDistributionItem[]
-        );
         const paidPrize = await tx.specialRoundPrize.findFirst({
           where: { specialRoundId: round.id, status: "PAID" }
         });
         if (paidPrize) throw new Error("PRIZE_ALREADY_PAID");
         await tx.specialRoundPrize.deleteMany({ where: { specialRoundId: round.id } });
-        for (const prize of distribution) {
-          const winner = ranked.find((item) => item.position === prize.position);
-          if (!winner) continue;
-          await tx.specialRoundPrize.create({
-            data: { ...prize, entryId: winner.entryId, specialRoundId: round.id }
+
+        let totalPrize = 0;
+        if (round.format === "PROMO_SINGLE_SELECTION") {
+          // Promocao nao tem bolo nem ranking: cada aposta certa recebe o proprio retorno
+          // (valor apostado * odd). A posicao vem da classificacao so para satisfazer a
+          // unicidade de premio por rodada.
+          const odds = Number(round.promoOdds ?? 0);
+          const stakeByEntry = new Map(
+            round.entries.map((entry) => [entry.id, Math.round(Number(entry.amount) * 100)])
+          );
+          for (const standing of ranked) {
+            if (standing.hits < 1) continue;
+            const stakeCents = stakeByEntry.get(standing.entryId) ?? 0;
+            if (stakeCents <= 0) continue;
+            const returnCents = promoReturnCents(stakeCents, odds);
+            totalPrize += returnCents / 100;
+            await tx.specialRoundPrize.create({
+              data: {
+                amount: returnCents / 100,
+                entryId: standing.entryId,
+                percentage: 100,
+                position: standing.position,
+                specialRoundId: round.id
+              }
+            });
+          }
+        } else {
+          const paidAmounts = round.entries.map((entry) => Number(entry.amount));
+          const pool = calculateSpecialRoundPrizePool({
+            adminFeePercent: Number(round.adminFeePercent),
+            confirmedAmounts: paidAmounts,
+            fixedPrize: round.fixedPrize ? Number(round.fixedPrize) : null,
+            mode: round.prizeMode,
+            poolPercent: Number(round.prizePoolPercent)
           });
+          const distribution = distributeSpecialRoundPrize(
+            pool.prize,
+            round.prizeDistribution as unknown as PrizeDistributionItem[]
+          );
+          for (const prize of distribution) {
+            const winner = ranked.find((item) => item.position === prize.position);
+            if (!winner) continue;
+            await tx.specialRoundPrize.create({
+              data: { ...prize, entryId: winner.entryId, specialRoundId: round.id }
+            });
+          }
+          totalPrize = pool.prize;
         }
-        await tx.specialRound.update({ data: { finalPrize: pool.prize }, where: { id: round.id } });
+
+        await tx.specialRound.update({ data: { finalPrize: totalPrize }, where: { id: round.id } });
         await tx.specialRoundAuditLog.create({
           data: {
             action: "special_round.calculated",
             actorId: input.actorId,
             entity: "SpecialRound",
             entityId: round.id,
-            metadata: json({ entries: ranked.length, prize: pool.prize }),
+            metadata: json({ entries: ranked.length, format: round.format, prize: totalPrize }),
             specialRoundId: round.id
           }
         });
@@ -411,8 +575,10 @@ export async function finalizeSpecialRound(input: {
         }
       });
       const credited = await creditSpecialRoundPrizesToWallets(tx, {
+        format: current.format,
         id: current.id,
-        name: current.name
+        name: current.name,
+        promoOdds: current.promoOdds
       });
       if (credited > 0) {
         await tx.specialRoundAuditLog.create({
@@ -426,7 +592,11 @@ export async function finalizeSpecialRound(input: {
           }
         });
       }
-      await createSpecialRoundFinalizedNotifications(tx, { id: current.id, name: current.name });
+      await createSpecialRoundFinalizedNotifications(tx, {
+        format: current.format,
+        id: current.id,
+        name: current.name
+      });
     }, serializable);
   } catch (error) {
     console.error("Special round finalization failed", {
@@ -501,17 +671,29 @@ export async function settleFinishedSpecialRounds(
     },
     take: 20,
     where: {
-      OR: [
-        { match: { status: "FINISHED" } },
+      AND: [
         {
-          matchId: null,
-          matchStartsAt: {
-            gte: new Date(now.getTime() - RELINK_MAX_AGE_MS),
-            lte: new Date(now.getTime() - RELINK_AFTER_KICKOFF_MS)
-          }
+          OR: [
+            { match: { status: "FINISHED" } },
+            {
+              matchId: null,
+              matchStartsAt: {
+                gte: new Date(now.getTime() - RELINK_MAX_AGE_MS),
+                lte: new Date(now.getTime() - RELINK_AFTER_KICKOFF_MS)
+              }
+            }
+          ]
+        },
+        {
+          OR: [
+            { format: "STANDARD", status: { in: [...settleableSpecialRoundStatuses] } },
+            {
+              format: "PROMO_SINGLE_SELECTION",
+              status: { in: [...settleablePromoRoundStatuses] }
+            }
+          ]
         }
-      ],
-      status: { in: [...settleableSpecialRoundStatuses] }
+      ]
     }
   });
 

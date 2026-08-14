@@ -19,7 +19,16 @@ export async function getWalletPageData(userId: string) {
       where: { userId }
     })
   ]);
-  return { balanceCents: wallet?.balanceCents ?? 0, deposits, transactions, withdrawals };
+  const balanceCents = wallet?.balanceCents ?? 0;
+  const bonusBalanceCents = wallet?.bonusBalanceCents ?? 0;
+  return {
+    balanceCents,
+    bonusBalanceCents,
+    deposits,
+    totalCents: balanceCents + bonusBalanceCents,
+    transactions,
+    withdrawals
+  };
 }
 
 export function getPendingWithdrawalsForAdmin() {

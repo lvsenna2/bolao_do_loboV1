@@ -81,10 +81,12 @@ export async function requestWithdrawal(input: WithdrawalRequestInput) {
 
       // O saldo sai agora para ninguem gastar duas vezes o mesmo dinheiro enquanto
       // o pedido espera aprovacao. Recusa e cancelamento devolvem.
+      // REAL_ONLY: saldo bonus nunca vira saque, nem quando o total daria.
       await debitWalletInTransaction(tx, {
         amountCents: input.amountCents,
         description: `Saque via Pix solicitado (${formatCents(input.amountCents)})`,
         relatedEntityId: withdrawal.id,
+        source: "REAL_ONLY",
         type: "WITHDRAWAL",
         uniqueKey: `wallet:withdrawal:${withdrawal.id}`,
         userId: input.userId
@@ -112,6 +114,7 @@ async function refundWithdrawalInTransaction(
 ) {
   await creditWalletInTransaction(tx, {
     amountCents: withdrawal.amountCents,
+    bucket: "REAL",
     description: reason,
     relatedEntityId: withdrawal.id,
     type: "REFUND",

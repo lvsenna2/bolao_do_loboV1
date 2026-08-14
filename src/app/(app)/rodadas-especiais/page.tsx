@@ -6,7 +6,13 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { getElectionRoundSummary } from "@/features/election-special-round/data";
 import { getSpecialRoundsForUser } from "@/features/special-rounds/data/special-round-data";
+import { PromoRoundCard } from "@/features/special-rounds/components/promo-round-card";
 import { SpecialRoundCard } from "@/features/special-rounds/components/special-round-card";
+import {
+  isPromoBettingOpen,
+  promoMaxStakeCents,
+  promoSelectionText
+} from "@/features/special-rounds/services/promo-service";
 import { requireUser } from "@/server/auth/session";
 import { canCreateSpecialRound } from "@/features/subscriptions/service";
 import { serverNow } from "@/lib/date-time";
@@ -30,14 +36,39 @@ export default async function SpecialRoundsPage() {
     getCachedElectionRoundSummary(),
     getCachedCanCreateSpecialRound(user.id)
   ]);
-  const active = rounds.filter((round) => !["FINALIZED", "CANCELLED"].includes(round.status));
+  const now = serverNow();
   // Rodadas encerradas continuam na aba por 48h para que o campeao fique visivel a todos.
-  const visibleSince = new Date(serverNow().getTime() - 48 * 60 * 60_000);
-  const closed = rounds.filter((round) => {
+  const visibleSince = new Date(now.getTime() - 48 * 60 * 60_000);
+  const isRecentlyClosed = (round: (typeof rounds)[number]) => {
     if (!["FINALIZED", "CANCELLED"].includes(round.status)) return false;
-    const closedAt = round.finalizedAt ?? round.cancelledAt ?? round.updatedAt;
-    return closedAt >= visibleSince;
-  });
+    return (round.finalizedAt ?? round.cancelledAt ?? round.updatedAt) >= visibleSince;
+  };
+
+  // A promocao vem antes de tudo: e a oferta anunciada no trafego pago e precisa ser a
+  // primeira coisa que o usuario ve ao cair na aba. Ela tem card proprio, entao sai das
+  // listas de rodadas comuns em qualquer status.
+  const promos = rounds
+    .filter(
+      (round) =>
+        round.format === "PROMO_SINGLE_SELECTION" &&
+        (!["FINALIZED", "CANCELLED"].includes(round.status) || isRecentlyClosed(round))
+    )
+    .map((round) => ({
+      bettingOpen: isPromoBettingOpen({
+        closesAt: round.registrationClosesAt,
+        matchStatus: round.match?.status,
+        now,
+        opensAt: round.registrationOpensAt,
+        status: round.status
+      }),
+      round
+    }))
+    .sort((left, right) => Number(right.bettingOpen) - Number(left.bettingOpen));
+  const isStandard = (round: (typeof rounds)[number]) => round.format !== "PROMO_SINGLE_SELECTION";
+  const active = rounds.filter(
+    (round) => isStandard(round) && !["FINALIZED", "CANCELLED"].includes(round.status)
+  );
+  const closed = rounds.filter((round) => isStandard(round) && isRecentlyClosed(round));
 
   return (
     <PageShell
@@ -54,6 +85,34 @@ export default async function SpecialRoundsPage() {
             <Plus className="h-4 w-4" /> Criar Rodada Especial
           </Link>
         </div>
+      ) : null}
+      {promos.length ? (
+        <section className="mb-8 space-y-5">
+          {promos.map(({ bettingOpen, round }) => (
+            <PromoRoundCard
+              awayTeamApiId={round.match?.awayTeam.apiId}
+              awayTeamLogo={round.awayTeamLogo}
+              awayTeamName={round.awayTeamName}
+              bettingOpen={bettingOpen}
+              headline={round.promoHeadline}
+              homeTeamApiId={round.match?.homeTeam.apiId}
+              homeTeamLogo={round.homeTeamLogo}
+              homeTeamName={round.homeTeamName}
+              href={`/rodadas-especiais/${round.promoSlug ?? round.id}`}
+              key={round.id}
+              matchStartsAt={round.matchStartsAt}
+              matchStatus={round.match?.status}
+              maxStakeCents={promoMaxStakeCents(round)}
+              odds={Number(round.promoOdds ?? 0)}
+              selectionLabel={promoSelectionText(round)}
+              userStakedCents={
+                round.userEntry?.paymentStatus === "APPROVED"
+                  ? Math.round(Number(round.userEntry.amount) * 100)
+                  : 0
+              }
+            />
+          ))}
+        </section>
       ) : null}
       {election && election.status !== "CANCELLED" ? (
         <Card className="mb-8 overflow-hidden border-brand-gold/40 bg-black text-white">
