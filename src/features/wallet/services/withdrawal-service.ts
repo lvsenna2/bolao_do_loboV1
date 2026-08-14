@@ -1,14 +1,16 @@
 import { Prisma, type PixKeyType } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
+import { getPixPayoutProvider, type PixPayoutResult } from "./pix-payout-provider";
 import { creditWalletInTransaction, debitWalletInTransaction, formatCents } from "./wallet-service";
 
 export const MIN_WITHDRAWAL_CENTS = 2_000;
 export const MAX_WITHDRAWAL_CENTS = 500_000;
 
 /** Enquanto um pedido esta nesses estados o dinheiro ja saiu da carteira e esta retido. */
-const OPEN_STATUSES = ["REQUESTED", "APPROVED"] as const;
+const OPEN_STATUSES = ["REQUESTED", "APPROVED", "PIX_PROCESSING", "PIX_FAILED"] as const;
 
 export type WithdrawalRequestInput = {
   amountCents: number;
@@ -72,6 +74,9 @@ export async function requestWithdrawal(input: WithdrawalRequestInput) {
       const withdrawal = await tx.walletWithdrawal.create({
         data: {
           amountCents: input.amountCents,
+          // Nasce junto com o pedido e nunca muda: e ela que impede o provedor de Pix de
+          // executar duas transferencias para o mesmo saque.
+          payoutIdempotencyKey: `withdrawal:${randomUUID()}`,
           pixKey: input.pixKey,
           pixKeyOwnerName: input.pixKeyOwnerName,
           pixKeyType: input.pixKeyType,
@@ -153,6 +158,14 @@ export async function cancelWithdrawal(input: { userId: string; withdrawalId: st
   );
 }
 
+/**
+ * Aprova o saque e, se houver provedor de Pix de saida configurado, ja envia o Pix.
+ *
+ * A protecao contra Pix duplicado tem duas camadas: a transicao de status e feita com
+ * `updateMany` filtrando pelo status anterior (dois cliques simultaneos, so um avanca) e a
+ * chamada ao provedor leva a `payoutIdempotencyKey` fixa do saque, para o proprio PSP recusar
+ * a segunda transferencia caso a primeira ja tenha saido.
+ */
 export async function approveWithdrawal(input: { adminId: string; withdrawalId: string }) {
   const withdrawal = await prisma.walletWithdrawal.findUnique({
     where: { id: input.withdrawalId }
@@ -162,11 +175,20 @@ export async function approveWithdrawal(input: { adminId: string; withdrawalId: 
   if (withdrawal.status !== "REQUESTED") throw new Error("WITHDRAWAL_NOT_REVIEWABLE");
 
   const now = serverNow();
-  const [updated] = await prisma.$transaction([
-    prisma.walletWithdrawal.update({
-      data: { reviewedAt: now, reviewedById: input.adminId, status: "APPROVED" },
-      where: { id: withdrawal.id }
-    }),
+  const claimed = await prisma.walletWithdrawal.updateMany({
+    data: {
+      approvedAt: now,
+      approvedById: input.adminId,
+      reviewedAt: now,
+      reviewedById: input.adminId,
+      status: "APPROVED"
+    },
+    // Filtro pelo status anterior: quem chegar depois nao encontra a linha.
+    where: { id: withdrawal.id, status: "REQUESTED" }
+  });
+  if (claimed.count !== 1) throw new Error("WITHDRAWAL_NOT_REVIEWABLE");
+
+  await prisma.$transaction([
     prisma.notification.upsert({
       create: {
         body: `Seu saque de ${formatCents(withdrawal.amountCents)} foi aprovado e sera enviado para a sua chave Pix.`,
@@ -191,6 +213,131 @@ export async function approveWithdrawal(input: { adminId: string; withdrawalId: 
     })
   ]);
 
+  return sendWithdrawalPix({ adminId: input.adminId, withdrawalId: withdrawal.id });
+}
+
+/**
+ * Dispara o Pix de saida de um saque ja aprovado. Sem provedor configurado nao faz nada e o
+ * saque continua em APPROVED, esperando o Pix manual — que e o comportamento de hoje.
+ */
+export async function sendWithdrawalPix(input: { adminId: string; withdrawalId: string }) {
+  const provider = getPixPayoutProvider();
+  const current = await prisma.walletWithdrawal.findUniqueOrThrow({
+    where: { id: input.withdrawalId }
+  });
+
+  if (!provider) return current;
+  if (!["APPROVED", "PIX_FAILED"].includes(current.status)) {
+    throw new Error("WITHDRAWAL_NOT_PAYABLE");
+  }
+
+  const processing = await prisma.walletWithdrawal.updateMany({
+    data: {
+      transferAttemptedAt: serverNow(),
+      transferError: null,
+      transferProvider: provider.name,
+      status: "PIX_PROCESSING"
+    },
+    where: { id: current.id, status: current.status }
+  });
+  // Outra requisicao ja pegou este saque: nao dispara um segundo Pix.
+  if (processing.count !== 1) throw new Error("WITHDRAWAL_PIX_ALREADY_RUNNING");
+
+  await prisma.auditLog.create({
+    data: {
+      action: "wallet.withdrawal.pix_requested",
+      entity: "WalletWithdrawal",
+      entityId: current.id,
+      userId: input.adminId
+    }
+  });
+
+  let result: PixPayoutResult;
+  try {
+    result = await provider.sendPix({
+      amountCents: current.amountCents,
+      idempotencyKey: current.payoutIdempotencyKey,
+      pixKey: current.pixKey,
+      pixKeyOwnerName: current.pixKeyOwnerName,
+      pixKeyType: current.pixKeyType,
+      withdrawalId: current.id
+    });
+  } catch (cause) {
+    // Erro inesperado (rede, timeout): o saque para em PIX_FAILED com o dinheiro ainda retido,
+    // nunca em "pago". Reenviar so pela acao de retentativa, que usa a mesma chave.
+    console.error("[wallet] Falha inesperada no Pix de saida", cause);
+    result = {
+      error: cause instanceof Error ? cause.message : "Falha ao comunicar com o provedor de Pix.",
+      ok: false
+    };
+  }
+
+  return finishWithdrawalPix({ adminId: input.adminId, result, withdrawalId: current.id });
+}
+
+async function finishWithdrawalPix(input: {
+  adminId: string;
+  result: PixPayoutResult;
+  withdrawalId: string;
+}) {
+  const now = serverNow();
+
+  if (!input.result.ok) {
+    const updated = await prisma.walletWithdrawal.update({
+      data: {
+        status: "PIX_FAILED",
+        transferError: input.result.error.slice(0, 400),
+        transferId: input.result.transferId ?? undefined,
+        transferStatus: input.result.providerStatus ?? "failed"
+      },
+      where: { id: input.withdrawalId }
+    });
+    await prisma.auditLog.create({
+      data: {
+        action: "wallet.withdrawal.pix_failed",
+        entity: "WalletWithdrawal",
+        entityId: updated.id,
+        userId: input.adminId
+      }
+    });
+    return updated;
+  }
+
+  const updated = await prisma.walletWithdrawal.update({
+    data: {
+      paidAt: now,
+      receiptRef: input.result.transferId,
+      status: "PAID",
+      transferId: input.result.transferId,
+      transferStatus: input.result.providerStatus
+    },
+    where: { id: input.withdrawalId }
+  });
+  await prisma.$transaction([
+    prisma.notification.upsert({
+      create: {
+        body: `O Pix de ${formatCents(updated.amountCents)} foi enviado para a sua chave.`,
+        icon: "wallet",
+        message: `O Pix de ${formatCents(updated.amountCents)} foi enviado para a sua chave.`,
+        relatedEntityId: updated.id,
+        title: "Saque pago",
+        type: "PAYMENT",
+        uniqueKey: `wallet:withdrawal:paid:${updated.id}`,
+        userId: updated.userId
+      },
+      update: {},
+      where: { uniqueKey: `wallet:withdrawal:paid:${updated.id}` }
+    }),
+    prisma.auditLog.create({
+      data: {
+        action: "wallet.withdrawal.pix_paid",
+        entity: "WalletWithdrawal",
+        entityId: updated.id,
+        userId: input.adminId
+      }
+    })
+  ]);
+
   return updated;
 }
 
@@ -204,7 +351,11 @@ export async function markWithdrawalPaid(input: {
   });
 
   if (!withdrawal) throw new Error("WITHDRAWAL_NOT_FOUND");
-  if (withdrawal.status !== "APPROVED") throw new Error("WITHDRAWAL_NOT_PAYABLE");
+  // PIX_FAILED tambem entra aqui: se o admin acabou fazendo o Pix por fora depois da falha,
+  // ele consegue fechar o saque com o comprovante do banco.
+  if (!["APPROVED", "PIX_FAILED"].includes(withdrawal.status)) {
+    throw new Error("WITHDRAWAL_NOT_PAYABLE");
+  }
 
   const now = serverNow();
   const [updated] = await prisma.$transaction([
@@ -256,7 +407,9 @@ export async function rejectWithdrawal(input: {
       });
 
       if (!withdrawal) throw new Error("WITHDRAWAL_NOT_FOUND");
-      if (withdrawal.status !== "REQUESTED" && withdrawal.status !== "APPROVED") {
+      // PIX_PROCESSING fica de fora: enquanto o provedor nao responde nao da para saber se o
+      // dinheiro saiu, e devolver o saldo agora arriscaria pagar duas vezes.
+      if (!["REQUESTED", "APPROVED", "PIX_FAILED"].includes(withdrawal.status)) {
         throw new Error("WITHDRAWAL_NOT_REVIEWABLE");
       }
 

@@ -12,8 +12,10 @@ import {
 import {
   approveWithdrawalFormAction,
   markWithdrawalPaidFormAction,
-  rejectWithdrawalFormAction
+  rejectWithdrawalFormAction,
+  retryWithdrawalPixFormAction
 } from "@/features/wallet/actions/withdrawal-actions";
+import { isAutomaticPixPayoutEnabled } from "@/features/wallet/services/pix-payout-provider";
 import {
   getPendingWithdrawalsForAdmin,
   getReviewedWithdrawalsForAdmin
@@ -27,16 +29,33 @@ export const dynamic = "force-dynamic";
 const inputClass =
   "h-10 w-full rounded-control border border-app-border bg-app-background px-3 text-sm text-app-foreground outline-none focus:border-brand-gold";
 
+const WITHDRAWAL_STATUS_LABEL: Record<string, string> = {
+  APPROVED: "Aprovado, aguardando Pix",
+  CANCELLED: "Cancelado",
+  PAID: "Pago",
+  PIX_FAILED: "Falha no Pix",
+  PIX_PROCESSING: "Pix em processamento",
+  REJECTED: "Recusado",
+  REQUESTED: "Aguardando aprovacao"
+};
+
 export default async function AdminWithdrawalsPage() {
   await requireAdmin();
   const [pending, reviewed] = await Promise.all([
     getPendingWithdrawalsForAdmin(),
     getReviewedWithdrawalsForAdmin()
   ]);
+  // Sem provedor de Pix de saida contratado o botao Aprovar so aprova, e o Pix continua
+  // sendo feito por fora pelo admin.
+  const automaticPix = isAutomaticPixPayoutEnabled();
 
   return (
     <PageShell
-      description="O valor ja saiu da carteira do usuario. Aprove, faca o Pix por fora e marque como pago."
+      description={
+        automaticPix
+          ? "O valor ja saiu da carteira do usuario. Ao aprovar, o Pix e enviado automaticamente."
+          : "O valor ja saiu da carteira do usuario. Aprove, faca o Pix por fora e marque como pago."
+      }
       eyebrow="Administracao"
       title="Saques"
     >
@@ -75,7 +94,20 @@ export default async function AdminWithdrawalsPage() {
                   </p>
                 </AdminTd>
                 <AdminTd>
-                  <AdminStatusBadge value={withdrawal.status} />
+                  <AdminStatusBadge
+                    label={WITHDRAWAL_STATUS_LABEL[withdrawal.status]}
+                    value={withdrawal.status}
+                  />
+                  {withdrawal.status === "PIX_FAILED" && withdrawal.transferError ? (
+                    <p className="mt-1 max-w-56 break-words text-xs text-red-400">
+                      {withdrawal.transferError}
+                    </p>
+                  ) : null}
+                  {withdrawal.transferId ? (
+                    <p className="mt-1 break-all text-xs text-app-muted">
+                      {withdrawal.transferProvider} | {withdrawal.transferId}
+                    </p>
+                  ) : null}
                 </AdminTd>
                 <AdminTd>
                   <div className="space-y-2">
@@ -84,11 +116,15 @@ export default async function AdminWithdrawalsPage() {
                         <input name="withdrawalId" type="hidden" value={withdrawal.id} />
                         <AdminSubmitButton
                           className="h-10 rounded-button bg-brand-gold px-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
-                          pendingLabel="Aprovando..."
+                          pendingLabel={automaticPix ? "Enviando Pix..." : "Aprovando..."}
                         >
-                          Aprovar
+                          {automaticPix ? "Aprovar e enviar Pix" : "Aprovar"}
                         </AdminSubmitButton>
                       </form>
+                    ) : withdrawal.status === "PIX_PROCESSING" ? (
+                      <p className="text-sm text-app-muted">
+                        Pix em processamento. Atualize a pagina para ver o resultado.
+                      </p>
                     ) : (
                       <form action={markWithdrawalPaidFormAction} className="flex gap-2">
                         <input name="withdrawalId" type="hidden" value={withdrawal.id} />
@@ -107,6 +143,19 @@ export default async function AdminWithdrawalsPage() {
                       </form>
                     )}
 
+                    {automaticPix && withdrawal.status === "PIX_FAILED" ? (
+                      <form action={retryWithdrawalPixFormAction}>
+                        <input name="withdrawalId" type="hidden" value={withdrawal.id} />
+                        <AdminSubmitButton
+                          className="h-10 rounded-button border border-brand-gold/40 px-3 text-sm font-semibold text-brand-gold transition hover:bg-brand-gold/10"
+                          pendingLabel="Reenviando..."
+                        >
+                          Reenviar Pix
+                        </AdminSubmitButton>
+                      </form>
+                    ) : null}
+
+                    {withdrawal.status === "PIX_PROCESSING" ? null : (
                     <form action={rejectWithdrawalFormAction} className="flex gap-2">
                       <input name="withdrawalId" type="hidden" value={withdrawal.id} />
                       <input
@@ -123,6 +172,7 @@ export default async function AdminWithdrawalsPage() {
                         Recusar
                       </AdminSubmitButton>
                     </form>
+                    )}
                   </div>
                 </AdminTd>
               </tr>
@@ -154,7 +204,10 @@ export default async function AdminWithdrawalsPage() {
                   </AdminTd>
                   <AdminTd>{formatCents(withdrawal.amountCents)}</AdminTd>
                   <AdminTd>
-                    <AdminStatusBadge value={withdrawal.status} />
+                    <AdminStatusBadge
+                      label={WITHDRAWAL_STATUS_LABEL[withdrawal.status]}
+                      value={withdrawal.status}
+                    />
                     {withdrawal.adminNote ? (
                       <p className="text-xs text-app-muted">{withdrawal.adminNote}</p>
                     ) : null}

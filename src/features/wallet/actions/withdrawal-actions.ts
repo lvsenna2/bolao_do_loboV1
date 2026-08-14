@@ -13,7 +13,8 @@ import {
   MIN_WITHDRAWAL_CENTS,
   normalizePixKey,
   rejectWithdrawal,
-  requestWithdrawal
+  requestWithdrawal,
+  sendWithdrawalPix
 } from "../services/withdrawal-service";
 
 const pixKeyTypeSchema = z.enum(["CPF", "CNPJ", "EMAIL", "PHONE", "RANDOM"]);
@@ -115,18 +116,65 @@ export async function cancelWithdrawalAction(withdrawalId: string) {
   return { message: "Saque cancelado e valor devolvido para a carteira.", ok: true as const };
 }
 
+function payoutResultMessage(status: string, transferError: string | null) {
+  if (status === "PAID") return "Saque aprovado e Pix enviado.";
+  if (status === "PIX_FAILED") {
+    return `Saque aprovado, mas o Pix falhou: ${transferError ?? "erro nao informado"}. O valor segue retido.`;
+  }
+  if (status === "PIX_PROCESSING") return "Saque aprovado. O Pix esta em processamento.";
+  return "Saque aprovado. Agora faca o Pix e marque como pago.";
+}
+
 export async function approveWithdrawalAction(withdrawalId: string) {
   const admin = await requireAdmin();
 
   try {
-    await approveWithdrawal({ adminId: admin.id, withdrawalId });
+    const result = await approveWithdrawal({ adminId: admin.id, withdrawalId });
+    revalidateWallet();
+    return {
+      message: payoutResultMessage(result.status, result.transferError),
+      ok: result.status !== "PIX_FAILED"
+    };
   } catch (cause) {
+    const code = cause instanceof Error ? cause.message : "";
+
+    if (code === "WITHDRAWAL_NOT_REVIEWABLE" || code === "WITHDRAWAL_PIX_ALREADY_RUNNING") {
+      revalidateWallet();
+      return {
+        message: "Esse saque ja foi aprovado. Atualize a pagina para ver o status atual.",
+        ok: false as const
+      };
+    }
+
     console.error("[wallet] Falha ao aprovar saque", cause);
     return { message: "Nao foi possivel aprovar esse saque.", ok: false as const };
   }
+}
 
-  revalidateWallet();
-  return { message: "Saque aprovado. Agora faca o Pix e marque como pago.", ok: true as const };
+/** Reenvia o Pix de um saque que ficou em PIX_FAILED, com a mesma chave de idempotencia. */
+export async function retryWithdrawalPixAction(withdrawalId: string) {
+  const admin = await requireAdmin();
+
+  try {
+    const result = await sendWithdrawalPix({ adminId: admin.id, withdrawalId });
+    revalidateWallet();
+    return {
+      message: payoutResultMessage(result.status, result.transferError),
+      ok: result.status !== "PIX_FAILED"
+    };
+  } catch (cause) {
+    const code = cause instanceof Error ? cause.message : "";
+
+    if (code === "WITHDRAWAL_PIX_ALREADY_RUNNING") {
+      return { message: "Ja existe um Pix em processamento para esse saque.", ok: false as const };
+    }
+    if (code === "WITHDRAWAL_NOT_PAYABLE") {
+      return { message: "Esse saque nao esta em um estado que permita reenvio.", ok: false as const };
+    }
+
+    console.error("[wallet] Falha ao reenviar Pix do saque", cause);
+    return { message: "Nao foi possivel reenviar o Pix.", ok: false as const };
+  }
 }
 
 export async function markWithdrawalPaidAction(input: {
@@ -153,6 +201,10 @@ export async function markWithdrawalPaidAction(input: {
 /** Versoes para `<form action={...}>` do painel admin, que sempre entrega FormData. */
 export async function approveWithdrawalFormAction(formData: FormData) {
   await approveWithdrawalAction(String(formData.get("withdrawalId") ?? ""));
+}
+
+export async function retryWithdrawalPixFormAction(formData: FormData) {
+  await retryWithdrawalPixAction(String(formData.get("withdrawalId") ?? ""));
 }
 
 export async function markWithdrawalPaidFormAction(formData: FormData) {
