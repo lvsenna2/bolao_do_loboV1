@@ -1,0 +1,1 @@
+ALTER TYPE "SpecialRoundMarketKind" ADD VALUE 'PROMO_SELECTION';

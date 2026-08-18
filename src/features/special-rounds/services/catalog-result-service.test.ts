@@ -329,4 +329,49 @@ describe("selecao unica da rodada promocional", () => {
       promo: true
     });
   });
+
+  const presetMarket = (selection: string) => [
+    {
+      answerType: "BOOLEAN",
+      id: "preset",
+      kind: "PROMO_SELECTION" as const,
+      options: [{ value: selection }],
+      title: selection
+    }
+  ];
+
+  it.each([
+    ["HOME_TO_SCORE", true],
+    ["AWAY_TO_SCORE", true],
+    ["BOTH_TEAMS_SCORE", true],
+    ["HOME_WIN", true],
+    ["DRAW", false],
+    ["AWAY_WIN", false],
+    ["HOME_TO_QUALIFY", true],
+    ["AWAY_TO_QUALIFY", false],
+    ["OVER_1_5", true],
+    ["OVER_2_5", true],
+    ["UNDER_2_5", false],
+    ["UNDER_3_5", true]
+  ])("apura o preset promocional %s", (selection, expected) => {
+    expect(deriveCatalogResults(finishedMatch(2, 1), presetMarket(selection)).answers).toEqual({
+      preset: expected
+    });
+  });
+
+  it("apura classificacao pelos penaltis quando o placar termina empatado", () => {
+    const match = { ...finishedMatch(1, 1), penaltyAway: 3, penaltyHome: 4 };
+    expect(deriveCatalogResults(match, presetMarket("HOME_TO_QUALIFY")).answers).toEqual({
+      preset: true
+    });
+    expect(deriveCatalogResults(match, presetMarket("AWAY_TO_QUALIFY")).answers).toEqual({
+      preset: false
+    });
+  });
+
+  it("aguarda o classificado quando empate ainda nao possui penaltis", () => {
+    const result = deriveCatalogResults(finishedMatch(1, 1), presetMarket("HOME_TO_QUALIFY"));
+    expect(result.answers).toEqual({});
+    expect(result.missing).toEqual(["HOME_TO_QUALIFY"]);
+  });
 });

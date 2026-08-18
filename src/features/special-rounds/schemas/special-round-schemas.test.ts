@@ -43,8 +43,8 @@ describe("promo special round schema", () => {
     promoMaxStakeCents: 1_000,
     promoMinStakeCents: 100,
     promoOdds: "2.00",
+    promoSelection: "HOME_TO_SCORE",
     promoSelectionLabel: "Flamengo marcar pelo menos 1 gol",
-    promoSide: "HOME",
     promoSlug: "flamengo-cruzeiro"
   };
 
@@ -77,6 +77,18 @@ describe("promo special round schema", () => {
     expect(promoSpecialRoundSchema.safeParse({ ...valid, promoOdds: "1.00" }).success).toBe(false);
     expect(
       promoSpecialRoundSchema.safeParse({ ...valid, promoSlug: "Flamengo Cruzeiro" }).success
+    ).toBe(false);
+  });
+
+  it("aceita os novos mercados promocionais e recusa preset desconhecido", () => {
+    expect(
+      promoSpecialRoundSchema.safeParse({ ...valid, promoSelection: "BOTH_TEAMS_SCORE" }).success
+    ).toBe(true);
+    expect(
+      promoSpecialRoundSchema.safeParse({ ...valid, promoSelection: "HOME_TO_QUALIFY" }).success
+    ).toBe(true);
+    expect(
+      promoSpecialRoundSchema.safeParse({ ...valid, promoSelection: "INVALID" }).success
     ).toBe(false);
   });
 });

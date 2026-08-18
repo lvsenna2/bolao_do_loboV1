@@ -4,6 +4,7 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { AdminPromoRoundForm } from "@/features/special-rounds/components/admin-promo-round-form";
 import { AdminSpecialRoundForm } from "@/features/special-rounds/components/admin-round-form";
+import type { PromoSelectionValue } from "@/features/special-rounds/services/promo-service";
 import {
   getAdminSpecialRoundDetail,
   getSpecialRoundMatchOptions
@@ -50,8 +51,12 @@ export default async function EditSpecialRoundPage({
                 promoMaxStakeCents: round.promoMaxStakeCents ?? 1000,
                 promoMinStakeCents: round.promoMinStakeCents ?? 100,
                 promoOdds: Number(round.promoOdds ?? 2),
+                promoSelection:
+                  round.markets[0]?.kind === "TEAM_TO_SCORE"
+                    ? (`${round.promoSide ?? "HOME"}_TO_SCORE` as PromoSelectionValue)
+                    : ((round.markets[0]?.options[0]?.value ??
+                        "HOME_TO_SCORE") as PromoSelectionValue),
                 promoSelectionLabel: round.promoSelectionLabel ?? "",
-                promoSide: round.promoSide ?? "HOME",
                 promoSlug: round.promoSlug ?? "",
                 rules: round.rules
               }}

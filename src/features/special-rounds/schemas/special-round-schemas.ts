@@ -2,12 +2,12 @@ import {
   SpecialRoundAnswerType,
   SpecialRoundMarketKind,
   SpecialRoundPrizeMode,
-  SpecialRoundPromoSide,
   SpecialRoundStatus
 } from "@prisma/client";
 import { z } from "zod";
 
 import { preprocessSaoPauloDateTimeLocal } from "@/lib/date-time";
+import { promoSelectionOptions } from "../services/promo-service";
 
 const dateTime = z.preprocess(preprocessSaoPauloDateTimeLocal, z.date());
 const money = z.coerce.number().min(0).max(1_000_000);
@@ -154,10 +154,13 @@ export const specialRoundMarketSchema = z
         path: ["answerType"]
       });
     }
-    if (value.kind === "TEAM_TO_SCORE" && value.answerType !== "BOOLEAN") {
+    if (
+      ["PROMO_SELECTION", "TEAM_TO_SCORE"].includes(value.kind) &&
+      value.answerType !== "BOOLEAN"
+    ) {
       context.addIssue({
         code: "custom",
-        message: "Time marcar gol deve usar resposta sim ou nao.",
+        message: "Mercado promocional deve usar resposta sim ou nao.",
         path: ["answerType"]
       });
     }
@@ -198,8 +201,13 @@ export const promoSpecialRoundSchema = z
     promoMaxStakeCents: z.coerce.number().int().min(100).max(1_000_000),
     promoMinStakeCents: z.coerce.number().int().min(100).max(1_000_000),
     promoOdds: z.coerce.number().min(1.01).max(100),
+    promoSelection: z.enum(
+      promoSelectionOptions.map((option) => option.value) as [
+        (typeof promoSelectionOptions)[number]["value"],
+        ...(typeof promoSelectionOptions)[number]["value"][]
+      ]
+    ),
     promoSelectionLabel: z.string().trim().min(3).max(160),
-    promoSide: z.nativeEnum(SpecialRoundPromoSide),
     promoSlug: z
       .string()
       .trim()

@@ -7,6 +7,7 @@ import {
   isUuid,
   promoProfitCents,
   promoReturnCents,
+  promoSelectionDefaultLabel,
   promoSelectionText,
   splitPromoPayout
 } from "./promo-service";
@@ -128,6 +129,15 @@ describe("janela de apostas", () => {
 });
 
 describe("texto e link da campanha", () => {
+  it("monta rotulos dos novos mercados com os times da partida", () => {
+    expect(promoSelectionDefaultLabel("BOTH_TEAMS_SCORE", "Flamengo", "Cruzeiro")).toBe(
+      "Ambas as equipes marcam"
+    );
+    expect(promoSelectionDefaultLabel("AWAY_TO_QUALIFY", "Flamengo", "Cruzeiro")).toBe(
+      "Cruzeiro se classificar"
+    );
+  });
+
   it("usa o rotulo configurado pelo admin", () => {
     expect(
       promoSelectionText({

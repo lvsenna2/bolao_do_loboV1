@@ -12,6 +12,45 @@ import type { SpecialRoundPromoSide, SpecialRoundStatus } from "@prisma/client";
 export const PROMO_DEFAULT_MIN_STAKE_CENTS = 100;
 export const PROMO_DEFAULT_MAX_STAKE_CENTS = 1_000;
 
+export const promoSelectionOptions = [
+  { label: "Mandante marcar pelo menos 1 gol", value: "HOME_TO_SCORE" },
+  { label: "Visitante marcar pelo menos 1 gol", value: "AWAY_TO_SCORE" },
+  { label: "Ambas as equipes marcam", value: "BOTH_TEAMS_SCORE" },
+  { label: "Mandante vence", value: "HOME_WIN" },
+  { label: "Empate", value: "DRAW" },
+  { label: "Visitante vence", value: "AWAY_WIN" },
+  { label: "Mandante se classifica", value: "HOME_TO_QUALIFY" },
+  { label: "Visitante se classifica", value: "AWAY_TO_QUALIFY" },
+  { label: "Mais de 1,5 gols", value: "OVER_1_5" },
+  { label: "Mais de 2,5 gols", value: "OVER_2_5" },
+  { label: "Menos de 2,5 gols", value: "UNDER_2_5" },
+  { label: "Menos de 3,5 gols", value: "UNDER_3_5" }
+] as const;
+
+export type PromoSelectionValue = (typeof promoSelectionOptions)[number]["value"];
+
+export function promoSelectionDefaultLabel(
+  selection: PromoSelectionValue,
+  homeTeamName: string,
+  awayTeamName: string
+) {
+  const labels: Record<PromoSelectionValue, string> = {
+    AWAY_TO_QUALIFY: `${awayTeamName} se classificar`,
+    AWAY_TO_SCORE: `${awayTeamName} marcar pelo menos 1 gol`,
+    AWAY_WIN: `${awayTeamName} vencer`,
+    BOTH_TEAMS_SCORE: "Ambas as equipes marcam",
+    DRAW: "Empate",
+    HOME_TO_QUALIFY: `${homeTeamName} se classificar`,
+    HOME_TO_SCORE: `${homeTeamName} marcar pelo menos 1 gol`,
+    HOME_WIN: `${homeTeamName} vencer`,
+    OVER_1_5: "Mais de 1,5 gols",
+    OVER_2_5: "Mais de 2,5 gols",
+    UNDER_2_5: "Menos de 2,5 gols",
+    UNDER_3_5: "Menos de 3,5 gols"
+  };
+  return labels[selection];
+}
+
 export type PromoRoundConfig = {
   promoMaxStakeCents: number | null;
   promoMinStakeCents: number | null;

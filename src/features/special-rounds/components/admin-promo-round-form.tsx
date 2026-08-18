@@ -1,6 +1,5 @@
 "use client";
 
-import type { SpecialRoundPromoSide } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useState, useTransition } from "react";
@@ -11,7 +10,12 @@ import {
   createPromoSpecialRoundAction,
   updatePromoSpecialRoundAction
 } from "../actions/promo-round-actions";
-import { buildPromoSlug } from "../services/promo-service";
+import {
+  buildPromoSlug,
+  promoSelectionDefaultLabel,
+  promoSelectionOptions,
+  type PromoSelectionValue
+} from "../services/promo-service";
 
 type MatchOption = {
   awayTeam: { logo: string | null; name: string };
@@ -43,8 +47,8 @@ export type InitialPromoRound = {
   promoMaxStakeCents: number;
   promoMinStakeCents: number;
   promoOdds: number;
+  promoSelection: PromoSelectionValue;
   promoSelectionLabel: string;
-  promoSide: SpecialRoundPromoSide;
   promoSlug: string;
   rules: string | null;
 };
@@ -91,8 +95,8 @@ export function AdminPromoRoundForm({
       promoMaxStakeCents: centsFromReais(formData.get("promoMaxStake")),
       promoMinStakeCents: centsFromReais(formData.get("promoMinStake")),
       promoOdds: formData.get("promoOdds"),
+      promoSelection: formData.get("promoSelection"),
       promoSelectionLabel: formData.get("promoSelectionLabel"),
-      promoSide: formData.get("promoSide"),
       promoSlug: buildPromoSlug(String(formData.get("promoSlug") ?? "")),
       rules: formData.get("rules")
     };
@@ -125,8 +129,35 @@ export function AdminPromoRoundForm({
     set("awayTeamLogo", match.awayTeam.logo ?? "");
     set("matchStartsAt", formatDateTimeLocalForSaoPaulo(match.startsAt));
     set("promoSlug", buildPromoSlug(`${match.homeTeam.name} ${match.awayTeam.name}`));
-    set("promoSelectionLabel", `${match.homeTeam.name} marcar pelo menos 1 gol`);
+    const selectionField = form.elements.namedItem("promoSelection");
+    const selection =
+      selectionField instanceof HTMLSelectElement || selectionField instanceof HTMLInputElement
+        ? (selectionField.value as PromoSelectionValue)
+        : "HOME_TO_SCORE";
+    set(
+      "promoSelectionLabel",
+      promoSelectionDefaultLabel(selection, match.homeTeam.name, match.awayTeam.name)
+    );
     set("name", `${match.homeTeam.name} x ${match.awayTeam.name}`);
+  }
+
+  function selectPromoSelection(event: React.ChangeEvent<HTMLSelectElement>) {
+    const form = event.currentTarget.form;
+    if (!form) return;
+    const home = form.elements.namedItem("homeTeamName");
+    const away = form.elements.namedItem("awayTeamName");
+    const label = form.elements.namedItem("promoSelectionLabel");
+    if (
+      home instanceof HTMLInputElement &&
+      away instanceof HTMLInputElement &&
+      label instanceof HTMLInputElement
+    ) {
+      label.value = promoSelectionDefaultLabel(
+        event.target.value as PromoSelectionValue,
+        home.value,
+        away.value
+      );
+    }
   }
 
   const dateDefault = (date?: Date) => (date ? formatDateTimeLocalForSaoPaulo(date) : "");
@@ -215,21 +246,25 @@ export function AdminPromoRoundForm({
               valor e o backend rejeitaria o formulario inteiro. */}
           {locked ? (
             <>
+              <input className={inputClass} readOnly value={initial?.promoSelectionLabel} />
               <input
-                className={inputClass}
-                readOnly
-                value={
-                  initial?.promoSide === "AWAY"
-                    ? "Visitante marcar pelo menos 1 gol"
-                    : "Mandante marcar pelo menos 1 gol"
-                }
+                name="promoSelection"
+                type="hidden"
+                value={initial?.promoSelection ?? "HOME_TO_SCORE"}
               />
-              <input name="promoSide" type="hidden" value={initial?.promoSide ?? "HOME"} />
             </>
           ) : (
-            <select className={inputClass} defaultValue={initial?.promoSide ?? "HOME"} name="promoSide">
-              <option value="HOME">Mandante marcar pelo menos 1 gol</option>
-              <option value="AWAY">Visitante marcar pelo menos 1 gol</option>
+            <select
+              className={inputClass}
+              defaultValue={initial?.promoSelection ?? "HOME_TO_SCORE"}
+              name="promoSelection"
+              onChange={selectPromoSelection}
+            >
+              {promoSelectionOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           )}
         </label>

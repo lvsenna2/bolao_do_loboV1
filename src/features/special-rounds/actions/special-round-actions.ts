@@ -1254,13 +1254,16 @@ export async function saveSpecialRoundResultsAction(
             typeof answer === "number" &&
             Number.isFinite(answer) &&
             answer >= 0) ||
-          (market.kind === "BOTH_TEAMS_SCORE" && typeof answer === "boolean") ||
+          (["BOTH_TEAMS_SCORE", "PROMO_SELECTION", "TEAM_TO_SCORE"].includes(market.kind) &&
+            typeof answer === "boolean") ||
           (![
             "EXACT_SCORE",
             "TOTAL_GOALS",
             "TOTAL_CORNERS",
             "TOTAL_CARDS",
-            "BOTH_TEAMS_SCORE"
+            "BOTH_TEAMS_SCORE",
+            "PROMO_SELECTION",
+            "TEAM_TO_SCORE"
           ].includes(market.kind) &&
             typeof answer === "string" &&
             answer.trim().length > 0);

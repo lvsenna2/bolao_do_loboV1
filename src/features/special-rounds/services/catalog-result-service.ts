@@ -32,6 +32,8 @@ type CatalogMatch = {
   events: CatalogEvent[];
   homeScore: number | null;
   homeTeamId: string;
+  penaltyAway?: number | null;
+  penaltyHome?: number | null;
   statistics: CatalogStatistic[];
   status: string;
 };
@@ -70,6 +72,54 @@ function firstGoal(events: CatalogEvent[]) {
     .sort(
       (left, right) => left.elapsed - right.elapsed || (left.extra ?? 0) - (right.extra ?? 0)
     )[0];
+}
+
+function promoSelectionResult(match: CatalogMatch, selection: string) {
+  const homeScore = match.homeScore as number;
+  const awayScore = match.awayScore as number;
+  const totalGoals = homeScore + awayScore;
+  switch (selection) {
+    case "HOME_TO_SCORE":
+      return homeScore > 0;
+    case "AWAY_TO_SCORE":
+      return awayScore > 0;
+    case "BOTH_TEAMS_SCORE":
+      return homeScore > 0 && awayScore > 0;
+    case "HOME_WIN":
+      return homeScore > awayScore;
+    case "DRAW":
+      return homeScore === awayScore;
+    case "AWAY_WIN":
+      return awayScore > homeScore;
+    case "OVER_1_5":
+      return totalGoals > 1.5;
+    case "OVER_2_5":
+      return totalGoals > 2.5;
+    case "UNDER_2_5":
+      return totalGoals < 2.5;
+    case "UNDER_3_5":
+      return totalGoals < 3.5;
+    case "HOME_TO_QUALIFY":
+    case "AWAY_TO_QUALIFY": {
+      const qualified =
+        match.penaltyHome !== null &&
+        match.penaltyHome !== undefined &&
+        match.penaltyAway !== null &&
+        match.penaltyAway !== undefined &&
+        match.penaltyHome !== match.penaltyAway
+          ? match.penaltyHome > match.penaltyAway
+            ? "HOME"
+            : "AWAY"
+          : homeScore !== awayScore
+            ? homeScore > awayScore
+              ? "HOME"
+              : "AWAY"
+            : undefined;
+      return qualified ? qualified === selection.replace("_TO_QUALIFY", "") : undefined;
+    }
+    default:
+      return undefined;
+  }
 }
 
 export function deriveCatalogResults(match: CatalogMatch, markets: readonly ResultMarket[]) {
@@ -173,6 +223,9 @@ export function deriveCatalogResults(match: CatalogMatch, markets: readonly Resu
         answer = side === "AWAY" ? awayScore > 0 : side === "HOME" ? homeScore > 0 : undefined;
         break;
       }
+      case "PROMO_SELECTION":
+        answer = promoSelectionResult(match, market.options[0]?.value ?? "");
+        break;
       default:
         break;
     }

@@ -20,7 +20,8 @@ import {
   promoMaxStakeCents,
   promoMinStakeCents,
   promoProfitCents,
-  promoReturnCents
+  promoReturnCents,
+  type PromoSelectionValue
 } from "../services/promo-service";
 import type { SpecialRoundActionResult } from "../types";
 
@@ -48,9 +49,27 @@ function revalidatePromoRound(round: { id: string; promoSlug: string | null }) {
   revalidatePath("/carteira");
 }
 
+function promoSide(selection: PromoSelectionValue) {
+  if (selection.startsWith("HOME_")) return "HOME" as const;
+  if (selection.startsWith("AWAY_")) return "AWAY" as const;
+  return null;
+}
+
+function promoMarketFields(value: z.infer<typeof promoSpecialRoundSchema>) {
+  return {
+    answerType: "BOOLEAN" as const,
+    description: "Selecao unica da promocao.",
+    kind: "PROMO_SELECTION" as const,
+    points: 1,
+    required: true,
+    sortOrder: 0,
+    title: value.promoSelectionLabel
+  };
+}
+
 /**
  * A promocao roda em cima da mesma tabela das Rodadas Especiais. O que muda e o `format`, o
- * unico mercado (TEAM_TO_SCORE) criado junto e a premiacao, que nao usa bolo nem ranking:
+ * unico mercado promocional criado junto e a premiacao, que nao usa bolo nem ranking:
  * cada aposta ganhadora recebe o proprio retorno, com o lucro em saldo bonus.
  */
 function promoRoundFields(value: z.infer<typeof promoSpecialRoundSchema>) {
@@ -77,7 +96,7 @@ function promoRoundFields(value: z.infer<typeof promoSpecialRoundSchema>) {
     promoMinStakeCents: value.promoMinStakeCents,
     promoOdds: value.promoOdds,
     promoSelectionLabel: value.promoSelectionLabel,
-    promoSide: value.promoSide,
+    promoSide: promoSide(value.promoSelection),
     promoSlug: value.promoSlug,
     registrationClosesAt: value.promoBetsCloseAt,
     registrationOpensAt: value.promoBetsOpenAt,
@@ -115,24 +134,17 @@ export async function createPromoSpecialRoundAction(
     });
     await tx.specialRoundMarket.create({
       data: {
-        answerType: "BOOLEAN",
-        description: "Selecao unica da promocao.",
-        kind: "TEAM_TO_SCORE",
-        // A unica opcao carrega o lado cobrado: e dela que a apuracao automatica le
-        // se a pergunta era sobre o mandante ou o visitante.
+        ...promoMarketFields(value),
+        // A unica opcao carrega o preset cobrado pela apuracao automatica.
         options: {
           create: [
             {
-              label: value.promoSide === "AWAY" ? value.awayTeamName : value.homeTeamName,
-              value: value.promoSide
+              label: value.promoSelectionLabel,
+              value: value.promoSelection
             }
           ]
         },
-        points: 1,
-        required: true,
-        sortOrder: 0,
-        specialRoundId: round.id,
-        title: value.promoSelectionLabel
+        specialRoundId: round.id
       }
     });
     await tx.specialRoundAuditLog.create({
@@ -172,7 +184,10 @@ export async function updatePromoSpecialRoundAction(
     };
   }
   const current = await prisma.specialRound.findUnique({
-    include: { _count: { select: { entries: true } } },
+    include: {
+      _count: { select: { entries: true } },
+      markets: { include: { options: true }, orderBy: { sortOrder: "asc" }, take: 1 }
+    },
     where: { id: id.data }
   });
   if (!current || current.format !== "PROMO_SINGLE_SELECTION") {
@@ -182,11 +197,16 @@ export async function updatePromoSpecialRoundAction(
     return { message: "Esta promocao ja foi encerrada.", ok: false };
   }
   const value = parsed.data;
-  // Depois da primeira aposta a odd, o lado e o limite viram contrato com quem ja apostou.
+  const currentMarket = current.markets[0];
+  const currentSelection =
+    currentMarket?.kind === "TEAM_TO_SCORE"
+      ? `${current.promoSide ?? "HOME"}_TO_SCORE`
+      : currentMarket?.options[0]?.value;
+  // Depois da primeira aposta a odd, a selecao e o limite viram contrato com quem ja apostou.
   if (
     current._count.entries > 0 &&
     (Number(current.promoOdds) !== value.promoOdds ||
-      current.promoSide !== value.promoSide ||
+      currentSelection !== value.promoSelection ||
       current.promoMaxStakeCents !== value.promoMaxStakeCents)
   ) {
     return {
@@ -205,18 +225,16 @@ export async function updatePromoSpecialRoundAction(
 
   await prisma.$transaction(async (tx) => {
     await tx.specialRound.update({ data: promoRoundFields(value), where: { id: id.data } });
-    const market = await tx.specialRoundMarket.findFirst({
-      where: { kind: "TEAM_TO_SCORE", specialRoundId: id.data }
-    });
+    const market = await tx.specialRoundMarket.findFirst({ where: { specialRoundId: id.data } });
     if (market) {
       await tx.specialRoundMarket.update({
-        data: { title: value.promoSelectionLabel },
+        data: promoMarketFields(value),
         where: { id: market.id }
       });
       await tx.specialRoundMarketOption.updateMany({
         data: {
-          label: value.promoSide === "AWAY" ? value.awayTeamName : value.homeTeamName,
-          value: value.promoSide
+          label: value.promoSelectionLabel,
+          value: value.promoSelection
         },
         where: { marketId: market.id }
       });
@@ -339,7 +357,7 @@ export async function placePromoBetAction(
       // A selecao e unica e ja esta escolhida: o palpite existe so para a apuracao padrao
       // (acertou/errou) continuar valendo para a promocao.
       const market = await tx.specialRoundMarket.findFirstOrThrow({
-        where: { kind: "TEAM_TO_SCORE", specialRoundId: round.id }
+        where: { specialRoundId: round.id }
       });
       await tx.specialRoundPrediction.upsert({
         create: { answer: true, entryId: entry.id, marketId: market.id, userId: user.id },

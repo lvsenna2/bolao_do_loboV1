@@ -227,6 +227,7 @@ enum SpecialRoundMarketKind {
   TEAM_MOST_CARDS
   TEAM_MOST_SHOTS
   TEAM_TO_SCORE
+  PROMO_SELECTION
   CUSTOM
 }
 

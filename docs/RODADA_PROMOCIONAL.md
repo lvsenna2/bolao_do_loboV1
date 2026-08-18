@@ -7,7 +7,7 @@ painel admin da Rodada Especial comum. O que muda e o campo `SpecialRound.format
 | | Rodada Especial comum | Rodada Promocional |
 | --- | --- | --- |
 | `format` | `STANDARD` | `PROMO_SINGLE_SELECTION` |
-| Mercados | varios, palpite montado pelo usuario | um so (`TEAM_TO_SCORE`), ja escolhido |
+| Mercados | varios, palpite montado pelo usuario | uma selecao predefinida pelo admin |
 | Entrada | inscricao de valor fixo | aposta de valor livre ate o limite |
 | Premiacao | bolo dividido por ranking | retorno da propria aposta (`valor x odd`) |
 | Premio cai como | saldo normal | valor apostado de volta + **lucro em saldo bonus** |
@@ -53,8 +53,12 @@ Exemplo: saldo normal R$ 30 + bonus R$ 10 = total R$ 40 exibido, R$ 30 disponive
 
 ## Apuracao
 
-O mercado unico e do tipo `TEAM_TO_SCORE`. A unica opcao do mercado guarda o lado cobrado
-(`HOME`/`AWAY`) e `deriveCatalogResults` responde "esse time marcou?" a partir do placar final.
+Campanhas antigas continuam usando `TEAM_TO_SCORE`. Novas campanhas usam `PROMO_SELECTION`; a
+unica opcao guarda o preset escolhido pelo admin. Estao disponiveis: mandante ou visitante marcar,
+ambas marcam, vitoria/empate, mandante ou visitante se classificar e totais de gols 1,5/2,5/3,5.
+`deriveCatalogResults` transforma o resultado do preset em booleano para preservar o fluxo de
+selecao unica. Classificacao considera o placar final e, quando houver empate, a disputa de
+penaltis registrada no catalogo.
 Dai para frente e o fluxo padrao: `calculateSpecialRound` pontua, e a branch promocional cria um
 premio por aposta certa em vez de dividir bolo. A varredura automatica
 (`settleFinishedSpecialRounds`) inclui a promocao ja a partir de `REGISTRATION_OPEN`, porque ela

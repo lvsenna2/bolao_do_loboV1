@@ -307,6 +307,8 @@ export async function homologateSpecialRoundFromCatalog(input: {
         events: round.match.events,
         homeScore: round.match.homeScore,
         homeTeamId: round.match.homeTeamId,
+        penaltyAway: round.match.penaltyAway,
+        penaltyHome: round.match.penaltyHome,
         statistics: round.match.statistics,
         status: round.match.status
       },
