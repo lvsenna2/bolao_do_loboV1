@@ -52,17 +52,92 @@ vi.mock("./match-link-service", () => ({
   resolveApiBackedSpecialRoundMatch: resolveMatchMock
 }));
 vi.mock("@/features/wallet/services/wallet-service", () => ({
+  BONUS_ROLLOVER_MULTIPLIER: 10,
   creditWalletInTransaction: creditWalletMock,
   formatCents: (value: number) => `R$ ${(value / 100).toFixed(2)}`
 }));
 
 import {
+  creditSpecialRoundPrizeToWallet,
   isSpecialRoundMatchReadyForSettlement,
   settleFinishedSpecialRounds,
   settleableSpecialRoundStatuses
 } from "./settlement-service";
 
 const kickoff = new Date("2026-08-09T18:00:00Z");
+
+describe("credito da promocao com rollover", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("devolve a aposta real e cria meta de 10x sobre o lucro", async () => {
+    await creditSpecialRoundPrizeToWallet(
+      txMock as never,
+      {
+        format: "PROMO_SINGLE_SELECTION",
+        id: "round-promo",
+        name: "Promocao teste",
+        promoOdds: 2 as never
+      },
+      {
+        amount: 10 as never,
+        confirmedAt: null,
+        entry: { amount: 5 as never, bonusAmount: 0 as never, userId: "user-1" },
+        id: "prize-promo"
+      }
+    );
+
+    expect(creditWalletMock).toHaveBeenNthCalledWith(
+      1,
+      txMock,
+      expect.objectContaining({ amountCents: 500, bucket: "REAL", type: "REFUND" })
+    );
+    expect(creditWalletMock).toHaveBeenNthCalledWith(
+      2,
+      txMock,
+      expect.objectContaining({
+        amountCents: 500,
+        bucket: "BONUS",
+        rolloverRequirementCents: 5_000,
+        type: "BONUS"
+      })
+    );
+  });
+
+  it("nao libera a parte apostada com bonus antes do rollover", async () => {
+    await creditSpecialRoundPrizeToWallet(
+      txMock as never,
+      {
+        format: "PROMO_SINGLE_SELECTION",
+        id: "round-promo",
+        name: "Promocao teste",
+        promoOdds: 2 as never
+      },
+      {
+        amount: 10 as never,
+        confirmedAt: null,
+        entry: { amount: 5 as never, bonusAmount: 5 as never, userId: "user-1" },
+        id: "prize-promo"
+      }
+    );
+
+    expect(creditWalletMock).toHaveBeenNthCalledWith(
+      1,
+      txMock,
+      expect.objectContaining({ amountCents: 500, bucket: "ROLLOVER", type: "REFUND" })
+    );
+    expect(creditWalletMock).toHaveBeenNthCalledWith(
+      2,
+      txMock,
+      expect.objectContaining({
+        amountCents: 500,
+        bucket: "BONUS",
+        rolloverRequirementCents: 5_000
+      })
+    );
+  });
+});
 
 function catalogRound() {
   return {

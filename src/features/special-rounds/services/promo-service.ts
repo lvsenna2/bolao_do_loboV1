@@ -113,8 +113,9 @@ export function splitPromoPayout(input: {
   const realStakeCents = input.stakeCents - bonusStakeCents;
   const profitCents = promoProfitCents(input.stakeCents, input.odds);
   return {
-    /** Volta para o saldo bonus: a parte da aposta paga com bonus + todo o lucro. */
+    /** Total que continua no fluxo de bonus antes da verificacao do rollover. */
     bonusCreditCents: bonusStakeCents + profitCents,
+    bonusStakeCents,
     profitCents,
     /** Volta para o saldo normal: so a parte da aposta paga com dinheiro real. */
     realCreditCents: realStakeCents,

@@ -66,10 +66,11 @@ export default async function WalletPage() {
               <dd className="mt-1 text-lg font-semibold">{formatCents(data.balanceCents)}</dd>
             </div>
           </dl>
-          {data.bonusBalanceCents > 0 ? (
+          {data.bonusRolloverRemainingCents > 0 ? (
             <p className="mt-3 text-xs text-app-muted">
-              O saldo bonus vale em qualquer aposta ou bolao da plataforma, mas nao pode ser
-              sacado. Apostas gastam o bonus primeiro.
+              Rollover 10x ativo: falta apostar {formatCents(data.bonusRolloverRemainingCents)}.
+              Apostas pagas com saldo contam para a meta. Quando ela for concluida, o saldo bonus
+              restante vira saldo normal e pode ser sacado.
             </p>
           ) : null}
         </CardContent>
@@ -171,6 +172,9 @@ export default async function WalletPage() {
                       {formatDateTimeInSaoPaulo(item.createdAt)}
                       {item.bonusAmountCents !== 0
                         ? ` | bonus ${formatCents(Math.abs(item.bonusAmountCents))}`
+                        : ""}
+                      {item.bonusUnlockedCents > 0
+                        ? ` | liberado ${formatCents(item.bonusUnlockedCents)}`
                         : ""}
                     </p>
                   </div>

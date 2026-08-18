@@ -164,8 +164,8 @@ export async function PromoRoundView({ round, userId }: { round: PromoRound; use
                 jogo, o que vier primeiro.
               </p>
               <p>
-                O saldo bonus vale em qualquer aposta ou bolao do Bolao do Lobo, mas nao pode ser
-                sacado.
+                O lucro vira saldo bonus. Para libera-lo para saque, e preciso apostar 10x o valor
+                recebido. A carteira mostra quanto falta para concluir o rollover.
               </p>
               <p>
                 Exemplo: aposta de {formatCents(500)} vira{" "}

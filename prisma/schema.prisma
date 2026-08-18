@@ -1069,14 +1069,15 @@ model Payment {
 
 /**
  * `balanceCents` e o saldo normal, o unico que pode ser sacado. `bonusBalanceCents` e o saldo
- * bonus (promocoes): aparece no saldo total, pode ser gasto em apostas e boloes, mas nunca sai
- * por saque. Aposta consome bonus primeiro; saque so enxerga `balanceCents`.
+ * bonus (promocoes): aparece no saldo total e pode ser gasto, mas so vira saldo sacavel depois
+ * do rollover. Aposta consome bonus primeiro; saque so enxerga `balanceCents`.
  */
 model Wallet {
   id                String   @id @default(uuid()) @db.Uuid
   userId            String   @unique @map("user_id") @db.Uuid
   balanceCents      Int      @default(0) @map("balance_cents")
-  bonusBalanceCents Int      @default(0) @map("bonus_balance_cents")
+  bonusBalanceCents           Int      @default(0) @map("bonus_balance_cents")
+  bonusRolloverRemainingCents Int      @default(0) @map("bonus_rollover_remaining_cents")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -1096,6 +1097,7 @@ model WalletTransaction {
   type               WalletTransactionType
   amountCents        Int                   @map("amount_cents")
   bonusAmountCents   Int                   @default(0) @map("bonus_amount_cents")
+  bonusUnlockedCents Int                   @default(0) @map("bonus_unlocked_cents")
   balanceBeforeCents Int                   @map("balance_before_cents")
   balanceAfterCents  Int                   @map("balance_after_cents")
   description        String                @db.VarChar(240)

@@ -4,10 +4,13 @@ import { prisma } from "@/server/db";
 
 /**
  * A carteira tem dois baldes: `balanceCents` (saldo normal, sacavel) e `bonusBalanceCents`
- * (saldo bonus de promocoes, gastavel mas nunca sacavel). O extrato guarda o saldo TOTAL em
- * `balanceBefore/AfterCents` e a parte que tocou o bonus em `bonusAmountCents`.
+ * (saldo bonus de promocoes). O bonus vira saldo normal quando o rollover chega a zero.
  */
 export type WalletBucket = "REAL" | "BONUS";
+/** ROLLOVER mantem premios no bonus enquanto houver meta; depois credita no saldo normal. */
+export type WalletCreditBucket = WalletBucket | "ROLLOVER";
+
+export const BONUS_ROLLOVER_MULTIPLIER = 10;
 
 /** ANY gasta o bonus primeiro e so entao o saldo normal. REAL_ONLY ignora o bonus (saques). */
 export type WalletDebitSource = "ANY" | "REAL_ONLY";
@@ -21,7 +24,12 @@ type WalletMutation = {
   userId: string;
 };
 
-type WalletCreditMutation = WalletMutation & { bucket?: WalletBucket };
+type WalletCreditMutation = WalletMutation & {
+  bucket?: WalletCreditBucket;
+  rolloverRequirementCents?: number;
+};
+
+type WalletReverseMutation = WalletMutation & { bucket?: WalletBucket };
 
 type WalletDebitMutation = WalletMutation & { source?: WalletDebitSource };
 
@@ -31,9 +39,20 @@ function assertAmount(amountCents: number) {
   }
 }
 
+function assertRolloverRequirement(amountCents: number) {
+  if (!Number.isSafeInteger(amountCents) || amountCents < 0) {
+    throw new Error("WALLET_INVALID_ROLLOVER_REQUIREMENT");
+  }
+}
+
 async function ensureWallet(tx: Prisma.TransactionClient, userId: string) {
   await tx.wallet.upsert({
-    create: { balanceCents: 0, bonusBalanceCents: 0, userId },
+    create: {
+      balanceCents: 0,
+      bonusBalanceCents: 0,
+      bonusRolloverRemainingCents: 0,
+      userId
+    },
     update: {},
     where: { userId }
   });
@@ -49,14 +68,24 @@ export async function creditWalletInTransaction(
   input: WalletCreditMutation
 ) {
   assertAmount(input.amountCents);
+  const rolloverRequirementCents = input.rolloverRequirementCents ?? 0;
+  assertRolloverRequirement(rolloverRequirementCents);
+  if (rolloverRequirementCents > 0 && input.bucket !== "BONUS") {
+    throw new Error("WALLET_ROLLOVER_REQUIRES_BONUS_BUCKET");
+  }
   const existing = await tx.walletTransaction.findUnique({ where: { uniqueKey: input.uniqueKey } });
   if (existing) return existing;
 
   const before = await ensureWallet(tx, input.userId);
-  const toBonus = input.bucket === "BONUS";
+  const toBonus =
+    input.bucket === "BONUS" ||
+    (input.bucket === "ROLLOVER" && before.bonusRolloverRemainingCents > 0);
   const after = await tx.wallet.update({
     data: toBonus
-      ? { bonusBalanceCents: { increment: input.amountCents } }
+      ? {
+          bonusBalanceCents: { increment: input.amountCents },
+          bonusRolloverRemainingCents: { increment: rolloverRequirementCents }
+        }
       : { balanceCents: { increment: input.amountCents } },
     where: { userId: input.userId }
   });
@@ -67,6 +96,7 @@ export async function creditWalletInTransaction(
       balanceAfterCents: totalOf(after),
       balanceBeforeCents: totalOf(before),
       bonusAmountCents: toBonus ? input.amountCents : 0,
+      bonusUnlockedCents: 0,
       description: input.description,
       relatedEntityId: input.relatedEntityId,
       type: input.type,
@@ -86,24 +116,44 @@ export async function debitWalletInTransaction(
 
   const before = await ensureWallet(tx, input.userId);
   const bonusPart =
-    input.source === "REAL_ONLY"
-      ? 0
-      : Math.min(before.bonusBalanceCents, input.amountCents);
+    input.source === "REAL_ONLY" ? 0 : Math.min(before.bonusBalanceCents, input.amountCents);
   const realPart = input.amountCents - bonusPart;
+  const rolloverAppliedCents =
+    input.type === "BET" ? Math.min(before.bonusRolloverRemainingCents, input.amountCents) : 0;
+  const completesRollover =
+    before.bonusRolloverRemainingCents > 0 &&
+    rolloverAppliedCents === before.bonusRolloverRemainingCents;
+  const unlockedBonusCents = completesRollover ? before.bonusBalanceCents - bonusPart : 0;
 
   // `updateMany` com o saldo no filtro garante que dois pedidos concorrentes nao gastem o
   // mesmo dinheiro: quem chegar depois nao encontra a linha e a transacao inteira falha.
-  const changed = await tx.wallet.updateMany({
-    data: {
-      balanceCents: { decrement: realPart },
-      bonusBalanceCents: { decrement: bonusPart }
-    },
-    where: {
-      balanceCents: { gte: realPart },
-      bonusBalanceCents: { gte: bonusPart },
-      userId: input.userId
-    }
-  });
+  const changed = completesRollover
+    ? await tx.wallet.updateMany({
+        data: {
+          balanceCents: before.balanceCents - realPart + unlockedBonusCents,
+          bonusBalanceCents: 0,
+          bonusRolloverRemainingCents: 0
+        },
+        where: {
+          balanceCents: before.balanceCents,
+          bonusBalanceCents: before.bonusBalanceCents,
+          bonusRolloverRemainingCents: before.bonusRolloverRemainingCents,
+          userId: input.userId
+        }
+      })
+    : await tx.wallet.updateMany({
+        data: {
+          balanceCents: { decrement: realPart },
+          bonusBalanceCents: { decrement: bonusPart },
+          bonusRolloverRemainingCents: { decrement: rolloverAppliedCents }
+        },
+        where: {
+          balanceCents: { gte: realPart },
+          bonusBalanceCents: { gte: bonusPart },
+          bonusRolloverRemainingCents: { gte: rolloverAppliedCents },
+          userId: input.userId
+        }
+      });
   if (changed.count !== 1) throw new Error("WALLET_INSUFFICIENT_BALANCE");
 
   return tx.walletTransaction.create({
@@ -112,6 +162,7 @@ export async function debitWalletInTransaction(
       balanceAfterCents: totalOf(before) - input.amountCents,
       balanceBeforeCents: totalOf(before),
       bonusAmountCents: bonusPart === 0 ? 0 : -bonusPart,
+      bonusUnlockedCents: unlockedBonusCents,
       description: input.description,
       relatedEntityId: input.relatedEntityId,
       type: input.type,
@@ -123,7 +174,7 @@ export async function debitWalletInTransaction(
 
 export async function reverseWalletCreditInTransaction(
   tx: Prisma.TransactionClient,
-  input: WalletCreditMutation
+  input: WalletReverseMutation
 ) {
   assertAmount(input.amountCents);
   const existing = await tx.walletTransaction.findUnique({ where: { uniqueKey: input.uniqueKey } });
@@ -144,6 +195,7 @@ export async function reverseWalletCreditInTransaction(
       balanceAfterCents: totalOf(after),
       balanceBeforeCents: totalOf(before),
       bonusAmountCents: fromBonus ? -input.amountCents : 0,
+      bonusUnlockedCents: 0,
       description: input.description,
       relatedEntityId: input.relatedEntityId,
       type: input.type,
@@ -155,15 +207,21 @@ export async function reverseWalletCreditInTransaction(
 
 export async function getWalletBalance(userId: string) {
   const wallet = await prisma.wallet.findUnique({
-    select: { balanceCents: true, bonusBalanceCents: true },
+    select: {
+      balanceCents: true,
+      bonusBalanceCents: true,
+      bonusRolloverRemainingCents: true
+    },
     where: { userId }
   });
   const balanceCents = wallet?.balanceCents ?? 0;
   const bonusBalanceCents = wallet?.bonusBalanceCents ?? 0;
+  const bonusRolloverRemainingCents = wallet?.bonusRolloverRemainingCents ?? 0;
   return {
     /** Saldo normal, o unico que pode virar saque. */
     balanceCents,
     bonusBalanceCents,
+    bonusRolloverRemainingCents,
     /** O que o usuario ve como "saldo" e pode gastar na plataforma. */
     totalCents: balanceCents + bonusBalanceCents
   };

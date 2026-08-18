@@ -76,6 +76,7 @@ describe("divisao do pagamento entre saldo normal e bonus", () => {
   it("devolve a aposta feita com dinheiro real ao saldo normal e paga o lucro em bonus", () => {
     expect(splitPromoPayout({ bonusStakeCents: 0, odds: 2, stakeCents: 500 })).toEqual({
       bonusCreditCents: 500,
+      bonusStakeCents: 0,
       profitCents: 500,
       realCreditCents: 500,
       totalReturnCents: 1_000
@@ -85,6 +86,7 @@ describe("divisao do pagamento entre saldo normal e bonus", () => {
   it("nao transforma bonus apostado em saldo sacavel", () => {
     expect(splitPromoPayout({ bonusStakeCents: 500, odds: 2, stakeCents: 500 })).toEqual({
       bonusCreditCents: 1_000,
+      bonusStakeCents: 500,
       profitCents: 500,
       realCreditCents: 0,
       totalReturnCents: 1_000
@@ -94,6 +96,7 @@ describe("divisao do pagamento entre saldo normal e bonus", () => {
   it("divide aposta mista de volta para cada balde de origem", () => {
     expect(splitPromoPayout({ bonusStakeCents: 300, odds: 2, stakeCents: 1_000 })).toEqual({
       bonusCreditCents: 1_300,
+      bonusStakeCents: 300,
       profitCents: 1_000,
       realCreditCents: 700,
       totalReturnCents: 2_000

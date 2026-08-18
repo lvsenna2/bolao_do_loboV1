@@ -21,9 +21,11 @@ export async function getWalletPageData(userId: string) {
   ]);
   const balanceCents = wallet?.balanceCents ?? 0;
   const bonusBalanceCents = wallet?.bonusBalanceCents ?? 0;
+  const bonusRolloverRemainingCents = wallet?.bonusRolloverRemainingCents ?? 0;
   return {
     balanceCents,
     bonusBalanceCents,
+    bonusRolloverRemainingCents,
     deposits,
     totalCents: balanceCents + bonusBalanceCents,
     transactions,

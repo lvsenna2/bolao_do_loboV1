@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireAdmin, requireUser } from "@/server/auth/session";
-import { getWalletBalance } from "../services/wallet-service";
+import { formatCents, getWalletBalance } from "../services/wallet-service";
 import {
   approveWithdrawal,
   cancelWithdrawal,
@@ -51,12 +51,13 @@ export async function requestWithdrawalAction(input: unknown) {
 
   const wallet = await getWalletBalance(user.id);
 
-  // Saque so enxerga o saldo normal: o bonus aparece no total mas nao pode ser sacado.
+  // Saque so enxerga o saldo normal. O bonus vira normal ao concluir o rollover.
   if (wallet.balanceCents < parsed.data.amountCents) {
     return {
-      message: wallet.bonusBalanceCents
-        ? "Saldo insuficiente para esse saque. O saldo bonus nao pode ser sacado."
-        : "Saldo insuficiente para esse saque.",
+      message:
+        wallet.bonusBalanceCents || wallet.bonusRolloverRemainingCents
+          ? `Saldo insuficiente para esse saque. Falta apostar ${formatCents(wallet.bonusRolloverRemainingCents)} para concluir o rollover do bonus.`
+          : "Saldo insuficiente para esse saque.",
       ok: false as const
     };
   }

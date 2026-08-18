@@ -171,8 +171,8 @@ export function AdminPromoRoundForm({
       <div className="rounded-control border border-brand-gold/30 bg-brand-gold/5 p-4">
         <h2 className="font-semibold text-brand-gold">Rodada Especial Promocional</h2>
         <p className="mt-1 text-sm text-app-muted">
-          Uma unica selecao, odd fixa e limite por usuario. O lucro e pago em saldo bonus e a
-          rodada encerra sozinha quando a partida termina.
+          Uma unica selecao, odd fixa e limite por usuario. O lucro e pago em saldo bonus com
+          rollover de 10x, e a rodada encerra sozinha quando a partida termina.
         </p>
       </div>
 

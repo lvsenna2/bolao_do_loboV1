@@ -214,8 +214,8 @@ export function PublicPromoRoundView({
               </p>
               <p className="flex items-start gap-2">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-gold" />
-                Se o palpite bater, o valor apostado volta e o lucro e creditado como saldo bonus,
-                conforme o regulamento.
+                Se o palpite bater, o valor apostado volta e o lucro e creditado como saldo bonus.
+                Para libera-lo para saque, e preciso apostar 10x o bonus recebido.
               </p>
               <p className="flex items-start gap-2">
                 <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-brand-gold" />

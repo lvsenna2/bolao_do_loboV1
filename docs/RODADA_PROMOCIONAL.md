@@ -32,6 +32,12 @@ painel admin da Rodada Especial comum. O que muda e o campo `SpecialRound.format
 - **Premio** = `valor apostado x odd`. Na hora de creditar (`splitPromoPayout`), a parte da
   aposta paga com dinheiro real volta para o saldo normal, a parte paga com bonus volta para o
   bonus, e **todo o lucro vira bonus**. Sem isso daria para lavar bonus em saldo sacavel.
+- **Rollover 10x**: cada credito de lucro soma `lucro x 10` em
+  `bonusRolloverRemainingCents`. Todo debito `BET` pago pela carteira reduz essa meta pelo valor
+  efetivamente apostado. Ao zerar, o saldo bonus restante e movido para `balanceCents`.
+- **Premios durante o rollover**: premio de rodada especial comum fica no saldo bonus enquanto a
+  meta estiver ativa. Isso impede apostar bonus uma vez em outra rodada e sacar o premio antes de
+  cumprir as 10 vezes.
 - **Idempotencia**: a `uniqueKey` do debito carrega o total acumulado
   (`wallet:promo-round:<round>:user:<user>:total:<centavos>`) e o credito do premio usa a chave
   do premio. Reenviar o formulario ou reprocessar a rodada nao cobra nem paga duas vezes.
@@ -43,13 +49,19 @@ painel admin da Rodada Especial comum. O que muda e o campo `SpecialRound.format
 `Wallet` passou a ter dois baldes:
 
 - `balanceCents` — saldo normal. **E o unico que pode ser sacado.**
-- `bonusBalanceCents` — saldo bonus. Aparece no saldo total, pode ser gasto em qualquer aposta
-  ou bolao, mas o saque nao enxerga (`debitWalletInTransaction` com `source: "REAL_ONLY"`).
+- `bonusBalanceCents` — saldo bonus. Aparece no saldo total e pode ser gasto em qualquer aposta
+  ou bolao.
+- `bonusRolloverRemainingCents` — volume que ainda precisa ser apostado. O bonus so passa para
+  `balanceCents` quando esse valor chega a zero.
+
+O saque continua usando `debitWalletInTransaction` com `source: "REAL_ONLY"`, portanto nunca
+retira diretamente de `bonusBalanceCents`.
 
 No extrato, `balanceBeforeCents`/`balanceAfterCents` guardam o saldo **total** e
 `bonusAmountCents` guarda a parte do movimento que tocou o bonus.
 
-Exemplo: saldo normal R$ 30 + bonus R$ 10 = total R$ 40 exibido, R$ 30 disponiveis para saque.
+Exemplo: lucro promocional de R$ 10 cria uma meta de R$ 100. Depois de R$ 100 em apostas pagas
+pela carteira, o saldo bonus que restar vira saldo normal e fica disponivel para saque.
 
 ## Apuracao
 

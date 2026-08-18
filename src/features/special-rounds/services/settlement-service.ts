@@ -1,6 +1,10 @@
 import type { Prisma, SpecialRoundFormat, SpecialRoundStatus } from "@prisma/client";
 
-import { creditWalletInTransaction, formatCents } from "@/features/wallet/services/wallet-service";
+import {
+  BONUS_ROLLOVER_MULTIPLIER,
+  creditWalletInTransaction,
+  formatCents
+} from "@/features/wallet/services/wallet-service";
 import { serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
 
@@ -118,20 +122,33 @@ export async function creditSpecialRoundPrizeToWallet(
         userId: prize.entry.userId
       });
     }
-    if (payout.bonusCreditCents > 0) {
+    if (payout.bonusStakeCents > 0) {
       await creditWalletInTransaction(client, {
-        amountCents: payout.bonusCreditCents,
+        amountCents: payout.bonusStakeCents,
+        bucket: "ROLLOVER",
+        description: `Valor apostado em bonus devolvido - ${round.name}`,
+        relatedEntityId: prize.id,
+        type: "REFUND",
+        uniqueKey: `wallet:special-round:prize:${prize.id}:bonus-stake`,
+        userId: prize.entry.userId
+      });
+    }
+    if (payout.profitCents > 0) {
+      await creditWalletInTransaction(client, {
+        amountCents: payout.profitCents,
         bucket: "BONUS",
         description: `Bonus da promocao ${round.name}`,
         relatedEntityId: prize.id,
+        rolloverRequirementCents: payout.profitCents * BONUS_ROLLOVER_MULTIPLIER,
         type: "BONUS",
-        uniqueKey: `wallet:special-round:prize:${prize.id}:bonus`,
+        uniqueKey: `wallet:special-round:prize:${prize.id}:profit`,
         userId: prize.entry.userId
       });
     }
   } else {
     await creditWalletInTransaction(client, {
       amountCents,
+      bucket: "ROLLOVER",
       description: `Premio da Rodada Especial ${round.name}`,
       relatedEntityId: prize.id,
       type: "BONUS",
@@ -199,7 +216,7 @@ export async function refundPromoRoundEntries(
     if (bonusCents > 0) {
       await creditWalletInTransaction(client, {
         amountCents: bonusCents,
-        bucket: "BONUS",
+        bucket: "ROLLOVER",
         description: `Estorno da promocao ${round.name}`,
         relatedEntityId: entry.id,
         type: "REFUND",

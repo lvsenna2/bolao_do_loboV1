@@ -166,8 +166,8 @@ export function PromoBetForm(props: Props) {
         Confirmar aposta
       </LoadingButton>
       <p className="text-center text-xs text-app-muted">
-        O lucro desta promocao e creditado como saldo bonus: da para usar em qualquer aposta ou
-        bolao da plataforma, mas nao pode ser sacado.
+        O lucro vira saldo bonus e exige rollover de 10x: e preciso apostar dez vezes o valor do
+        bonus antes de libera-lo para saque.
       </p>
     </div>
   );
