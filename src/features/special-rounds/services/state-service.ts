@@ -1,4 +1,4 @@
-import type { SpecialRoundStatus } from "@prisma/client";
+import type { Prisma, SpecialRoundFormat, SpecialRoundStatus } from "@prisma/client";
 
 export const blockingSpecialRoundStatuses: SpecialRoundStatus[] = [
   "DRAFT",
@@ -8,6 +8,13 @@ export const blockingSpecialRoundStatuses: SpecialRoundStatus[] = [
   "AWAITING_RESULT",
   "CALCULATING"
 ];
+
+export function activeSpecialRoundOfFormatWhere(
+  matchId: string,
+  format: SpecialRoundFormat
+): Prisma.SpecialRoundWhereInput {
+  return { format, matchId, status: { in: blockingSpecialRoundStatuses } };
+}
 
 export function canDeleteSpecialRoundEntries(
   entries: { paymentStatus: string; transactionId: string | null }[]

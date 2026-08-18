@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  activeSpecialRoundOfFormatWhere,
   blockingSpecialRoundStatuses,
   canDeleteSpecialRoundEntries,
   canTransitionSpecialRound,
@@ -29,6 +30,19 @@ describe("special round state", () => {
   it("does not treat finalized or cancelled rounds as active duplicates", () => {
     expect(blockingSpecialRoundStatuses).not.toContain("FINALIZED");
     expect(blockingSpecialRoundStatuses).not.toContain("CANCELLED");
+  });
+
+  it("scopes active duplicates by round format", () => {
+    expect(activeSpecialRoundOfFormatWhere("match-1", "STANDARD")).toEqual({
+      format: "STANDARD",
+      matchId: "match-1",
+      status: { in: blockingSpecialRoundStatuses }
+    });
+    expect(activeSpecialRoundOfFormatWhere("match-1", "PROMO_SINGLE_SELECTION")).toEqual({
+      format: "PROMO_SINGLE_SELECTION",
+      matchId: "match-1",
+      status: { in: blockingSpecialRoundStatuses }
+    });
   });
 
   it("only deletes entries without real payment transactions", () => {

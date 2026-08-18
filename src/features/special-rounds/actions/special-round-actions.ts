@@ -34,8 +34,8 @@ import {
   getStoredGoalScorerCandidates
 } from "../services/scorer-candidates-service";
 import {
+  activeSpecialRoundOfFormatWhere,
   assertSpecialRoundTransition,
-  blockingSpecialRoundStatuses,
   canDeleteSpecialRoundEntries,
   isPredictionWindowOpen
 } from "../services/state-service";
@@ -166,7 +166,7 @@ export async function createAutomaticSpecialRoundAction(
 
     const activeRound = await prisma.specialRound.findFirst({
       select: { id: true },
-      where: { matchId: match.id, status: { in: blockingSpecialRoundStatuses } }
+      where: activeSpecialRoundOfFormatWhere(match.id, "STANDARD")
     });
     if (activeRound) {
       return {
@@ -225,7 +225,7 @@ export async function createAutomaticSpecialRoundAction(
       async (tx) => {
         const existing = await tx.specialRound.findFirst({
           select: { id: true, name: true },
-          where: { matchId: match.id, status: { in: blockingSpecialRoundStatuses } }
+          where: activeSpecialRoundOfFormatWhere(match.id, "STANDARD")
         });
         if (existing) return { ...existing, created: false };
 
