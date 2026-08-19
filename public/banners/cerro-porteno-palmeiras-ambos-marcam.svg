@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Cerro Porteno x Palmeiras - Ambos marcam</title>
+  <desc id="desc">Banner promocional do Bolao do Lobo para Cerro Porteno x Palmeiras. Ambos marcam. Coloque R$ 10 e volta R$ 25.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#050505"/><stop offset="0.48" stop-color="#1d0306"/><stop offset="1" stop-color="#04190c"/></linearGradient>
+    <linearGradient id="red" x1="0" x2="1"><stop offset="0" stop-color="#8b0016"/><stop offset="1" stop-color="#e21b32"/></linearGradient>
+    <linearGradient id="green" x1="0" x2="1"><stop offset="0" stop-color="#063d24"/><stop offset="1" stop-color="#0b7c3d"/></linearGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop offset="0" stop-color="#e39a08"/><stop offset="0.5" stop-color="#ffd15a"/><stop offset="1" stop-color="#c77c00"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.55"/></filter>
+  </defs>
+  <rect width="1080" height="1080" fill="url(#bg)"/>
+  <circle cx="120" cy="310" r="310" fill="#d31327" opacity="0.14"/>
+  <circle cx="970" cy="310" r="330" fill="#0e9b4d" opacity="0.14"/>
+  <g transform="translate(52 42)"><rect width="304" height="64" rx="32" fill="#111" stroke="#f2b31f" stroke-width="2"/><text x="152" y="42" text-anchor="middle" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="900">BOLAO DO LOBO</text></g>
+  <text x="540" y="152" text-anchor="middle" fill="#f1b52b" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="800" letter-spacing="5">LIBERTADORES</text>
+  <text x="540" y="193" text-anchor="middle" fill="#d7d7d7" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" letter-spacing="4">RODADA ESPECIAL</text>
+  <g filter="url(#shadow)">
+    <rect x="52" y="236" width="976" height="340" rx="34" fill="#101010" stroke="#f3b525" stroke-opacity="0.48" stroke-width="2"/>
+    <path d="M52 270 Q52 236 86 236 H540 V576 H86 Q52 576 52 542 Z" fill="url(#red)"/>
+    <path d="M540 236 H994 Q1028 236 1028 270 V542 Q1028 576 994 576 H540 Z" fill="url(#green)"/>
+    <g transform="translate(300 390)"><path d="M-82 -95 L82 -95 L69 54 Q0 108 -69 54 Z" fill="#111a33" stroke="#fff" stroke-width="7"/><path d="M-60 -62 H60 M-62 -18 H62 M-54 26 H54" stroke="#e11b36" stroke-width="23"/><circle r="56" fill="#fff"/><text x="0" y="16" text-anchor="middle" fill="#17213e" font-family="Arial,Helvetica,sans-serif" font-size="44" font-weight="900">CP</text><text x="0" y="152" text-anchor="middle" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="900">CERRO PORTENO</text></g>
+    <g transform="translate(780 390)"><circle r="95" fill="#fff" stroke="#0b6b38" stroke-width="8"/><circle r="72" fill="#0b6b38"/><text x="0" y="17" text-anchor="middle" fill="#fff" font-family="Georgia,serif" font-size="58" font-weight="700">P</text><text x="0" y="152" text-anchor="middle" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="40" font-weight="900">PALMEIRAS</text></g>
+    <circle cx="540" cy="394" r="54" fill="#0b0b0b" stroke="#f4b622" stroke-width="4"/><text x="540" y="411" text-anchor="middle" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="900">X</text>
+  </g>
+  <text x="540" y="650" text-anchor="middle" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" letter-spacing="1">PROMOCAO ESPECIAL</text>
+  <text x="540" y="715" text-anchor="middle" fill="url(#gold)" font-family="Arial,Helvetica,sans-serif" font-size="70" font-weight="900">AMBOS MARCAREM</text>
+  <g filter="url(#shadow)"><rect x="88" y="770" width="904" height="196" rx="32" fill="#0c0c0c" stroke="#f1b11e" stroke-width="3"/><rect x="116" y="798" width="380" height="140" rx="24" fill="#171717" stroke="#6f520c"/><rect x="584" y="798" width="380" height="140" rx="24" fill="#171717" stroke="#6f520c"/><text x="306" y="843" text-anchor="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="800" letter-spacing="3">COLOQUE</text><text x="306" y="911" text-anchor="middle" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="66" font-weight="900">R$ 10</text><text x="774" y="843" text-anchor="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="800" letter-spacing="3">VOLTA</text><text x="774" y="911" text-anchor="middle" fill="url(#gold)" font-family="Arial,Helvetica,sans-serif" font-size="66" font-weight="900">R$ 25</text><text x="540" y="889" text-anchor="middle" fill="#f1b11e" font-family="Arial,Helvetica,sans-serif" font-size="56" font-weight="900">→</text></g>
+  <text x="540" y="1016" text-anchor="middle" fill="#9d9d9d" font-family="Arial,Helvetica,sans-serif" font-size="18">Consulte o regulamento da campanha na plataforma.</text>
+</svg>
