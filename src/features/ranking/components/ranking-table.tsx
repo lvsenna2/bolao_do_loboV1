@@ -39,9 +39,23 @@ function getPositionTone(position: number | null) {
   return "neutral" as const;
 }
 
+function RankingIdentity({ ranking }: { ranking: RankingRowView }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <Avatar alt={ranking.user.name} name={ranking.user.name} src={ranking.user.avatarUrl} />
+      <div className="min-w-0">
+        <p className="truncate font-semibold text-app-foreground">{ranking.user.name}</p>
+        <p className="truncate text-xs text-app-muted">@{ranking.user.username}</p>
+        <SubscriptionBadge plan={ranking.subscriptionPlan} />
+        <LeagueEmblemList emblems={ranking.emblems} />
+      </div>
+    </div>
+  );
+}
+
 export function RankingTable({ myRanking, rankings }: RankingTableProps) {
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardContent className="p-0">
         {myRanking ? (
           <div className="border-b border-app-border bg-brand-gold/10 p-4">
@@ -55,7 +69,43 @@ export function RankingTable({ myRanking, rankings }: RankingTableProps) {
           </div>
         ) : null}
 
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-app-border md:hidden">
+          {rankings.map((ranking) => (
+            <div key={ranking.id} className="bg-app-surface p-4">
+              <div className="flex items-start justify-between gap-3">
+                <RankingIdentity ranking={ranking} />
+                <Badge tone={getPositionTone(ranking.position)}>
+                  <Medal aria-hidden className="mr-1 h-3.5 w-3.5" />#{ranking.position ?? "-"}
+                </Badge>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-app-elevated p-2">
+                  <p className="text-[10px] uppercase tracking-wide text-app-muted">Pontos</p>
+                  <p className="mt-1 font-bold text-app-foreground">{ranking.points}</p>
+                </div>
+                <div className="rounded-md bg-app-elevated p-2">
+                  <p className="text-[10px] uppercase tracking-wide text-app-muted">Exatos</p>
+                  <p className="mt-1 font-semibold text-app-foreground">{ranking.exactScores}</p>
+                </div>
+                <div className="rounded-md bg-app-elevated p-2">
+                  <p className="text-[10px] uppercase tracking-wide text-app-muted">Acertos</p>
+                  <p className="mt-1 font-semibold text-app-foreground">{ranking.hits}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-app-muted">
+                <span>XP: {ranking.user.xp}</span>
+                <span>Nivel: {ranking.user.level}</span>
+                <span>Erros: {ranking.losses}</span>
+                <span>Sequencia: {ranking.currentStreak}</span>
+                <span>Tempo medio: {formatAverageSubmit(ranking.averageSubmitSeconds)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="border-b border-app-border bg-app-elevated text-xs uppercase tracking-[0.12em] text-app-muted">
               <tr>
@@ -80,19 +130,7 @@ export function RankingTable({ myRanking, rankings }: RankingTableProps) {
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar
-                        alt={ranking.user.name}
-                        name={ranking.user.name}
-                        src={ranking.user.avatarUrl}
-                      />
-                      <div>
-                        <p className="font-semibold text-app-foreground">{ranking.user.name}</p>
-                        <p className="text-xs text-app-muted">@{ranking.user.username}</p>
-                        <SubscriptionBadge plan={ranking.subscriptionPlan} />
-                        <LeagueEmblemList emblems={ranking.emblems} />
-                      </div>
-                    </div>
+                    <RankingIdentity ranking={ranking} />
                   </td>
                   <td className="px-4 py-3 font-bold text-app-foreground">{ranking.points}</td>
                   <td className="px-4 py-3">{ranking.user.xp}</td>
