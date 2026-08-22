@@ -18,6 +18,38 @@ import { assertSpecialRoundTransition } from "./state-service";
 
 const serializable = { isolationLevel: "Serializable" as const };
 
+// A apuracao percorre todas as inscricoes da rodada: numa promocao de trafego pago sao
+// centenas. O padrao do Prisma (5s) estoura muito antes do fim, entao a transacao de
+// calculo tem prazo proprio.
+const calculationTransaction = {
+  isolationLevel: "Serializable" as const,
+  maxWait: 10_000,
+  timeout: 60_000
+};
+
+// O credito de premio custa varias idas ao banco por ganhador. Uma unica transacao com
+// todos os premios estoura o prazo (e prende linhas da carteira o tempo todo), entao o
+// pagamento sai em lotes pequenos, cada um na sua transacao.
+const prizeCreditTransaction = {
+  isolationLevel: "Serializable" as const,
+  maxWait: 10_000,
+  timeout: 20_000
+};
+const PRIZE_CREDIT_CHUNK_SIZE = 5;
+const NOTIFICATION_CHUNK_SIZE = 500;
+
+function chunk<T>(values: T[], size: number) {
+  const groups: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    groups.push(values.slice(index, index + size));
+  }
+  return groups;
+}
+
+function errorDetail(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 // Quando a partida encerra mas a API-Football nunca consolida todos os detalhes, a rodada
 // ainda precisa ser apurada. Passado esse prazo desde o apito inicial, a apuracao automatica
 // aceita os dados ja catalogados.
@@ -165,18 +197,30 @@ export async function creditSpecialRoundPrizeToWallet(
   return true;
 }
 
-export async function creditSpecialRoundPrizesToWallets(
-  client: Prisma.TransactionClient,
-  round: SpecialRoundPrizeRoundInfo
-) {
-  const prizes = await client.specialRoundPrize.findMany({
+/**
+ * Paga todos os premios pendentes da rodada em lotes, cada lote na sua propria transacao
+ * curta. Uma promocao de trafego pago paga TODO ganhador (nao so o pódio), e uma transacao
+ * unica com centenas de creditos estourava o prazo e derrubava a publicacao inteira.
+ *
+ * Reprocessar e seguro: o `uniqueKey` de cada credito e o filtro por status garantem que
+ * ninguem recebe duas vezes.
+ */
+export async function creditSpecialRoundPrizesToWallets(round: SpecialRoundPrizeRoundInfo) {
+  const prizes = await prisma.specialRoundPrize.findMany({
     include: { entry: { select: { amount: true, bonusAmount: true, userId: true } } },
+    orderBy: { createdAt: "asc" },
     where: { specialRoundId: round.id, status: { in: ["PENDING", "CONFIRMED"] } }
   });
   let credited = 0;
 
-  for (const prize of prizes) {
-    if (await creditSpecialRoundPrizeToWallet(client, round, prize)) credited += 1;
+  for (const group of chunk(prizes, PRIZE_CREDIT_CHUNK_SIZE)) {
+    credited += await prisma.$transaction(async (tx) => {
+      let paid = 0;
+      for (const prize of group) {
+        if (await creditSpecialRoundPrizeToWallet(tx, round, prize)) paid += 1;
+      }
+      return paid;
+    }, prizeCreditTransaction);
   }
 
   return credited;
@@ -252,45 +296,47 @@ export async function createSpecialRoundFinalizedNotifications(
       ? `A classificacao de ${round.name} foi publicada. Campeao: ${championName}.`
       : `A classificacao de ${round.name} foi publicada.`;
 
-  await client.notification.createMany({
-    data: entries.flatMap((entry) => {
-      const prizeBody = entry.prize
-        ? isPromo
-          ? `Sua aposta em ${round.name} bateu! ${formatCents(
-              Math.round(Number(entry.prize.amount) * 100)
-            )} ja estao na sua carteira, com o lucro em saldo bonus.`
-          : `Parabens! ${formatCents(Math.round(Number(entry.prize.amount) * 100))} de ${round.name} ja estao no saldo da sua carteira.`
-        : null;
+  const rows = entries.flatMap((entry) => {
+    const prizeBody = entry.prize
+      ? isPromo
+        ? `Sua aposta em ${round.name} bateu! ${formatCents(
+            Math.round(Number(entry.prize.amount) * 100)
+          )} ja estao na sua carteira, com o lucro em saldo bonus.`
+        : `Parabens! ${formatCents(Math.round(Number(entry.prize.amount) * 100))} de ${round.name} ja estao no saldo da sua carteira.`
+      : null;
 
-      return [
-        {
-          body: resultBody,
-          icon: "special-round-result",
-          message: resultBody,
-          relatedEntityId: round.id,
-          title: isPromo ? "Promocao encerrada" : "Resultado publicado",
-          type: "SPECIAL_ROUND" as const,
-          uniqueKey: `special-round:result:${round.id}:${entry.userId}`,
-          userId: entry.userId
-        },
-        ...(entry.prize && prizeBody
-          ? [
-              {
-                body: prizeBody,
-                icon: "special-round-prize",
-                message: prizeBody,
-                relatedEntityId: entry.prize.id,
-                title: isPromo ? "Aposta premiada" : "Usuario premiado",
-                type: "SPECIAL_ROUND" as const,
-                uniqueKey: `special-round:prize:${entry.prize.id}`,
-                userId: entry.userId
-              }
-            ]
-          : [])
-      ];
-    }),
-    skipDuplicates: true
+    return [
+      {
+        body: resultBody,
+        icon: "special-round-result",
+        message: resultBody,
+        relatedEntityId: round.id,
+        title: isPromo ? "Promocao encerrada" : "Resultado publicado",
+        type: "SPECIAL_ROUND" as const,
+        uniqueKey: `special-round:result:${round.id}:${entry.userId}`,
+        userId: entry.userId
+      },
+      ...(entry.prize && prizeBody
+        ? [
+            {
+              body: prizeBody,
+              icon: "special-round-prize",
+              message: prizeBody,
+              relatedEntityId: entry.prize.id,
+              title: isPromo ? "Aposta premiada" : "Usuario premiado",
+              type: "SPECIAL_ROUND" as const,
+              uniqueKey: `special-round:prize:${entry.prize.id}`,
+              userId: entry.userId
+            }
+          ]
+        : [])
+    ];
   });
+
+  // Promocao de trafego pago tem inscricao demais para um insert unico: sai em blocos.
+  for (const group of chunk(rows, NOTIFICATION_CHUNK_SIZE)) {
+    await client.notification.createMany({ data: group, skipDuplicates: true });
+  }
 }
 
 export async function homologateSpecialRoundFromCatalog(input: {
@@ -396,154 +442,147 @@ export async function calculateSpecialRound(input: {
   specialRoundId: string;
 }): Promise<SpecialRoundSettlementResult> {
   try {
-    await prisma.$transaction(
-      async (tx) => {
-        const round = await tx.specialRound.findUniqueOrThrow({
-          include: {
-            entries: {
-              include: { predictions: true, standing: true },
-              where: { blockedAt: null, paymentStatus: "APPROVED" }
-            },
-            markets: { include: { result: true }, where: { active: true } }
+    await prisma.$transaction(async (tx) => {
+      const round = await tx.specialRound.findUniqueOrThrow({
+        include: {
+          entries: {
+            include: { predictions: true, standing: true },
+            where: { blockedAt: null, paymentStatus: "APPROVED" }
           },
-          where: { id: input.specialRoundId }
-        });
-        if (!["AWAITING_RESULT", "CALCULATING"].includes(round.status))
-          throw new Error("INVALID_STATUS");
-        if (round.markets.some((market) => !market.result)) throw new Error("MISSING_RESULTS");
-        await tx.specialRound.update({ data: { status: "CALCULATING" }, where: { id: round.id } });
-        const candidates = [];
-        const scoreRows: {
-          entryId: string;
-          exactScoreHit: boolean;
-          hit: boolean;
-          marketId: string;
-          maxPointsHit: boolean;
-          points: number;
-        }[] = [];
-        for (const entry of round.entries) {
-          let totalPoints = 0,
-            hits = 0,
-            maxPointsHits = 0,
-            exactScoreHits = 0;
-          for (const market of round.markets) {
-            const prediction = entry.predictions.find((item) => item.marketId === market.id);
-            const evaluation = prediction
-              ? evaluateSpecialRoundAnswer(
-                  {
-                    kind: market.kind,
-                    line: market.line ? Number(market.line) : null,
-                    points: market.points
-                  },
-                  prediction.answer as SpecialRoundAnswer,
-                  market.result!.answer as SpecialRoundAnswer
-                )
-              : { exactScoreHit: false, hit: false, maxPointsHit: false, points: 0 };
-            totalPoints += evaluation.points;
-            hits += Number(evaluation.hit);
-            maxPointsHits += Number(evaluation.maxPointsHit);
-            exactScoreHits += Number(evaluation.exactScoreHit);
-            scoreRows.push({ ...evaluation, entryId: entry.id, marketId: market.id });
-          }
-          candidates.push({
-            entryId: entry.id,
-            exactScoreHits,
-            firstSubmittedAt: entry.predictions.reduce<Date | null>(
-              (first, prediction) =>
-                !first || prediction.submittedAt < first ? prediction.submittedAt : first,
-              null
-            ),
-            hits,
-            manualTieBreak: entry.standing?.manualTieBreak ?? 0,
-            maxPointsHits,
-            totalPoints
-          });
+          markets: { include: { result: true }, where: { active: true } }
+        },
+        where: { id: input.specialRoundId }
+      });
+      if (!["AWAITING_RESULT", "CALCULATING"].includes(round.status))
+        throw new Error("INVALID_STATUS");
+      if (round.markets.some((market) => !market.result)) throw new Error("MISSING_RESULTS");
+      await tx.specialRound.update({ data: { status: "CALCULATING" }, where: { id: round.id } });
+      const candidates = [];
+      const scoreRows: {
+        entryId: string;
+        exactScoreHit: boolean;
+        hit: boolean;
+        marketId: string;
+        maxPointsHit: boolean;
+        points: number;
+      }[] = [];
+      for (const entry of round.entries) {
+        let totalPoints = 0,
+          hits = 0,
+          maxPointsHits = 0,
+          exactScoreHits = 0;
+        for (const market of round.markets) {
+          const prediction = entry.predictions.find((item) => item.marketId === market.id);
+          const evaluation = prediction
+            ? evaluateSpecialRoundAnswer(
+                {
+                  kind: market.kind,
+                  line: market.line ? Number(market.line) : null,
+                  points: market.points
+                },
+                prediction.answer as SpecialRoundAnswer,
+                market.result!.answer as SpecialRoundAnswer
+              )
+            : { exactScoreHit: false, hit: false, maxPointsHit: false, points: 0 };
+          totalPoints += evaluation.points;
+          hits += Number(evaluation.hit);
+          maxPointsHits += Number(evaluation.maxPointsHit);
+          exactScoreHits += Number(evaluation.exactScoreHit);
+          scoreRows.push({ ...evaluation, entryId: entry.id, marketId: market.id });
         }
-        await tx.specialRoundScore.deleteMany({
-          where: { entry: { specialRoundId: round.id } }
+        candidates.push({
+          entryId: entry.id,
+          exactScoreHits,
+          firstSubmittedAt: entry.predictions.reduce<Date | null>(
+            (first, prediction) =>
+              !first || prediction.submittedAt < first ? prediction.submittedAt : first,
+            null
+          ),
+          hits,
+          manualTieBreak: entry.standing?.manualTieBreak ?? 0,
+          maxPointsHits,
+          totalPoints
         });
-        if (scoreRows.length) {
-          await tx.specialRoundScore.createMany({ data: scoreRows });
-        }
-        const ranked = rankSpecialRoundEntries(candidates);
-        await tx.specialRoundStanding.deleteMany({ where: { specialRoundId: round.id } });
-        if (ranked.length) {
-          await tx.specialRoundStanding.createMany({
-            data: ranked.map((standing) => ({ ...standing, specialRoundId: round.id }))
-          });
-        }
-        const paidPrize = await tx.specialRoundPrize.findFirst({
-          where: { specialRoundId: round.id, status: "PAID" }
-        });
-        if (paidPrize) throw new Error("PRIZE_ALREADY_PAID");
-        await tx.specialRoundPrize.deleteMany({ where: { specialRoundId: round.id } });
-
-        let totalPrize = 0;
-        if (round.format === "PROMO_SINGLE_SELECTION") {
-          // Promocao nao tem bolo nem ranking: cada aposta certa recebe o proprio retorno
-          // (valor apostado * odd). A posicao vem da classificacao so para satisfazer a
-          // unicidade de premio por rodada.
-          const odds = Number(round.promoOdds ?? 0);
-          const stakeByEntry = new Map(
-            round.entries.map((entry) => [entry.id, Math.round(Number(entry.amount) * 100)])
-          );
-          for (const standing of ranked) {
-            if (standing.hits < 1) continue;
-            const stakeCents = stakeByEntry.get(standing.entryId) ?? 0;
-            if (stakeCents <= 0) continue;
-            const returnCents = promoReturnCents(stakeCents, odds);
-            totalPrize += returnCents / 100;
-            await tx.specialRoundPrize.create({
-              data: {
-                amount: returnCents / 100,
-                entryId: standing.entryId,
-                percentage: 100,
-                position: standing.position,
-                specialRoundId: round.id
-              }
-            });
-          }
-        } else {
-          const paidAmounts = round.entries.map((entry) => Number(entry.amount));
-          const pool = calculateSpecialRoundPrizePool({
-            adminFeePercent: Number(round.adminFeePercent),
-            confirmedAmounts: paidAmounts,
-            fixedPrize: round.fixedPrize ? Number(round.fixedPrize) : null,
-            mode: round.prizeMode,
-            poolPercent: Number(round.prizePoolPercent)
-          });
-          const distribution = distributeSpecialRoundPrize(
-            pool.prize,
-            round.prizeDistribution as unknown as PrizeDistributionItem[]
-          );
-          for (const prize of distribution) {
-            const winner = ranked.find((item) => item.position === prize.position);
-            if (!winner) continue;
-            await tx.specialRoundPrize.create({
-              data: { ...prize, entryId: winner.entryId, specialRoundId: round.id }
-            });
-          }
-          totalPrize = pool.prize;
-        }
-
-        await tx.specialRound.update({ data: { finalPrize: totalPrize }, where: { id: round.id } });
-        await tx.specialRoundAuditLog.create({
-          data: {
-            action: "special_round.calculated",
-            actorId: input.actorId,
-            entity: "SpecialRound",
-            entityId: round.id,
-            metadata: json({ entries: ranked.length, format: round.format, prize: totalPrize }),
-            specialRoundId: round.id
-          }
-        });
-      },
-      {
-        isolationLevel: "Serializable",
-        maxWait: 5_000,
-        timeout: 20_000
       }
-    );
+      await tx.specialRoundScore.deleteMany({
+        where: { entry: { specialRoundId: round.id } }
+      });
+      if (scoreRows.length) {
+        await tx.specialRoundScore.createMany({ data: scoreRows });
+      }
+      const ranked = rankSpecialRoundEntries(candidates);
+      await tx.specialRoundStanding.deleteMany({ where: { specialRoundId: round.id } });
+      if (ranked.length) {
+        await tx.specialRoundStanding.createMany({
+          data: ranked.map((standing) => ({ ...standing, specialRoundId: round.id }))
+        });
+      }
+      const paidPrize = await tx.specialRoundPrize.findFirst({
+        where: { specialRoundId: round.id, status: "PAID" }
+      });
+      if (paidPrize) throw new Error("PRIZE_ALREADY_PAID");
+      await tx.specialRoundPrize.deleteMany({ where: { specialRoundId: round.id } });
+
+      let totalPrize = 0;
+      const prizeRows: Prisma.SpecialRoundPrizeCreateManyInput[] = [];
+      if (round.format === "PROMO_SINGLE_SELECTION") {
+        // Promocao nao tem bolo nem ranking: cada aposta certa recebe o proprio retorno
+        // (valor apostado * odd). A posicao vem da classificacao so para satisfazer a
+        // unicidade de premio por rodada.
+        const odds = Number(round.promoOdds ?? 0);
+        const stakeByEntry = new Map(
+          round.entries.map((entry) => [entry.id, Math.round(Number(entry.amount) * 100)])
+        );
+        for (const standing of ranked) {
+          if (standing.hits < 1) continue;
+          const stakeCents = stakeByEntry.get(standing.entryId) ?? 0;
+          if (stakeCents <= 0) continue;
+          const returnCents = promoReturnCents(stakeCents, odds);
+          totalPrize += returnCents / 100;
+          prizeRows.push({
+            amount: returnCents / 100,
+            entryId: standing.entryId,
+            percentage: 100,
+            position: standing.position,
+            specialRoundId: round.id
+          });
+        }
+      } else {
+        const paidAmounts = round.entries.map((entry) => Number(entry.amount));
+        const pool = calculateSpecialRoundPrizePool({
+          adminFeePercent: Number(round.adminFeePercent),
+          confirmedAmounts: paidAmounts,
+          fixedPrize: round.fixedPrize ? Number(round.fixedPrize) : null,
+          mode: round.prizeMode,
+          poolPercent: Number(round.prizePoolPercent)
+        });
+        const distribution = distributeSpecialRoundPrize(
+          pool.prize,
+          round.prizeDistribution as unknown as PrizeDistributionItem[]
+        );
+        for (const prize of distribution) {
+          const winner = ranked.find((item) => item.position === prize.position);
+          if (!winner) continue;
+          prizeRows.push({ ...prize, entryId: winner.entryId, specialRoundId: round.id });
+        }
+        totalPrize = pool.prize;
+      }
+
+      // Um insert por ganhador derrubava a promocao no prazo da transacao.
+      if (prizeRows.length) await tx.specialRoundPrize.createMany({ data: prizeRows });
+
+      await tx.specialRound.update({ data: { finalPrize: totalPrize }, where: { id: round.id } });
+      await tx.specialRoundAuditLog.create({
+        data: {
+          action: "special_round.calculated",
+          actorId: input.actorId,
+          entity: "SpecialRound",
+          entityId: round.id,
+          metadata: json({ entries: ranked.length, format: round.format, prize: totalPrize }),
+          specialRoundId: round.id
+        }
+      });
+    }, calculationTransaction);
   } catch (error) {
     console.error("Special round calculation failed", {
       error,
@@ -557,7 +596,9 @@ export async function calculateSpecialRound(input: {
             ? "Nao e permitido recalcular depois que um premio foi marcado como pago."
             : error instanceof Error && error.message === "INVALID_STATUS"
               ? "A rodada precisa estar aguardando resultado antes da apuracao."
-              : "Nao foi possivel calcular a rodada.",
+              : // Sem o motivo real o painel dizia so "nao foi possivel" e a causa ficava
+                // escondida no log da Vercel.
+                `Nao foi possivel calcular a rodada: ${errorDetail(error)}`,
       ok: false
     };
   }
@@ -568,12 +609,24 @@ export async function finalizeSpecialRound(input: {
   actorId: string | null;
   specialRoundId: string;
 }): Promise<SpecialRoundSettlementResult> {
+  let round: SpecialRoundPrizeRoundInfo;
+
+  // A publicacao em si e barata: muda o status e registra a auditoria. O que custava caro —
+  // creditar cada premio e notificar cada inscrito — saiu daqui, porque numa promocao com
+  // centenas de ganhadores a transacao unica estourava o prazo e desfazia tudo, deixando a
+  // rodada presa em CALCULATING e a apuracao automatica repetindo a mesma falha.
   try {
-    await prisma.$transaction(async (tx) => {
+    round = await prisma.$transaction(async (tx) => {
       const current = await tx.specialRound.findUniqueOrThrow({
         where: { id: input.specialRoundId }
       });
-      if (current.status === "FINALIZED") return;
+      const info: SpecialRoundPrizeRoundInfo = {
+        format: current.format,
+        id: current.id,
+        name: current.name,
+        promoOdds: current.promoOdds
+      };
+      if (current.status === "FINALIZED") return info;
       assertSpecialRoundTransition(current.status, "FINALIZED");
       const now = serverNow();
       await tx.specialRound.update({
@@ -593,29 +646,7 @@ export async function finalizeSpecialRound(input: {
           specialRoundId: current.id
         }
       });
-      const credited = await creditSpecialRoundPrizesToWallets(tx, {
-        format: current.format,
-        id: current.id,
-        name: current.name,
-        promoOdds: current.promoOdds
-      });
-      if (credited > 0) {
-        await tx.specialRoundAuditLog.create({
-          data: {
-            action: "special_round.prizes_credited_to_wallet",
-            actorId: input.actorId,
-            entity: "SpecialRound",
-            entityId: current.id,
-            metadata: json({ prizes: credited }),
-            specialRoundId: current.id
-          }
-        });
-      }
-      await createSpecialRoundFinalizedNotifications(tx, {
-        format: current.format,
-        id: current.id,
-        name: current.name
-      });
+      return info;
     }, serializable);
   } catch (error) {
     console.error("Special round finalization failed", {
@@ -626,11 +657,72 @@ export async function finalizeSpecialRound(input: {
       message:
         error instanceof Error && error.message.startsWith("SPECIAL_ROUND_INVALID_TRANSITION")
           ? "Essa mudanca de status nao e permitida."
-          : "Nao foi possivel publicar a classificacao.",
+          : `Nao foi possivel publicar a classificacao: ${errorDetail(error)}`,
       ok: false
     };
   }
+
+  return payoutFinalizedSpecialRound(round, input.actorId);
+}
+
+/**
+ * Paga os premios e avisa os inscritos de uma rodada ja publicada. Roda fora da transacao de
+ * publicacao e e totalmente repetivel: premio ja pago fica de fora da busca e notificacao
+ * repetida cai no `skipDuplicates`. Se parar no meio, a varredura automatica termina depois.
+ */
+async function payoutFinalizedSpecialRound(
+  round: SpecialRoundPrizeRoundInfo,
+  actorId: string | null
+): Promise<SpecialRoundSettlementResult> {
+  try {
+    const credited = await creditSpecialRoundPrizesToWallets(round);
+    if (credited > 0) {
+      await prisma.specialRoundAuditLog.create({
+        data: {
+          action: "special_round.prizes_credited_to_wallet",
+          actorId,
+          entity: "SpecialRound",
+          entityId: round.id,
+          metadata: json({ prizes: credited }),
+          specialRoundId: round.id
+        }
+      });
+    }
+    await createSpecialRoundFinalizedNotifications(prisma, round);
+  } catch (error) {
+    console.error("Special round payout failed", { error, specialRoundId: round.id });
+    return {
+      message: `Classificacao publicada, mas o pagamento dos premios ficou pendente: ${errorDetail(
+        error
+      )}`,
+      ok: false
+    };
+  }
+
   return { message: "Classificacao publicada.", ok: true };
+}
+
+/**
+ * Retoma rodadas que ja foram publicadas mas ficaram com premio por creditar — por exemplo
+ * quando o banco derrubou o pagamento no meio do caminho.
+ */
+export async function creditPendingFinalizedPrizes(limit = 5) {
+  const rounds = await prisma.specialRound.findMany({
+    orderBy: { finalizedAt: "asc" },
+    select: { format: true, id: true, name: true, promoOdds: true },
+    take: limit,
+    where: {
+      prizes: { some: { status: { in: ["PENDING", "CONFIRMED"] } } },
+      status: "FINALIZED"
+    }
+  });
+
+  let recovered = 0;
+  for (const round of rounds) {
+    const result = await payoutFinalizedSpecialRound(round, null);
+    if (result.ok) recovered += 1;
+  }
+  return recovered;
 }
 
 export async function settleSpecialRoundFromCatalog(input: {
@@ -665,6 +757,8 @@ export async function settleSpecialRoundFromCatalog(input: {
 export type AutoSettlementSummary = {
   finalized: number;
   pending: { name: string; reason: string }[];
+  /** Rodadas ja publicadas que tiveram o pagamento pendente concluido nesta passada. */
+  recovered: number;
   scanned: number;
 };
 
@@ -716,7 +810,12 @@ export async function settleFinishedSpecialRounds(
     }
   });
 
-  const summary: AutoSettlementSummary = { finalized: 0, pending: [], scanned: rounds.length };
+  const summary: AutoSettlementSummary = {
+    finalized: 0,
+    pending: [],
+    recovered: 0,
+    scanned: rounds.length
+  };
 
   for (const round of rounds) {
     let match = round.match;
@@ -757,6 +856,13 @@ export async function settleFinishedSpecialRounds(
     if (result.ok) summary.finalized += 1;
     else summary.pending.push({ name: round.name, reason: result.message });
   }
+
+  // Rodada publicada que ficou com premio por pagar volta a ser tentada aqui, sem depender
+  // de ninguem clicar no painel.
+  summary.recovered = await creditPendingFinalizedPrizes().catch((error: unknown) => {
+    console.error("Special round pending payout recovery failed", { error });
+    return 0;
+  });
 
   return summary;
 }

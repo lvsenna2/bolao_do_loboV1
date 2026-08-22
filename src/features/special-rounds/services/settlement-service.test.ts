@@ -11,6 +11,7 @@ const { creditWalletMock, prismaMock, resolveMatchMock, txMock } = vi.hoisted(()
     specialRoundEntry: { findMany: vi.fn() },
     specialRoundPrize: {
       create: vi.fn(),
+      createMany: vi.fn(),
       deleteMany: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(async (): Promise<unknown[]> => []),
@@ -29,6 +30,7 @@ const { creditWalletMock, prismaMock, resolveMatchMock, txMock } = vi.hoisted(()
     resolveMatchMock: vi.fn(async (): Promise<{ id: string } | null> => null),
     prismaMock: {
       match: { findUnique: vi.fn() },
+      notification: { createMany: vi.fn(async () => ({})) },
       $transaction: vi.fn(async (input: unknown) =>
         typeof input === "function"
           ? (input as (client: typeof txMock) => Promise<unknown>)(txMock)
@@ -40,6 +42,8 @@ const { creditWalletMock, prismaMock, resolveMatchMock, txMock } = vi.hoisted(()
         update: vi.fn(async () => ({}))
       },
       specialRoundAuditLog: { create: vi.fn(async () => ({})) },
+      specialRoundEntry: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
+      specialRoundPrize: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
       specialRoundResult: { upsert: vi.fn(async () => ({})) },
       specialRoundStanding: { findFirst: vi.fn() }
     },
@@ -58,6 +62,7 @@ vi.mock("@/features/wallet/services/wallet-service", () => ({
 }));
 
 import {
+  creditPendingFinalizedPrizes,
   creditSpecialRoundPrizeToWallet,
   isSpecialRoundMatchReadyForSettlement,
   settleFinishedSpecialRounds,
@@ -65,6 +70,17 @@ import {
 } from "./settlement-service";
 
 const kickoff = new Date("2026-08-09T18:00:00Z");
+
+/**
+ * A varredura e a retomada de pagamento consultam a mesma tabela. O mock separa as duas pelo
+ * filtro de status, para a rodada da varredura nao ser paga duas vezes dentro do teste.
+ */
+function mockScanRounds(rounds: unknown[]) {
+  prismaMock.specialRound.findMany.mockImplementation(
+    async (args?: { where?: { status?: string } }) =>
+      args?.where?.status === "FINALIZED" ? [] : rounds
+  );
+}
 
 describe("credito da promocao com rollover", () => {
   beforeEach(() => {
@@ -216,6 +232,9 @@ describe("settleFinishedSpecialRounds", () => {
     prismaMock.specialRound.update.mockResolvedValue({});
     prismaMock.specialRoundAuditLog.create.mockResolvedValue({});
     prismaMock.specialRoundResult.upsert.mockResolvedValue({});
+    prismaMock.specialRoundPrize.findMany.mockResolvedValue([]);
+    prismaMock.specialRoundEntry.findMany.mockResolvedValue([]);
+    prismaMock.notification.createMany.mockResolvedValue({});
   });
 
   it("nao apura rodadas finalizadas nem canceladas", () => {
@@ -224,7 +243,7 @@ describe("settleFinishedSpecialRounds", () => {
   });
 
   it("deixa pendente a rodada cuja partida ainda nao consolidou", async () => {
-    prismaMock.specialRound.findMany.mockResolvedValue([
+    mockScanRounds([
       {
         id: "round-1",
         match: { fullySyncedAt: null, kickoff, status: "FINISHED" },
@@ -240,9 +259,7 @@ describe("settleFinishedSpecialRounds", () => {
   });
 
   it("vincula a partida sozinha quando a rodada foi criada sem catalogo", async () => {
-    prismaMock.specialRound.findMany.mockResolvedValue([
-      { id: "round-1", match: null, name: "Rodada teste" }
-    ]);
+    mockScanRounds([{ id: "round-1", match: null, name: "Rodada teste" }]);
     resolveMatchMock.mockResolvedValue({ id: "match-1" });
     prismaMock.match.findUnique.mockResolvedValue({
       fullySyncedAt: kickoff,
@@ -263,9 +280,7 @@ describe("settleFinishedSpecialRounds", () => {
   });
 
   it("deixa pendente a rodada sem partida encontrada no catalogo", async () => {
-    prismaMock.specialRound.findMany.mockResolvedValue([
-      { id: "round-1", match: null, name: "Rodada teste" }
-    ]);
+    mockScanRounds([{ id: "round-1", match: null, name: "Rodada teste" }]);
     resolveMatchMock.mockResolvedValue(null);
 
     const summary = await settleFinishedSpecialRounds(
@@ -278,7 +293,7 @@ describe("settleFinishedSpecialRounds", () => {
   });
 
   it("deixa pendente quando o catalogo ainda nao tem todos os mercados", async () => {
-    prismaMock.specialRound.findMany.mockResolvedValue([
+    mockScanRounds([
       {
         id: "round-1",
         match: { fullySyncedAt: kickoff, kickoff, status: "FINISHED" },
@@ -301,7 +316,7 @@ describe("settleFinishedSpecialRounds", () => {
   });
 
   it("homologa, apura e publica o campeao automaticamente", async () => {
-    prismaMock.specialRound.findMany.mockResolvedValue([
+    mockScanRounds([
       {
         id: "round-1",
         match: { fullySyncedAt: kickoff, kickoff, status: "FINISHED" },
@@ -344,7 +359,7 @@ describe("settleFinishedSpecialRounds", () => {
       })
       .mockResolvedValueOnce({ id: "round-1", name: "Rodada teste", status: "CALCULATING" });
     txMock.specialRoundPrize.findFirst.mockResolvedValue(null);
-    txMock.specialRoundPrize.findMany.mockResolvedValue([
+    prismaMock.specialRoundPrize.findMany.mockResolvedValue([
       {
         amount: 10,
         confirmedAt: null,
@@ -353,10 +368,10 @@ describe("settleFinishedSpecialRounds", () => {
         specialRoundId: "round-1"
       }
     ]);
-    txMock.specialRoundEntry.findMany.mockResolvedValue([
+    prismaMock.specialRoundEntry.findMany.mockResolvedValue([
       { id: "entry-1", prize: { amount: 10, id: "prize-1" }, userId: "user-1" }
     ]);
-    txMock.specialRoundStanding.findFirst.mockResolvedValue({
+    prismaMock.specialRoundStanding.findFirst.mockResolvedValue({
       entry: { user: { name: "Joao Pedro" } }
     });
 
@@ -374,7 +389,7 @@ describe("settleFinishedSpecialRounds", () => {
     expect(txMock.specialRound.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "FINALIZED" }) })
     );
-    expect(txMock.notification.createMany).toHaveBeenCalledWith(
+    expect(prismaMock.notification.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.arrayContaining([
           expect.objectContaining({ body: expect.stringContaining("Campeao: Joao Pedro") })
@@ -384,7 +399,7 @@ describe("settleFinishedSpecialRounds", () => {
   });
 
   it("credita o premio na carteira do ganhador e marca como pago", async () => {
-    prismaMock.specialRound.findMany.mockResolvedValue([
+    mockScanRounds([
       {
         id: "round-1",
         match: { fullySyncedAt: kickoff, kickoff, status: "FINISHED" },
@@ -427,7 +442,7 @@ describe("settleFinishedSpecialRounds", () => {
       })
       .mockResolvedValueOnce({ id: "round-1", name: "Rodada teste", status: "CALCULATING" });
     txMock.specialRoundPrize.findFirst.mockResolvedValue(null);
-    txMock.specialRoundPrize.findMany.mockResolvedValue([
+    prismaMock.specialRoundPrize.findMany.mockResolvedValue([
       {
         amount: 10,
         confirmedAt: null,
@@ -436,10 +451,10 @@ describe("settleFinishedSpecialRounds", () => {
         specialRoundId: "round-1"
       }
     ]);
-    txMock.specialRoundEntry.findMany.mockResolvedValue([
+    prismaMock.specialRoundEntry.findMany.mockResolvedValue([
       { id: "entry-1", prize: { amount: 10, id: "prize-1" }, userId: "user-1" }
     ]);
-    txMock.specialRoundStanding.findFirst.mockResolvedValue({
+    prismaMock.specialRoundStanding.findFirst.mockResolvedValue({
       entry: { user: { name: "Joao Pedro" } }
     });
 
@@ -459,11 +474,102 @@ describe("settleFinishedSpecialRounds", () => {
         where: { id: "prize-1" }
       })
     );
-    expect(txMock.notification.createMany).toHaveBeenCalledWith(
+    expect(prismaMock.notification.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.arrayContaining([
           expect.objectContaining({ body: expect.stringContaining("carteira") })
         ])
+      })
+    );
+  });
+  it("paga em lotes a promocao com muitos ganhadores, fora da transacao da publicacao", async () => {
+    const winners = Array.from({ length: 12 }, (_, index) => ({
+      amount: 25,
+      confirmedAt: null,
+      entry: { amount: 10, bonusAmount: 0, userId: `user-${index}` },
+      id: `prize-${index}`,
+      specialRoundId: "round-promo"
+    }));
+    mockScanRounds([
+      {
+        id: "round-promo",
+        match: { fullySyncedAt: kickoff, kickoff, status: "FINISHED" },
+        name: "Promocao teste"
+      }
+    ]);
+    prismaMock.specialRound.findUnique.mockResolvedValue(catalogRound());
+    txMock.specialRound.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        adminFeePercent: 0,
+        entries: [],
+        fixedPrize: null,
+        format: "PROMO_SINGLE_SELECTION",
+        id: "round-promo",
+        markets: [
+          {
+            id: "market-1",
+            kind: "MATCH_RESULT",
+            line: null,
+            points: 10,
+            result: { answer: "HOME" }
+          }
+        ],
+        prizeDistribution: [{ percent: 100, position: 1 }],
+        prizeMode: "FIXED",
+        prizePoolPercent: 100,
+        promoOdds: 2.5,
+        status: "AWAITING_RESULT"
+      })
+      .mockResolvedValueOnce({
+        format: "PROMO_SINGLE_SELECTION",
+        id: "round-promo",
+        name: "Promocao teste",
+        promoOdds: 2.5,
+        status: "CALCULATING"
+      });
+    txMock.specialRoundPrize.findFirst.mockResolvedValue(null);
+    prismaMock.specialRoundPrize.findMany.mockResolvedValue(winners);
+
+    const summary = await settleFinishedSpecialRounds(
+      new Date(kickoff.getTime() + 3 * 60 * 60_000)
+    );
+
+    expect(summary.finalized).toBe(1);
+    // Um lote por vez: o pagamento nunca depende de uma unica transacao gigante.
+    expect(prismaMock.specialRoundPrize.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ specialRoundId: "round-promo" }) })
+    );
+    expect(txMock.specialRoundPrize.update).toHaveBeenCalledTimes(12);
+    // Dois creditos por ganhador na promocao: devolucao da aposta e lucro em bonus.
+    expect(creditWalletMock).toHaveBeenCalledTimes(24);
+  });
+
+  it("retoma o pagamento de rodada ja publicada que ficou com premio pendente", async () => {
+    prismaMock.specialRound.findMany.mockResolvedValue([
+      {
+        format: "PROMO_SINGLE_SELECTION",
+        id: "round-promo",
+        name: "Promocao teste",
+        promoOdds: 2
+      }
+    ]);
+    prismaMock.specialRoundPrize.findMany.mockResolvedValue([
+      {
+        amount: 20,
+        confirmedAt: null,
+        entry: { amount: 10, bonusAmount: 0, userId: "user-1" },
+        id: "prize-pendente",
+        specialRoundId: "round-promo"
+      }
+    ]);
+
+    const recovered = await creditPendingFinalizedPrizes();
+
+    expect(recovered).toBe(1);
+    expect(txMock.specialRoundPrize.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "PAID" }),
+        where: { id: "prize-pendente" }
       })
     );
   });

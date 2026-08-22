@@ -41,6 +41,10 @@ async function runCron(request: Request) {
     durationMs,
     specialRoundsFinalized: settlement?.finalized ?? 0,
     specialRoundsPending: settlement?.pending.length ?? 0,
+    // O motivo de cada pendencia no log evita ter que adivinhar por que uma rodada nao apurou.
+    specialRoundsPendingReasons:
+      settlement?.pending.map((round) => `${round.name}: ${round.reason}`) ?? [],
+    specialRoundsRecovered: settlement?.recovered ?? 0,
     specialRoundsScanned: settlement?.scanned ?? 0,
     locked: result.locked ?? false,
     ok: result.ok,
