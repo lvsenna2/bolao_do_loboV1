@@ -383,6 +383,13 @@ describe("settleFinishedSpecialRounds", () => {
     expect(prismaMock.specialRound.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "AWAITING_RESULT" } })
     );
+    // Rodada que apurou nao pode continuar exibindo a falha da tentativa anterior.
+    expect(prismaMock.specialRound.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ settlementError: null }),
+        where: { id: "round-1" }
+      })
+    );
     expect(txMock.specialRoundStanding.createMany).toHaveBeenCalledWith({
       data: [expect.objectContaining({ entryId: "entry-1", position: 1, totalPoints: 10 })]
     });
@@ -572,5 +579,59 @@ describe("settleFinishedSpecialRounds", () => {
         where: { id: "prize-pendente" }
       })
     );
+  });
+
+  // Sem rodizio, uma rodada antiga que nunca apura ocupa as 20 vagas da varredura para
+  // sempre e nenhuma rodada nova chega a ser olhada.
+  it("varre pela tentativa mais antiga, para rodada travada nao prender a fila", async () => {
+    mockScanRounds([]);
+
+    await settleFinishedSpecialRounds(new Date(kickoff.getTime() + 3 * 60 * 60_000));
+
+    expect(prismaMock.specialRound.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [
+          { settlementAttemptedAt: { nulls: "first", sort: "asc" } },
+          { matchStartsAt: "asc" }
+        ]
+      })
+    );
+  });
+
+  it("guarda na rodada o motivo de nao ter homologado", async () => {
+    mockScanRounds([{ id: "round-1", match: null, name: "Rodada teste" }]);
+    resolveMatchMock.mockResolvedValue(null);
+
+    await settleFinishedSpecialRounds(new Date(kickoff.getTime() + 3 * 60 * 60_000));
+
+    expect(prismaMock.specialRound.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          settlementError: expect.stringContaining("nao localizada")
+        }),
+        where: { id: "round-1" }
+      })
+    );
+  });
+
+  // Premio zerado sem estado final mantinha a rodada eternamente na fila de recuperacao.
+  it("encerra o premio sem valor em vez de deixa-lo pendente para sempre", async () => {
+    const credited = await creditSpecialRoundPrizeToWallet(
+      txMock as never,
+      { format: "STANDARD", id: "round-1", name: "Rodada teste" },
+      {
+        amount: 0 as never,
+        confirmedAt: null,
+        entry: { amount: 10 as never, bonusAmount: 0 as never, userId: "user-1" },
+        id: "prize-zero"
+      }
+    );
+
+    expect(credited).toBe(false);
+    expect(creditWalletMock).not.toHaveBeenCalled();
+    expect(txMock.specialRoundPrize.update).toHaveBeenCalledWith({
+      data: { status: "CANCELLED" },
+      where: { id: "prize-zero" }
+    });
   });
 });

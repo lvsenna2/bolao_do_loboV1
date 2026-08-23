@@ -105,6 +105,17 @@ export default async function AdminSpecialRoundsPage() {
                   {collected.toLocaleString("pt-BR", { currency: "BRL", style: "currency" })}{" "}
                   {round.format === "PROMO_SINGLE_SELECTION" ? "apostados" : "arrecadados"}
                 </p>
+                {round.settlementError ? (
+                  <p className="mt-3 rounded-card border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+                    <span className="font-semibold">Apuracao automatica pendente:</span>{" "}
+                    {round.settlementError}
+                    {round.settlementAttemptedAt ? (
+                      <span className="block text-red-300/70">
+                        Ultima tentativa em {formatDateTimeInSaoPaulo(round.settlementAttemptedAt)}
+                      </span>
+                    ) : null}
+                  </p>
+                ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link
                     className="inline-flex h-10 items-center rounded-button border border-brand-gold/40 px-4 text-sm font-semibold text-brand-gold"

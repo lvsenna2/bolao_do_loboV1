@@ -135,7 +135,16 @@ export async function creditSpecialRoundPrizeToWallet(
   prize: CreditablePrize
 ) {
   const amountCents = Math.round(Number(prize.amount) * 100);
-  if (amountCents <= 0) return false;
+  if (amountCents <= 0) {
+    // Premio sem valor nao tem o que creditar. Sem um estado final ele ficava PENDING para
+    // sempre e mantinha a rodada na fila de recuperacao de pagamento, ocupando a vaga de quem
+    // de fato tinha premio a receber.
+    await client.specialRoundPrize.update({
+      data: { status: "CANCELLED" },
+      where: { id: prize.id }
+    });
+    return false;
+  }
 
   if (round.format === "PROMO_SINGLE_SELECTION") {
     const payout = splitPromoPayout({
@@ -703,12 +712,33 @@ async function payoutFinalizedSpecialRound(
 }
 
 /**
+ * Guarda o resultado da ultima tentativa automatica. E o que garante o rodizio da fila: a
+ * varredura ordena por este carimbo, entao uma rodada que falha sempre vai para o fim e as
+ * outras passam a ser tentadas. O motivo fica visivel para o admin no painel.
+ */
+async function recordSettlementAttempt(specialRoundId: string, error: string | null) {
+  await prisma.specialRound
+    .update({
+      data: { settlementAttemptedAt: serverNow(), settlementError: error },
+      where: { id: specialRoundId }
+    })
+    .catch((updateError: unknown) => {
+      console.error("Special round settlement attempt log failed", {
+        specialRoundId,
+        updateError
+      });
+    });
+}
+
+/**
  * Retoma rodadas que ja foram publicadas mas ficaram com premio por creditar — por exemplo
  * quando o banco derrubou o pagamento no meio do caminho.
  */
 export async function creditPendingFinalizedPrizes(limit = 5) {
   const rounds = await prisma.specialRound.findMany({
-    orderBy: { finalizedAt: "asc" },
+    // Rodizio pelo mesmo carimbo da varredura: rodada que nao consegue pagar vai para o fim
+    // da fila em vez de ocupar as vagas para sempre.
+    orderBy: [{ settlementAttemptedAt: { nulls: "first", sort: "asc" } }, { finalizedAt: "asc" }],
     select: { format: true, id: true, name: true, promoOdds: true },
     take: limit,
     where: {
@@ -720,6 +750,7 @@ export async function creditPendingFinalizedPrizes(limit = 5) {
   let recovered = 0;
   for (const round of rounds) {
     const result = await payoutFinalizedSpecialRound(round, null);
+    await recordSettlementAttempt(round.id, result.ok ? null : result.message);
     if (result.ok) recovered += 1;
   }
   return recovered;
@@ -776,7 +807,14 @@ export async function settleFinishedSpecialRounds(
   now = serverNow()
 ): Promise<AutoSettlementSummary> {
   const rounds = await prisma.specialRound.findMany({
-    orderBy: { matchStartsAt: "asc" },
+    // Rodizio: quem nunca foi tentado vem primeiro, depois quem foi tentado ha mais tempo.
+    // Com `orderBy: matchStartsAt` uma rodada antiga que nunca apura (mercado que o catalogo
+    // nao entrega, partida sem estatistica) ficava presa no topo da fila e, somadas 20 delas,
+    // nenhuma rodada nova era sequer olhada — era isso que travava a apuracao automatica.
+    orderBy: [
+      { settlementAttemptedAt: { nulls: "first", sort: "asc" } },
+      { matchStartsAt: "asc" }
+    ],
     select: {
       id: true,
       match: { select: { fullySyncedAt: true, kickoff: true, status: true } },
@@ -829,10 +867,9 @@ export async function settleFinishedSpecialRounds(
           })
         : null;
       if (!match) {
-        summary.pending.push({
-          name: round.name,
-          reason: "Partida ainda nao localizada no catalogo da API-Football."
-        });
+        const reason = "Partida ainda nao localizada no catalogo da API-Football.";
+        summary.pending.push({ name: round.name, reason });
+        await recordSettlementAttempt(round.id, reason);
         continue;
       }
     }
@@ -845,7 +882,9 @@ export async function settleFinishedSpecialRounds(
         status: match.status
       })
     ) {
-      summary.pending.push({ name: round.name, reason: "Aguardando consolidacao da partida." });
+      const reason = "Aguardando consolidacao da partida.";
+      summary.pending.push({ name: round.name, reason });
+      await recordSettlementAttempt(round.id, reason);
       continue;
     }
 
@@ -853,6 +892,7 @@ export async function settleFinishedSpecialRounds(
       actorId: null,
       specialRoundId: round.id
     });
+    await recordSettlementAttempt(round.id, result.ok ? null : result.message);
     if (result.ok) summary.finalized += 1;
     else summary.pending.push({ name: round.name, reason: result.message });
   }
