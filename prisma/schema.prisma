@@ -1451,6 +1451,13 @@ model SpecialRound {
   rankingPublishedAt   DateTime?             @map("ranking_published_at")
   finalizedAt          DateTime?             @map("finalized_at")
   cancelledAt          DateTime?             @map("cancelled_at")
+  /// Quando a varredura automatica tentou apurar esta rodada pela ultima vez. A varredura
+  /// ordena por este campo (nulos primeiro), entao uma rodada que nunca apura nao pode mais
+  /// prender a fila e impedir que as outras sejam apuradas.
+  settlementAttemptedAt DateTime?            @map("settlement_attempted_at")
+  /// Motivo da ultima falha de apuracao automatica, ou null quando a ultima tentativa deu
+  /// certo. E o que o painel mostra para o admin saber por que a rodada nao homologou.
+  settlementError      String?               @map("settlement_error")
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
 
@@ -1467,6 +1474,7 @@ model SpecialRound {
   @@index([createdById])
   @@index([matchId])
   @@index([format, status])
+  @@index([settlementAttemptedAt])
   @@map("special_rounds")
 }
 
