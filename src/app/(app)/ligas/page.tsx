@@ -11,7 +11,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AvailableLeagueList } from "@/features/leagues/components/available-league-list";
 import { JoinAvailableLeagueButton } from "@/features/leagues/components/join-available-league-button";
 import { JoinLeagueForm } from "@/features/leagues/components/join-league-form";
-import { PixPaymentCard } from "@/features/payments/components/pix-payment-card";
 import { UserAlert } from "@/features/user/components/user-alert";
 import { formatCurrency, formatDate, getUserLeagues } from "@/features/user/data/user-data";
 import { toMoneyNumber } from "@/lib/money";
@@ -151,15 +150,20 @@ export default async function LeaguesPage() {
                   pendingPixPayment?.qrCode &&
                   pendingPixPayment.qrCodeBase64 ? (
                     <div className="mt-4">
-                      <PixPaymentCard
-                        amountLabel={formatCurrency(pendingPixPayment.amount)}
-                        expiresAtLabel={formatDate(pendingPixPayment.expiresAt)}
-                        leagueName={membership.league.name}
-                        paymentId={pendingPixPayment.id}
-                        pixCode={pendingPixPayment.qrCode}
-                        qrCodeDataUri={`data:image/png;base64,${pendingPixPayment.qrCodeBase64}`}
-                        ticketUrl={pendingPixPayment.ticketUrl}
-                        transactionId={pendingPixPayment.transactionId ?? "PENDENTE"}
+                      <JoinAvailableLeagueButton
+                        initialPaymentIntent={{
+                          amountLabel: formatCurrency(pendingPixPayment.amount),
+                          expiresAtLabel: formatDate(pendingPixPayment.expiresAt),
+                          leagueName: membership.league.name,
+                          paymentId: pendingPixPayment.id,
+                          pixCode: pendingPixPayment.qrCode,
+                          qrCodeDataUri: `data:image/png;base64,${pendingPixPayment.qrCodeBase64}`,
+                          ticketUrl: pendingPixPayment.ticketUrl,
+                          transactionId: pendingPixPayment.transactionId ?? "PENDENTE"
+                        }}
+                        key={pendingPixPayment.id}
+                        leagueId={membership.league.id}
+                        requiresPayment
                       />
                     </div>
                   ) : membership.status === "PENDING_PAYMENT" ? (

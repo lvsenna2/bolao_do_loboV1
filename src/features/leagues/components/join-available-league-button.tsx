@@ -13,12 +13,20 @@ import { PixPaymentCard } from "@/features/payments/components/pix-payment-card"
 import { joinAvailableLeagueAction, joinLeagueWithWalletAction } from "../actions/league-actions";
 import type { LeaguePaymentIntent } from "../types/league-action-result";
 
+type LeaguePaymentDisplayIntent = Pick<
+  LeaguePaymentIntent,
+  "amountLabel" | "leagueName" | "paymentId" | "pixCode" | "qrCodeDataUri" | "transactionId"
+> &
+  Partial<LeaguePaymentIntent>;
+
 type JoinAvailableLeagueButtonProps = {
+  initialPaymentIntent?: LeaguePaymentDisplayIntent;
   leagueId: string;
   requiresPayment: boolean;
 };
 
 export function JoinAvailableLeagueButton({
+  initialPaymentIntent,
   leagueId,
   requiresPayment
 }: JoinAvailableLeagueButtonProps) {
@@ -26,7 +34,9 @@ export function JoinAvailableLeagueButton({
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
-  const [paymentIntent, setPaymentIntent] = useState<LeaguePaymentIntent | undefined>();
+  const [paymentIntent, setPaymentIntent] = useState<LeaguePaymentDisplayIntent | undefined>(
+    initialPaymentIntent
+  );
 
   function onJoin() {
     setMessage(undefined);
