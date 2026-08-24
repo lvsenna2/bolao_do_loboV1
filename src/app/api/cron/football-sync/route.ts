@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 240;
 export const runtime = "nodejs";
 
-export function shouldRunSpecialRoundSettlement(result: { locked?: boolean }) {
+function shouldRunSpecialRoundSettlement(result: { locked?: boolean }) {
   return !result.locked;
 }
 
