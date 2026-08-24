@@ -20,7 +20,7 @@ export default async function DailyRoulettePage() {
   const data = await getRouletteData(user.id);
   return (
     <PageShell
-      description="Um giro diario, premios internos e chances reais de saldo."
+      description="Um giro diario, premios internos e chances reais de saldo bonus."
       eyebrow="Recompensa diaria"
       title="Roleta Diaria"
     >
@@ -87,8 +87,8 @@ export default async function DailyRoulettePage() {
             ))}
           </div>
           <p className="mt-3 text-xs text-app-muted">
-            O premio e definido com seguranca no servidor. As chances podem ser atualizadas em
-            campanhas futuras.
+            Premios em dinheiro entram como saldo bonus e so ficam disponiveis para saque apos o
+            rollover de 10x. O premio e definido com seguranca no servidor.
           </p>
         </CardContent>
       </Card>

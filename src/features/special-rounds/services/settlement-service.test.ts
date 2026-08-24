@@ -29,6 +29,11 @@ const { creditWalletMock, prismaMock, resolveMatchMock, txMock } = vi.hoisted(()
     creditWalletMock: vi.fn(async () => ({})),
     resolveMatchMock: vi.fn(async (): Promise<{ id: string } | null> => null),
     prismaMock: {
+      footballSyncLock: {
+        create: vi.fn(async () => ({})),
+        deleteMany: vi.fn(async () => ({ count: 1 })),
+        updateMany: vi.fn(async () => ({ count: 0 }))
+      },
       match: { findUnique: vi.fn() },
       notification: { createMany: vi.fn(async () => ({})) },
       $transaction: vi.fn(async (input: unknown) =>
@@ -240,6 +245,16 @@ describe("settleFinishedSpecialRounds", () => {
   it("nao apura rodadas finalizadas nem canceladas", () => {
     expect(settleableSpecialRoundStatuses).not.toContain("FINALIZED");
     expect(settleableSpecialRoundStatuses).not.toContain("CANCELLED");
+  });
+
+  it("nao inicia outra homologacao enquanto uma varredura esta em andamento", async () => {
+    prismaMock.footballSyncLock.create.mockRejectedValueOnce({ code: "P2002" });
+
+    const summary = await settleFinishedSpecialRounds();
+
+    expect(summary).toMatchObject({ finalized: 0, locked: true, scanned: 0 });
+    expect(prismaMock.specialRound.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.footballSyncLock.deleteMany).not.toHaveBeenCalled();
   });
 
   it("deixa pendente a rodada cuja partida ainda nao consolidou", async () => {

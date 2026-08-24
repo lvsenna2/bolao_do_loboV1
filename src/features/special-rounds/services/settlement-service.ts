@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Prisma, SpecialRoundFormat, SpecialRoundStatus } from "@prisma/client";
 
 import {
@@ -37,6 +38,48 @@ const prizeCreditTransaction = {
 };
 const PRIZE_CREDIT_CHUNK_SIZE = 5;
 const NOTIFICATION_CHUNK_SIZE = 500;
+const SETTLEMENT_LOCK_KEY = "special-round-settlement";
+const SETTLEMENT_LOCK_TTL_MS = 10 * 60_000;
+
+type SettlementLockStore = {
+  create(input: { data: { key: string; lockedUntil: Date; ownerToken: string } }): Promise<unknown>;
+  deleteMany(input: { where: { key: string; ownerToken: string } }): Promise<unknown>;
+  updateMany(input: {
+    data: { lockedUntil: Date; ownerToken: string };
+    where: { key: string; lockedUntil: { lte: Date } };
+  }): Promise<{ count: number }>;
+};
+
+async function acquireSettlementLock(ownerToken: string, now: Date) {
+  const store = prisma.footballSyncLock as unknown as SettlementLockStore;
+  const lockedUntil = new Date(now.getTime() + SETTLEMENT_LOCK_TTL_MS);
+  try {
+    await store.create({
+      data: { key: SETTLEMENT_LOCK_KEY, lockedUntil, ownerToken }
+    });
+    return true;
+  } catch (error) {
+    if (
+      typeof error !== "object" ||
+      error === null ||
+      !("code" in error) ||
+      error.code !== "P2002"
+    ) {
+      throw error;
+    }
+  }
+
+  const recovered = await store.updateMany({
+    data: { lockedUntil, ownerToken },
+    where: { key: SETTLEMENT_LOCK_KEY, lockedUntil: { lte: now } }
+  });
+  return recovered.count === 1;
+}
+
+async function releaseSettlementLock(ownerToken: string) {
+  const store = prisma.footballSyncLock as unknown as SettlementLockStore;
+  await store.deleteMany({ where: { key: SETTLEMENT_LOCK_KEY, ownerToken } });
+}
 
 function chunk<T>(values: T[], size: number) {
   const groups: T[][] = [];
@@ -787,6 +830,7 @@ export async function settleSpecialRoundFromCatalog(input: {
 
 export type AutoSettlementSummary = {
   finalized: number;
+  locked: boolean;
   pending: { name: string; reason: string }[];
   /** Rodadas ja publicadas que tiveram o pagamento pendente concluido nesta passada. */
   recovered: number;
@@ -803,18 +847,13 @@ const RELINK_MAX_AGE_MS = 14 * 24 * 60 * 60_000;
  * Apura e publica automaticamente toda Rodada Especial cuja partida ja terminou.
  * Rodadas sem dados suficientes ficam pendentes e sao tentadas na proxima execucao.
  */
-export async function settleFinishedSpecialRounds(
-  now = serverNow()
-): Promise<AutoSettlementSummary> {
+async function settleFinishedSpecialRoundsUnlocked(now: Date): Promise<AutoSettlementSummary> {
   const rounds = await prisma.specialRound.findMany({
     // Rodizio: quem nunca foi tentado vem primeiro, depois quem foi tentado ha mais tempo.
     // Com `orderBy: matchStartsAt` uma rodada antiga que nunca apura (mercado que o catalogo
     // nao entrega, partida sem estatistica) ficava presa no topo da fila e, somadas 20 delas,
     // nenhuma rodada nova era sequer olhada — era isso que travava a apuracao automatica.
-    orderBy: [
-      { settlementAttemptedAt: { nulls: "first", sort: "asc" } },
-      { matchStartsAt: "asc" }
-    ],
+    orderBy: [{ settlementAttemptedAt: { nulls: "first", sort: "asc" } }, { matchStartsAt: "asc" }],
     select: {
       id: true,
       match: { select: { fullySyncedAt: true, kickoff: true, status: true } },
@@ -850,6 +889,7 @@ export async function settleFinishedSpecialRounds(
 
   const summary: AutoSettlementSummary = {
     finalized: 0,
+    locked: false,
     pending: [],
     recovered: 0,
     scanned: rounds.length
@@ -905,4 +945,20 @@ export async function settleFinishedSpecialRounds(
   });
 
   return summary;
+}
+
+export async function settleFinishedSpecialRounds(
+  now = serverNow()
+): Promise<AutoSettlementSummary> {
+  const ownerToken = randomUUID();
+  const locked = await acquireSettlementLock(ownerToken, now);
+  if (!locked) {
+    return { finalized: 0, locked: true, pending: [], recovered: 0, scanned: 0 };
+  }
+
+  try {
+    return await settleFinishedSpecialRoundsUnlocked(now);
+  } finally {
+    await releaseSettlementLock(ownerToken);
+  }
 }

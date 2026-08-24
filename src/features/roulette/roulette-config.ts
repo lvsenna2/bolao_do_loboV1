@@ -9,7 +9,7 @@ export type RoulettePrize = {
 export const DAILY_ROULETTE_PRIZES: RoulettePrize[] = [
   { id: "none", name: "Nenhum premio hoje", probabilityUnits: 50_000, value: 0 },
   { id: "fragment", name: "1 Fragmento de Vale Especial", probabilityUnits: 20_000, value: 1 },
-  { id: "balance_200", name: "R$ 2,00 de saldo", probabilityUnits: 10_000, value: 200 },
+  { id: "balance_200", name: "R$ 2,00 de saldo bonus", probabilityUnits: 10_000, value: 200 },
   {
     id: "promo",
     name: "5% de desconto na proxima participacao",
@@ -20,7 +20,12 @@ export const DAILY_ROULETTE_PRIZES: RoulettePrize[] = [
   { id: "bonus_spin", name: "Giro bonus", probabilityUnits: 3_000, value: 1 },
   { id: "league_voucher", name: "1 Vale para Liga", probabilityUnits: 1_000, value: 1 },
   { id: "surprise", name: "3 Fragmentos de Vale Especial", probabilityUnits: 999, value: 3 },
-  { id: "jackpot", name: "JACKPOT: R$ 50,00 de saldo", probabilityUnits: 1, value: 5_000 }
+  {
+    id: "jackpot",
+    name: "JACKPOT: R$ 50,00 de saldo bonus",
+    probabilityUnits: 1,
+    value: 5_000
+  }
 ];
 
 export const BONUS_ROULETTE_PRIZES = DAILY_ROULETTE_PRIZES.filter(

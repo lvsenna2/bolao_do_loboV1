@@ -3,7 +3,10 @@ import { Prisma, type RouletteSpinKind } from "@prisma/client";
 
 import { getSaoPauloDateKey, serverNow } from "@/lib/date-time";
 import { prisma } from "@/server/db";
-import { creditWalletInTransaction } from "@/features/wallet/services/wallet-service";
+import {
+  BONUS_ROLLOVER_MULTIPLIER,
+  creditWalletInTransaction
+} from "@/features/wallet/services/wallet-service";
 import {
   BONUS_ROULETTE_PRIZES,
   DAILY_ROULETTE_PRIZES,
@@ -51,8 +54,10 @@ async function applyPrize(
   if (prize.id === "balance_200" || prize.id === "jackpot") {
     await creditWalletInTransaction(tx, {
       amountCents: prize.value,
+      bucket: "BONUS",
       description: prize.name,
       relatedEntityId: spinId,
+      rolloverRequirementCents: prize.value * BONUS_ROLLOVER_MULTIPLIER,
       type: "ROULETTE",
       uniqueKey: `roulette:${spinId}:balance`,
       userId

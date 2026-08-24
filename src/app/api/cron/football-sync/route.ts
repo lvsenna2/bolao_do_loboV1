@@ -8,6 +8,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 240;
 export const runtime = "nodejs";
 
+export function shouldRunSpecialRoundSettlement(result: { locked?: boolean }) {
+  return !result.locked;
+}
+
 async function runCron(request: Request) {
   if (!process.env.CRON_SECRET?.trim()) {
     return NextResponse.json(
@@ -31,10 +35,14 @@ async function runCron(request: Request) {
   });
   // Com a partida ja atualizada nesta execucao, apura e publica quem venceu cada
   // Rodada Especial encerrada. Falhas aqui nao invalidam a sincronizacao.
-  const settlement = await settleFinishedSpecialRounds().catch((error: unknown) => {
-    console.error("[football-cron] Falha na apuracao automatica de rodadas especiais", { error });
-    return null;
-  });
+  const settlement = shouldRunSpecialRoundSettlement(result)
+    ? await settleFinishedSpecialRounds().catch((error: unknown) => {
+        console.error("[football-cron] Falha na apuracao automatica de rodadas especiais", {
+          error
+        });
+        return null;
+      })
+    : null;
   const durationMs = Date.now() - startedAt;
 
   console.info("[football-cron] Execucao concluida", {

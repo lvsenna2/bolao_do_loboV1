@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { isValidCronRequest } from "@/server/cron/auth";
+import { shouldRunSpecialRoundSettlement } from "./route";
 
 const previousSecret = process.env.CRON_SECRET;
 
@@ -34,5 +35,12 @@ describe("football cron authorization", () => {
         })
       )
     ).toBe(false);
+  });
+});
+
+describe("football cron settlement", () => {
+  it("does not start another settlement while the automation lock is active", () => {
+    expect(shouldRunSpecialRoundSettlement({ locked: true })).toBe(false);
+    expect(shouldRunSpecialRoundSettlement({ locked: false })).toBe(true);
   });
 });

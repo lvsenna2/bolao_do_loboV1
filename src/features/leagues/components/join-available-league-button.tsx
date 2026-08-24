@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, LogIn, WalletCards } from "lucide-react";
+import { ArrowLeft, CreditCard, LogIn, WalletCards } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -63,26 +63,37 @@ export function JoinAvailableLeagueButton({
     });
   }
 
+  function returnToPaymentOptions() {
+    setPaymentIntent(undefined);
+    setMessage(undefined);
+    setError(undefined);
+  }
+
   return (
     <div className="space-y-3">
-      <LoadingButton
-        className={buttonVariants({ size: "sm", variant: requiresPayment ? "primary" : "accent" })}
-        disabled={isPending}
-        icon={
-          requiresPayment ? (
-            <CreditCard aria-hidden className="h-4 w-4" />
-          ) : (
-            <LogIn aria-hidden className="h-4 w-4" />
-          )
-        }
-        isLoading={isPending}
-        loadingLabel={requiresPayment ? "Processando..." : "Entrando..."}
-        onClick={onJoin}
-        type="button"
-      >
-        {requiresPayment ? "Pagar e entrar" : "Entrar"}
-      </LoadingButton>
-      {requiresPayment ? (
+      {!paymentIntent ? (
+        <LoadingButton
+          className={buttonVariants({
+            size: "sm",
+            variant: requiresPayment ? "primary" : "accent"
+          })}
+          disabled={isPending}
+          icon={
+            requiresPayment ? (
+              <CreditCard aria-hidden className="h-4 w-4" />
+            ) : (
+              <LogIn aria-hidden className="h-4 w-4" />
+            )
+          }
+          isLoading={isPending}
+          loadingLabel={requiresPayment ? "Processando..." : "Entrando..."}
+          onClick={onJoin}
+          type="button"
+        >
+          {requiresPayment ? "Pagar e entrar" : "Entrar"}
+        </LoadingButton>
+      ) : null}
+      {requiresPayment && !paymentIntent ? (
         <LoadingButton
           className={buttonVariants({ size: "sm", variant: "secondary" })}
           disabled={isPending}
@@ -102,7 +113,19 @@ export function JoinAvailableLeagueButton({
           Adicionar saldo
         </Link>
       ) : null}
-      {paymentIntent ? <PixPaymentCard {...paymentIntent} /> : null}
+      {paymentIntent ? (
+        <>
+          <button
+            className={buttonVariants({ size: "sm", variant: "secondary" })}
+            onClick={returnToPaymentOptions}
+            type="button"
+          >
+            <ArrowLeft aria-hidden className="h-4 w-4" />
+            Voltar e escolher saldo ou vale
+          </button>
+          <PixPaymentCard {...paymentIntent} />
+        </>
+      ) : null}
     </div>
   );
 }

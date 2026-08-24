@@ -15,8 +15,16 @@ import { serverNow } from "@/lib/date-time";
 import { formatMoney, toMoneyNumber } from "@/lib/money";
 import { requireAdmin, requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
-import { getMercadoPagoErrorDescription, MercadoPagoApiError } from "@/server/mercado-pago/client";
-import { createDynamicPixForPayment } from "@/server/mercado-pago/payment-service";
+import {
+  cancelMercadoPagoPayment,
+  getMercadoPagoErrorDescription,
+  getMercadoPagoPayment,
+  MercadoPagoApiError
+} from "@/server/mercado-pago/client";
+import {
+  createDynamicPixForPayment,
+  reconcileMercadoPagoPayment
+} from "@/server/mercado-pago/payment-service";
 import {
   createAdminLeagueSchema,
   createLeagueSchema,
@@ -767,6 +775,76 @@ export async function joinLeagueWithWalletAction(
     return { ok: false, message: "Liga paga nao encontrada ou indisponivel." };
   }
 
+  const checkoutKey = `league:${league.id}:user:${user.id}`;
+  const pendingPix = await prisma.payment.findUnique({
+    select: { id: true, status: true, transactionId: true },
+    where: { checkoutKey }
+  });
+  if (pendingPix?.status === "PENDING" && pendingPix.transactionId) {
+    try {
+      let providerPayment = await getMercadoPagoPayment(pendingPix.transactionId);
+      const providerStatus = providerPayment.status?.toLowerCase() ?? "";
+
+      if (providerStatus === "approved") {
+        await reconcileMercadoPagoPayment(providerPayment);
+        revalidateLeaguePaths();
+        return { ok: true, message: "O Pix ja foi aprovado e sua entrada foi liberada." };
+      }
+
+      if (["authorized", "in_process", "pending"].includes(providerStatus)) {
+        providerPayment = await cancelMercadoPagoPayment(
+          pendingPix.transactionId,
+          `cancel:${pendingPix.id}`
+        );
+      } else if (
+        !["cancelled", "canceled", "charged_back", "expired", "refunded", "rejected"].includes(
+          providerStatus
+        )
+      ) {
+        return {
+          ok: false,
+          message: "O Pix mudou de status. Verifique o pagamento antes de usar saldo ou vale."
+        };
+      }
+
+      const cancelled = await prisma.payment.updateMany({
+        data: {
+          checkoutKey: null,
+          providerStatus: providerPayment.status ?? "cancelled",
+          providerStatusDetail: providerPayment.status_detail ?? "switched_to_wallet",
+          status: "CANCELLED"
+        },
+        where: { id: pendingPix.id, status: "PENDING", transactionId: pendingPix.transactionId }
+      });
+      if (cancelled.count !== 1) {
+        const currentPayment = await prisma.payment.findUnique({
+          select: { checkoutKey: true, status: true },
+          where: { id: pendingPix.id }
+        });
+        if (currentPayment?.status === "APPROVED") {
+          revalidateLeaguePaths();
+          return { ok: true, message: "O Pix ja foi aprovado e sua entrada foi liberada." };
+        }
+        if (currentPayment?.checkoutKey) {
+          return {
+            ok: false,
+            message: "O Pix mudou de status. Verifique o pagamento antes de usar saldo ou vale."
+          };
+        }
+      }
+    } catch (error) {
+      console.error("League Pix cancellation before wallet payment failed", {
+        error,
+        paymentId: pendingPix.id
+      });
+      return {
+        ok: false,
+        message:
+          "Nao foi possivel cancelar o Pix pendente. Verifique o pagamento e tente novamente."
+      };
+    }
+  }
+
   const pricing = await getPaidLeaguePricingForUser(user.id, toMoneyNumber(league.entryFee));
   const priceCents = Math.round(pricing.finalAmount * 100);
   try {
@@ -785,7 +863,7 @@ export async function joinLeagueWithWalletAction(
           if (memberCount >= league.maxMembers) throw new Error("LEAGUE_FULL");
         }
 
-      const rewards = await tx.userRewardBalance.findUnique({ where: { userId: user.id } });
+        const rewards = await tx.userRewardBalance.findUnique({ where: { userId: user.id } });
         const useVoucher = Boolean(rewards && rewards.leagueVouchers > 0);
         const promoValid = Boolean(
           rewards?.promoExpiresAt &&
@@ -798,12 +876,11 @@ export async function joinLeagueWithWalletAction(
               Math.floor((priceCents * (rewards?.promoDiscountPercent ?? 0)) / 100)
             )
           : 0;
-      const chargeCents = Math.max(0, priceCents - promoCents);
-      const checkoutKey = `league:${league.id}:user:${user.id}`;
-      const existingPayment = await tx.payment.findUnique({ where: { checkoutKey } });
-      if (existingPayment?.transactionId && existingPayment.status === "PENDING") {
-        throw new Error("LEAGUE_PIX_ALREADY_CREATED");
-      }
+        const chargeCents = Math.max(0, priceCents - promoCents);
+        const existingPayment = await tx.payment.findUnique({ where: { checkoutKey } });
+        if (existingPayment?.transactionId && existingPayment.status === "PENDING") {
+          throw new Error("LEAGUE_PIX_ALREADY_CREATED");
+        }
         if (useVoucher) {
           await tx.userRewardBalance.update({
             data: { leagueVouchers: { decrement: 1 } },
@@ -831,33 +908,33 @@ export async function joinLeagueWithWalletAction(
             });
           }
         }
-      await tx.leagueMember.upsert({
+        await tx.leagueMember.upsert({
           create: { leagueId: league.id, role: "MEMBER", status: "ACTIVE", userId: user.id },
           update: { joinedAt: serverNow(), leftAt: null, role: "MEMBER", status: "ACTIVE" },
-        where: { leagueId_userId: { leagueId: league.id, userId: user.id } }
-      });
-      await tx.payment.upsert({
-        create: {
-          amount: chargeCents / 100,
-          checkoutKey,
-          gateway: "MANUAL",
-          leagueId: league.id,
-          paidAt: serverNow(),
-          providerStatus: useVoucher ? "voucher" : "wallet",
-          status: "APPROVED",
-          transactionId: `wallet:${league.id}:${user.id}`,
-          userId: user.id
-        },
-        update: {
-          amount: chargeCents / 100,
-          gateway: "MANUAL",
-          paidAt: serverNow(),
-          providerStatus: useVoucher ? "voucher" : "wallet",
-          status: "APPROVED",
-          transactionId: `wallet:${league.id}:${user.id}`
-        },
-        where: { checkoutKey }
-      });
+          where: { leagueId_userId: { leagueId: league.id, userId: user.id } }
+        });
+        await tx.payment.upsert({
+          create: {
+            amount: chargeCents / 100,
+            checkoutKey,
+            gateway: "MANUAL",
+            leagueId: league.id,
+            paidAt: serverNow(),
+            providerStatus: useVoucher ? "voucher" : "wallet",
+            status: "APPROVED",
+            transactionId: `wallet:${league.id}:${user.id}`,
+            userId: user.id
+          },
+          update: {
+            amount: chargeCents / 100,
+            gateway: "MANUAL",
+            paidAt: serverNow(),
+            providerStatus: useVoucher ? "voucher" : "wallet",
+            status: "APPROVED",
+            transactionId: `wallet:${league.id}:${user.id}`
+          },
+          where: { checkoutKey }
+        });
         await tx.auditLog.create({
           data: {
             action: useVoucher ? "league.joined_with_voucher" : "league.joined_with_wallet",
