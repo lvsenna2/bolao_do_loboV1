@@ -107,8 +107,8 @@ Arquivo: `src/features/wallet/services/withdrawal-service.ts`.
 - `20260814000200_withdrawal_pix_payout` — status `PIX_PROCESSING`/`PIX_FAILED`, aprovador,
   rastreio da transferencia e `payout_idempotency_key` (saques antigos herdam o proprio id).
 
-O Build Command da Vercel roda `pnpm prisma migrate deploy && pnpm build` desde 13/ago/2026.
-Para aplicar a mao:
+O Build Command da Vercel roda apenas `pnpm build` e nao depende de acesso ao banco.
+As migrations devem ser aplicadas manualmente, uma unica vez, fora do build:
 
 ```bash
 pnpm prisma migrate deploy
