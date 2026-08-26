@@ -62,7 +62,7 @@ aguarde alguns minutos, cancele deploys antigos em andamento e rode a migration 
 fora do build.
 
 O plano Vercel Pro le os agendamentos de `vercel.json` no deploy de producao. Depois do deploy,
-confirme em `Project > Settings > Cron Jobs` que `football-sync` aparece a cada minuto e
+confirme em `Project > Settings > Cron Jobs` que `football-sync` aparece a cada 30 minutos e
 `football-catalog` a cada seis horas. A mesma `CRON_SECRET` deve estar disponivel no ambiente
 Production; nao e necessario informar o segredo na URL.
 

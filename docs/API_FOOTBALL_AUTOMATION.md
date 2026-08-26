@@ -25,14 +25,15 @@ build/deploy antes da primeira execucao.
 
 O arquivo `vercel.json` agenda duas rotinas, executadas apenas em deploys de producao:
 
-- `/api/cron/football-sync`: a cada minuto, identifica partidas relevantes e atualiza em lote;
+- `/api/cron/football-sync`: a cada 30 minutos, identifica partidas relevantes e atualiza em lote;
 - `/api/cron/football-catalog`: a cada seis horas, verifica se algum catalogo esta desatualizado.
 
 A Vercel envia `Authorization: Bearer <CRON_SECRET>` automaticamente. As rotas recusam
 requisicoes sem esse segredo e o servico usa lock no PostgreSQL para impedir execucoes
 simultaneas. Configure `CRON_SECRET` apenas no servidor e nunca como `NEXT_PUBLIC_*`.
 
-O agendamento por minuto nao significa uma chamada externa por minuto quando nao ha jogo. A
+Cada execucao consulta o PostgreSQL mesmo quando nao ha chamada externa. O intervalo de 30 minutos
+permite que bancos com scale-to-zero sejam suspensos entre execucoes. A
 decisao usa os horarios e os carimbos de sincronizacao salvos no banco. Placar e status de ate 20
 partidas sao consultados em lote. Na janela critica do kickoff (15 minutos antes ate 10 minutos
 depois), a fixture e atualizada em toda execucao do cron, sem cooldown, para que a transicao
@@ -48,6 +49,10 @@ partidas encerradas. Assim, muitos jogos simultaneos ao vivo nao bloqueiam a esc
 partida que comeca em poucos minutos. A atualizacao basica da fixture (status, placar, elapsed,
 kickoff e demais campos) nao depende desses budgets.
 
+Enquanto um usuario acompanha uma partida proxima ou ao vivo, o polling de `/api/football/live-scores`
+aciona a mesma automacao apenas quando a decisao de sincronizacao indica dados vencidos. Isso mantem
+placares frequentes durante uso ativo sem despertar o PostgreSQL continuamente quando nao ha audiencia.
+
 As escalacoes entram na fila 30 minutos antes do inicio. Enquanto estiverem incompletas,
 o sistema tenta novamente a cada 5 minutos e reduz o intervalo para 2 minutos nos 10
 minutos finais. Partidas ao vivo e escalacoes urgentes passam na frente do backlog de
@@ -56,9 +61,8 @@ escalacao, os eventos e as estatisticas persistidos pelo sincronizador.
 
 Partidas encerradas buscam cada conjunto de detalhes apenas enquanto ele ainda nao foi salvo.
 O preenchimento do backlog de historico libera no maximo um lote a cada 30 minutos e a tabela
-de uma mesma competicao tambem respeita um intervalo minimo de 30 minutos. O Cron continua
-rodando a cada minuto para nao atrasar placares ao vivo, mas encerra rapidamente sem chamada
-externa quando nao existe trabalho devido.
+de uma mesma competicao tambem respeita um intervalo minimo de 30 minutos. O Cron encerra
+rapidamente sem chamada externa quando nao existe trabalho devido.
 
 ### Jogadores das Rodadas Especiais
 

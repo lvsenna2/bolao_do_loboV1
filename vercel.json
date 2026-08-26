@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/football-sync",
-      "schedule": "* * * * *"
+      "schedule": "*/30 * * * *"
     },
     {
       "path": "/api/cron/football-catalog",
