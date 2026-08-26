@@ -1,12 +1,45 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "next-auth/middleware";
 
+import { isMaintenanceActive } from "@/lib/maintenance";
 import { getPublicPromoSlug } from "@/lib/public-promo-path";
 
 const adminRoles = new Set(["ADMIN", "SUPER_ADMIN"]);
+const protectedPaths = [
+  "/admin",
+  "/apoie-a-api",
+  "/comparar-palpites",
+  "/dashboard",
+  "/ligas",
+  "/minhas-ligas",
+  "/palpites",
+  "/planos",
+  "/rodadas",
+  "/rodadas-especiais"
+];
+
+function isProtectedPath(pathname: string) {
+  return protectedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
 
 export default withAuth(
   function middleware(request) {
+    if (isMaintenanceActive()) {
+      if (request.nextUrl.pathname === "/manutencao") return NextResponse.next();
+
+      const destination = request.nextUrl.clone();
+      destination.pathname = "/manutencao";
+      const response = NextResponse.rewrite(destination);
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
+
+    if (request.nextUrl.pathname === "/manutencao") {
+      const destination = request.nextUrl.clone();
+      destination.pathname = "/";
+      return NextResponse.redirect(destination);
+    }
+
     const promoSlug = getPublicPromoSlug(request.nextUrl.pathname);
 
     if (promoSlug) {
@@ -20,7 +53,15 @@ export default withAuth(
   {
     callbacks: {
       authorized({ req, token }) {
+        if (isMaintenanceActive()) {
+          return true;
+        }
+
         if (getPublicPromoSlug(req.nextUrl.pathname)) {
+          return true;
+        }
+
+        if (!isProtectedPath(req.nextUrl.pathname)) {
           return true;
         }
 
@@ -39,16 +80,5 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/apoie-a-api/:path*",
-    "/comparar-palpites/:path*",
-    "/dashboard/:path*",
-    "/ligas/:path*",
-    "/minhas-ligas/:path*",
-    "/palpites/:path*",
-    "/planos/:path*",
-    "/rodadas/:path*",
-    "/rodadas-especiais/:path*"
-  ]
+  matcher: ["/((?!api|_next/static|_next/image|brand|favicon.ico|.*\\..*).*)"]
 };

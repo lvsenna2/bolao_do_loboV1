@@ -22,6 +22,7 @@
 
 ## Important paths
 
+- `src/middleware.ts` - authentication, public promo rewrites, and global maintenance gate
 - `src/app/(app)/` - authenticated user routes
 - `src/app/admin/` - administrative routes
 - `src/features/` - feature-owned data, services, actions, and UI
