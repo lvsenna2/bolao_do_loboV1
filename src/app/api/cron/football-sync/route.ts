@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { settleFinishedSpecialRounds } from "@/features/special-rounds/services/settlement-service";
-import { isValidCronRequest } from "@/server/cron/auth";
+import { isValidScheduledCronRequest } from "@/server/cron/auth";
 import { runFootballAutomation } from "@/server/football-api/automation-service";
 
 export const dynamic = "force-dynamic";
@@ -13,14 +13,7 @@ function shouldRunSpecialRoundSettlement(result: { locked?: boolean }) {
 }
 
 async function runCron(request: Request) {
-  if (!process.env.CRON_SECRET?.trim()) {
-    return NextResponse.json(
-      { message: "CRON_SECRET nao esta configurado.", ok: false },
-      { status: 503 }
-    );
-  }
-
-  if (!isValidCronRequest(request)) {
+  if (!(await isValidScheduledCronRequest(request))) {
     return NextResponse.json({ message: "Cron nao autorizado.", ok: false }, { status: 401 });
   }
 
