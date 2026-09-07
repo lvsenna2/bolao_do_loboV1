@@ -65,9 +65,10 @@ describe("football automation history throttle", () => {
   it("persists the thirty-minute window and atomically rejects concurrent batches", async () => {
     let lockedUntil: Date | null = null;
     const store = {
-      create: vi.fn(async ({ data }: { data: { lockedUntil: Date } }) => {
-        if (lockedUntil) throw { code: "P2002" };
-        lockedUntil = data.lockedUntil;
+      createMany: vi.fn(async ({ data }: { data: Array<{ lockedUntil: Date }> }) => {
+        if (lockedUntil) return { count: 0 };
+        lockedUntil = data[0].lockedUntil;
+        return { count: 1 };
       }),
       updateMany: vi.fn(
         async ({

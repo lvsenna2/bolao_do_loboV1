@@ -147,19 +147,15 @@ function emptySummary(): AutomationSummary {
 }
 
 type HistoryThrottleStore = {
-  create(input: { data: { key: string; lockedUntil: Date; ownerToken: string } }): Promise<unknown>;
+  createMany(input: {
+    data: Array<{ key: string; lockedUntil: Date; ownerToken: string }>;
+    skipDuplicates: boolean;
+  }): Promise<{ count: number }>;
   updateMany(input: {
     data: { lockedUntil: Date; ownerToken: string };
     where: { key: string; lockedUntil: { lte: Date } };
   }): Promise<{ count: number }>;
 };
-
-function isUniqueConstraintError(error: unknown) {
-  return (
-    (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") ||
-    (typeof error === "object" && error !== null && "code" in error && error.code === "P2002")
-  );
-}
 
 export async function claimBackgroundHistorySlot(
   now = serverNow(),
@@ -168,14 +164,12 @@ export async function claimBackgroundHistorySlot(
   const lockedUntil = new Date(now.getTime() + BACKGROUND_HISTORY_INTERVAL_MS);
   const ownerToken = randomUUID();
 
-  try {
-    await store.create({
-      data: { key: HISTORY_THROTTLE_KEY, lockedUntil, ownerToken }
-    });
-    return true;
-  } catch (error) {
-    if (!isUniqueConstraintError(error)) throw error;
-  }
+  const created = await store.createMany({
+    data: [{ key: HISTORY_THROTTLE_KEY, lockedUntil, ownerToken }],
+    skipDuplicates: true
+  });
+
+  if (created.count === 1) return true;
 
   const claimed = await store.updateMany({
     data: { lockedUntil, ownerToken },

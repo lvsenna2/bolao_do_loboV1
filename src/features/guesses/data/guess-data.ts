@@ -91,6 +91,109 @@ export type GuessesPageData = {
   };
 };
 
+export type PendingGuessRound = {
+  endsAt: string;
+  id: string;
+  label: string;
+  leagueName: string;
+  pendingMatches: number;
+};
+
+export async function getPendingGuessRounds(userId: string): Promise<PendingGuessRound[]> {
+  try {
+    const now = serverNow();
+    const rounds = await prisma.round.findMany({
+      orderBy: { endsAt: "asc" },
+      select: {
+        endsAt: true,
+        id: true,
+        league: {
+          select: {
+            championshipId: true,
+            id: true,
+            name: true
+          }
+        },
+        matches: {
+          select: {
+            guesses: {
+              select: {
+                awayPrediction: true,
+                homePrediction: true,
+                leagueId: true
+              },
+              where: {
+                deletedAt: null,
+                userId
+              }
+            },
+            id: true
+          },
+          where: {
+            deletedAt: null,
+            kickoff: { gt: now },
+            status: "SCHEDULED"
+          }
+        },
+        name: true,
+        number: true,
+        season: {
+          select: {
+            championshipId: true,
+            name: true,
+            year: true
+          }
+        }
+      },
+      where: {
+        endsAt: { gte: now },
+        league: {
+          deletedAt: null,
+          members: {
+            some: {
+              status: "ACTIVE",
+              userId
+            }
+          }
+        },
+        leagueId: { not: null },
+        status: "OPEN"
+      }
+    });
+
+    return rounds.flatMap((round) => {
+      const league = round.league;
+
+      if (!league || league.championshipId !== round.season.championshipId) return [];
+
+      const pendingMatches = round.matches.filter(
+        (match) =>
+          !match.guesses.some(
+            (guess) =>
+              guess.leagueId === league.id &&
+              guess.homePrediction !== null &&
+              guess.awayPrediction !== null
+          )
+      ).length;
+
+      return pendingMatches > 0
+        ? [
+            {
+              endsAt: round.endsAt.toISOString(),
+              id: round.id,
+              label: getRoundLabel(round),
+              leagueName: league.name,
+              pendingMatches
+            }
+          ]
+        : [];
+    });
+  } catch (error) {
+    console.error("[pending-guesses] Falha ao carregar rodadas pendentes", { error, userId });
+    return [];
+  }
+}
+
 export async function getGuessLeagueAccessData(userId: string) {
   const activeMembershipCount = await prisma.leagueMember.count({
     where: {

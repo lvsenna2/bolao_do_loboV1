@@ -12,14 +12,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Cron nao autorizado.", ok: false }, { status: 401 });
   }
 
+  const startedAt = Date.now();
   const result = await runFootballAutomation("vercel-catalog", {
     fixtureLimit: 0,
     historyBudget: 0,
     includeCatalog: true
   });
+  const durationMs = Date.now() - startedAt;
 
-  return NextResponse.json(result, {
-    headers: { "Cache-Control": "no-store" },
-    status: result.ok ? 200 : 500
+  console.info("[football-catalog] Execucao concluida", {
+    durationMs,
+    locked: result.locked ?? false,
+    ok: result.ok,
+    ...("summary" in result
+      ? {
+          callsUsed: result.summary.callsUsed,
+          catalogsSynced: result.summary.catalogsSynced,
+          errors: result.summary.errors
+        }
+      : {})
   });
+
+  return NextResponse.json(
+    { ...result, durationMs },
+    {
+      headers: { "Cache-Control": "no-store" },
+      status: result.ok ? 200 : 500
+    }
+  );
 }

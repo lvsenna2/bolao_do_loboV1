@@ -3,6 +3,7 @@ import type { Session } from "next-auth";
 import { PawPrint } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { PendingGuessesAlert } from "@/features/guesses/components/pending-guesses-alert";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopbar } from "./app-topbar";
 import { MobileBottomNav } from "./mobile-bottom-nav";
@@ -68,6 +69,11 @@ export function AppShell({ children, mode = "user", user }: AppShellProps) {
               ) : null
             }
           />
+          {mode === "user" ? (
+            <Suspense fallback={null}>
+              <PendingGuessesAlert userId={user.id} />
+            </Suspense>
+          ) : null}
           <main className="min-w-0 flex-1 overflow-x-hidden" id="main-content" tabIndex={-1}>
             {children}
           </main>

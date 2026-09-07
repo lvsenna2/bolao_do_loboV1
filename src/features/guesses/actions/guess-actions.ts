@@ -73,6 +73,7 @@ function validateEditableMatch(match: EditableMatch | null, now = serverNow()) {
 }
 
 function revalidateGuessesArea() {
+  revalidatePath("/", "layout");
   revalidatePath("/admin/palpites");
   revalidatePath("/comparar-palpites");
   revalidatePath("/palpites");
@@ -105,9 +106,7 @@ async function createGuessAuditLog(
   });
 }
 
-export async function upsertGuessAction(
-  input: UpsertGuessInput
-): Promise<
+export async function upsertGuessAction(input: UpsertGuessInput): Promise<
   GuessActionResult<{
     guess: {
       awayPrediction: number | null;
