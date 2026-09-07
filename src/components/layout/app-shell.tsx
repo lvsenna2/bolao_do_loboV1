@@ -27,6 +27,12 @@ export function AppShell({ children, mode = "user", user }: AppShellProps) {
       )}
       data-shell-mode={mode}
     >
+      <a
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[110] focus:rounded-button focus:bg-brand-gold focus:px-4 focus:py-3 focus:text-black"
+        href="#main-content"
+      >
+        Pular para o conteúdo
+      </a>
       {mode === "user" ? (
         <div aria-hidden className="wolf-ambience">
           <PawPrint className="wolf-paw wolf-paw-one" />
@@ -40,7 +46,7 @@ export function AppShell({ children, mode = "user", user }: AppShellProps) {
         <div
           className={cn(
             "flex min-w-0 flex-1 flex-col lg:pb-0",
-            mode === "user" ? "pb-20" : "pb-0",
+            mode === "user" ? "pb-[calc(5rem+env(safe-area-inset-bottom))]" : "pb-0",
             mode === "user" ? "min-h-screen" : ""
           )}
         >
@@ -62,7 +68,9 @@ export function AppShell({ children, mode = "user", user }: AppShellProps) {
               ) : null
             }
           />
-          <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
+          <main className="min-w-0 flex-1 overflow-x-hidden" id="main-content" tabIndex={-1}>
+            {children}
+          </main>
         </div>
       </div>
       {mode === "user" ? <XpNotificationToast /> : null}

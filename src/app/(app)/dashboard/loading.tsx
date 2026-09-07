@@ -20,11 +20,11 @@ export function DashboardProfileLoading() {
 export function DashboardSectionsLoading() {
   return (
     <div className="space-y-6" role="status" aria-label="Carregando dados do dashboard">
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid grid-cols-3 gap-2 sm:gap-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <Card key={index}>
-            <CardContent className="space-y-3 p-5">
-              <Skeleton className="h-4 w-24" />
+            <CardContent className="space-y-3 p-3 sm:p-5">
+              <Skeleton className="h-4 w-full max-w-24" />
               <Skeleton className="h-7 w-16" />
               <Skeleton className="h-3 w-full" />
             </CardContent>

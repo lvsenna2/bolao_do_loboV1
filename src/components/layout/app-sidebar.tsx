@@ -17,7 +17,7 @@ export function AppSidebar({ mode = "user", user }: AppSidebarProps) {
   const items = mode === "admin" ? adminNavigationItems : mainNavigationItems;
 
   return (
-    <aside className="hidden min-h-screen w-72 shrink-0 border-r border-app-border bg-app-surface lg:sticky lg:top-0 lg:flex lg:flex-col">
+    <aside className="hidden h-dvh w-72 shrink-0 border-r border-app-border bg-app-surface lg:sticky lg:top-0 lg:flex lg:flex-col">
       <div className="flex h-16 items-center border-b border-app-border px-5">
         <BrandLogo href={mode === "admin" ? "/admin" : "/dashboard"} />
       </div>

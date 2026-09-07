@@ -25,13 +25,15 @@ export type NavigationItem = {
   href: string;
   icon: LucideIcon;
   label: string;
+  mobileLabel?: string;
 };
 
 export const mainNavigationItems: NavigationItem[] = [
   {
     href: "/dashboard",
     icon: LayoutDashboard,
-    label: "Dashboard"
+    label: "Dashboard",
+    mobileLabel: "Início"
   },
   {
     href: "/ligas",
@@ -51,7 +53,8 @@ export const mainNavigationItems: NavigationItem[] = [
   {
     href: "/rodadas-especiais",
     icon: Swords,
-    label: "Rodada Especial"
+    label: "Rodada Especial",
+    mobileLabel: "Especiais"
   },
   {
     href: "/comparar-palpites",
@@ -90,9 +93,7 @@ const mobileNavigationHrefs = new Set([
   "/ligas",
   "/palpites",
   "/rodadas-especiais",
-  "/comparar-palpites",
-  "/roleta-diaria",
-  "/planos"
+  "/ranking"
 ]);
 
 export const mobileNavigationItems = mainNavigationItems.filter((item) =>

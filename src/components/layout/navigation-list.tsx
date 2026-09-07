@@ -15,8 +15,8 @@ type NavigationListProps = {
 };
 
 function isActiveRoute(pathname: string, href: string) {
-  if (href === "/") {
-    return pathname === "/";
+  if (href === "/" || href === "/admin") {
+    return pathname === href;
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -51,13 +51,17 @@ export function NavigationList({
               active
                 ? "bg-brand-gold text-slate-950 shadow-sm"
                 : "text-app-muted hover:bg-app-elevated hover:text-app-foreground",
-              compact ? "h-12 flex-col justify-center gap-1 px-1 text-[10px] leading-none" : ""
+              compact
+                ? "h-12 min-w-0 flex-col justify-center gap-1 px-1 text-[11px] leading-none"
+                : ""
             )}
             href={item.href as Route}
             title={compact ? item.label : undefined}
           >
             <Icon aria-hidden className="h-4 w-4 shrink-0" />
-            <span className={compact ? "max-w-full truncate" : ""}>{item.label}</span>
+            <span className={compact ? "max-w-full truncate" : ""}>
+              {compact ? (item.mobileLabel ?? item.label) : item.label}
+            </span>
           </Link>
         );
       })}

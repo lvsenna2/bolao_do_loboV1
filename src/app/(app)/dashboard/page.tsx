@@ -119,23 +119,29 @@ async function DashboardDataContent({ userId }: { userId: string }) {
             />
           ) : null}
 
-          <section className="grid gap-3 sm:grid-cols-3">
+          <section
+            aria-label="Resumo da sua participação"
+            className="grid grid-cols-3 gap-2 sm:gap-3"
+          >
             <UserStatCard
+              compact
               description="Pontuacao acumulada"
               icon={Trophy}
               label="Pontos"
               value={stats.points}
             />
             <UserStatCard
+              compact
               description="Total registrado"
               icon={ClipboardList}
               label="Palpites"
               value={stats.guesses}
             />
             <UserStatCard
+              compact
               description="Na liga mais recente"
               icon={Users}
-              label="Minha posicao"
+              label="Posição"
               value={stats.myLeaguePosition ? `#${stats.myLeaguePosition}` : "-"}
             />
           </section>
@@ -143,7 +149,7 @@ async function DashboardDataContent({ userId }: { userId: string }) {
           <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-5">
               <Card>
-                <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+                <CardHeader className="flex items-center justify-between gap-3 space-y-0">
                   <div>
                     <CardTitle>Rodada atual</CardTitle>
                     <CardDescription>Prazo e jogos disponiveis.</CardDescription>
@@ -185,7 +191,15 @@ async function DashboardDataContent({ userId }: { userId: string }) {
                 </CardContent>
               </Card>
 
-              <Suspense fallback={<Card><CardContent className="p-4"><p className="text-sm text-app-muted">Carregando proximos palpites...</p></CardContent></Card>}>
+              <Suspense
+                fallback={
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-app-muted">Carregando proximos palpites...</p>
+                    </CardContent>
+                  </Card>
+                }
+              >
                 <DashboardMatchesContent userId={userId} />
               </Suspense>
             </div>
@@ -211,7 +225,7 @@ async function DashboardMatchesContent({ userId }: { userId: string }) {
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+      <CardHeader className="flex items-center justify-between gap-3 space-y-0">
         <div>
           <CardTitle>Proximos palpites</CardTitle>
           <CardDescription>Partidas abertas mais proximas.</CardDescription>
@@ -223,7 +237,10 @@ async function DashboardMatchesContent({ userId }: { userId: string }) {
       <CardContent className="space-y-3">
         {todayMatches.length > 0 ? (
           todayMatches.map((match) => (
-            <div className="rounded-control border border-app-border bg-app-background p-3" key={match.id}>
+            <div
+              className="rounded-control border border-app-border bg-app-background p-3"
+              key={match.id}
+            >
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <TeamMark {...match.homeTeam} />
                 <span className="text-sm font-bold text-app-muted">x</span>

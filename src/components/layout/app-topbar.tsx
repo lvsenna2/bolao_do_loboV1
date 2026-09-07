@@ -1,6 +1,6 @@
 import type { Session } from "next-auth";
 import type { ReactNode } from "react";
-import { Bell, Search } from "lucide-react";
+import { Bell } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 
@@ -12,6 +12,7 @@ import { AdminMobileMenu } from "./admin-mobile-menu";
 import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMobileMenu } from "./user-mobile-menu";
+import { NavigationSearch } from "./navigation-search";
 
 type AppTopbarProps = {
   mode?: "user" | "admin";
@@ -41,7 +42,7 @@ export function AppTopbar({
         {userMode ? (
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <UserMobileMenu isAdmin={user.role === "ADMIN" || user.role === "SUPER_ADMIN"} />
-            <BrandLogo compact="mobile" />
+            <BrandLogo compact="mobile" href="/dashboard" />
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
@@ -60,18 +61,7 @@ export function AppTopbar({
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {userMode ? walletBalance : null}
-          <button
-            aria-label="Pesquisar"
-            className={cn(
-              "hidden h-10 w-10 items-center justify-center rounded-button border transition sm:inline-flex",
-              userMode
-                ? "border-white/15 bg-white/8 text-white/75 hover:border-brand-gold hover:text-brand-gold"
-                : "border-app-border bg-app-surface text-app-muted hover:border-brand-gold hover:text-brand-gold"
-            )}
-            type="button"
-          >
-            <Search aria-hidden className="h-4 w-4" />
-          </button>
+          <NavigationSearch mode={mode} />
           <Link
             aria-label="Notificacoes"
             className={cn(
