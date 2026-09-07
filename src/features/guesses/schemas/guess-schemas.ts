@@ -4,14 +4,23 @@ export const predictionValues = ["HOME", "DRAW", "AWAY"] as const;
 
 export type GuessPrediction = (typeof predictionValues)[number];
 
-const scoreSchema = z.coerce
-  .number({
-    invalid_type_error: "Informe um placar valido.",
-    required_error: "Informe o placar."
-  })
-  .int("Use apenas numeros inteiros.")
-  .min(0, "O placar nao pode ser negativo.")
-  .max(99, "Informe um placar menor que 100.");
+const scoreSchema = z.preprocess(
+  (value) => {
+    if (typeof value === "string") {
+      return value.trim() === "" ? undefined : Number(value);
+    }
+
+    return value;
+  },
+  z
+    .number({
+      invalid_type_error: "Informe um placar valido.",
+      required_error: "Informe o placar."
+    })
+    .int("Use apenas numeros inteiros.")
+    .min(0, "O placar nao pode ser negativo.")
+    .max(99, "Informe um placar menor que 100.")
+);
 
 export function getPredictionFromScore(homePrediction: number, awayPrediction: number) {
   if (homePrediction > awayPrediction) {
@@ -34,7 +43,10 @@ export const upsertGuessSchema = z
     }),
     homePrediction: scoreSchema,
     awayPrediction: scoreSchema,
-    joker: z.coerce.boolean().default(false)
+    joker: z.preprocess(
+      (value) => (value === "true" ? true : value === "false" ? false : value),
+      z.boolean().default(false)
+    )
   })
   .superRefine((data, context) => {
     const scorePrediction = getPredictionFromScore(data.homePrediction, data.awayPrediction);
